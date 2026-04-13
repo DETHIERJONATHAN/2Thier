@@ -158,11 +158,11 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
         console.log('📥 [PageBuilder] Chargement des sections pour template:', templateId);
         
         // Charger les sections existantes
-        const sections = await api.get(`/api/documents/templates/${templateId}/sections`) as any[];
+        const sections = await api.get(`/api/documents/templates/${templateId}/sections`) as unknown[];
         console.log('📥 [PageBuilder] Sections chargées:', sections?.length || 0);
         
         // Charger le template pour le globalTheme
-        const template = await api.get(`/api/documents/templates/${templateId}`) as any;
+        const template = await api.get(`/api/documents/templates/${templateId}`) as unknown;
         console.log('📥 [PageBuilder] Template chargé, globalTheme:', !!template?.globalTheme, 'DocumentTheme:', !!template?.DocumentTheme);
         
         // Priorité : globalTheme > DocumentTheme (DB) > défaut
@@ -179,9 +179,9 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
         if (sections && sections.length > 0) {
           // Convertir les sections en pages
           const pages: DocumentPage[] = sections
-            .filter((s: any) => s.type === 'MODULAR_PAGE')
-            .sort((a: any, b: any) => a.order - b.order)
-            .map((section: any) => ({
+            .filter((s: Record<string, unknown>) => s.type === 'MODULAR_PAGE')
+            .sort((a: unknown, b: unknown) => a.order - b.order)
+            .map((section: Record<string, unknown>) => ({
               id: section.config?.pageId || uuidv4(),
               name: section.config?.name || `Page ${section.order + 1}`,
               order: section.order,
@@ -251,7 +251,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
   }, [config.pages, editorState.activePageId]);
 
   const themeColors = useMemo(() => {
-    const theme = config.globalTheme as any;
+    const theme = config.globalTheme as unknown;
     return {
       primary: theme?.primaryColor || '#1890ff',
       secondary: theme?.secondaryColor || '#722ed1',
@@ -792,7 +792,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
       console.log('💾 [handleSave] Début sauvegarde, pages:', config.pages.length);
 
       // Récupérer toutes les sections existantes
-      const existingSections = await api.get(`/api/documents/templates/${templateId}/sections`) as any[];
+      const existingSections = await api.get(`/api/documents/templates/${templateId}/sections`) as unknown[];
       console.log('💾 [handleSave] Sections existantes:', existingSections?.length || 0);
 
       // Convertir la config en sections pour le backend existant
@@ -815,7 +815,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
         };
 
         // Chercher si la section existe déjà par pageId
-        const existing = existingSections?.find((s: any) => s.config?.pageId === page.id);
+        const existing = existingSections?.find((s: Record<string, unknown>) => s.config?.pageId === page.id);
         console.log('💾 [handleSave] Section existante trouvée:', !!existing, existing?.id);
 
         if (existing) {
@@ -1343,11 +1343,11 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
         open={themeEditorOpen}
         onClose={() => setThemeEditorOpen(false)}
         onSave={(theme) => {
-          setConfig(prev => ({ ...prev, globalTheme: theme as any }));
+          setConfig(prev => ({ ...prev, globalTheme: theme as unknown }));
           setThemeEditorOpen(false);
           message.success('Thème mis à jour');
         }}
-        initialTheme={config.globalTheme as any}
+        initialTheme={config.globalTheme as unknown}
       />
 
       {/* Theme Selector Modal - 8 Professional Themes */}
@@ -1476,7 +1476,7 @@ const PageBuilder = ({ templateId, initialConfig, onSave, onClose }: PageBuilder
                 document.body.removeChild(a);
 
                 message.success({ content: '✅ PDF téléchargé !', key: 'pdf-gen' });
-              } catch (error: any) {
+              } catch (error: unknown) {
                 console.error('❌ Erreur génération PDF:', error);
                 message.error({ content: `Erreur: ${error.message}`, key: 'pdf-gen' });
               }

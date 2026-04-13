@@ -260,7 +260,7 @@ describe('TBL Integration', () => {
         { id: '4', tbl_code: '33', label: 'Element 4', type: 'text' }
       ];
       
-      const duplicates = TBLValidator.findDuplicateCodes(elements as any);
+      const duplicates = TBLValidator.findDuplicateCodes(elements as unknown);
       
       expect(Object.keys(duplicates)).toHaveLength(1);
       expect(duplicates['11']).toHaveLength(2);

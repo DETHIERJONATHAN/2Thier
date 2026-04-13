@@ -17,8 +17,47 @@
     <meta name="category" content="Business" />
     <meta name="rating" content="General" />
     <meta name="robots" content="index, follow" />
+    <!-- 🌐 OpenGraph Meta Tags -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Zhiive — Votre ruche vivante" />
+    <meta property="og:description" content="Plateforme collaborative professionnelle. Gestion d'équipe, communication, et outils métier pour les entreprises." />
+    <meta property="og:image" content="https://www.zhiive.com/zhiive-logo.png" />
+    <meta property="og:url" content="https://www.zhiive.com" />
+    <meta property="og:site_name" content="Zhiive" />
+    <meta property="og:locale" content="fr_BE" />
+    <!-- 🐦 Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Zhiive — Votre ruche vivante" />
+    <meta name="twitter:description" content="Plateforme collaborative professionnelle. Gestion d'équipe, communication, et outils métier." />
+    <meta name="twitter:image" content="https://www.zhiive.com/zhiive-logo.png" />
+    <!-- 🔗 Canonical -->
+    <link rel="canonical" href="https://www.zhiive.com" />
+    <!-- 📊 JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Zhiive",
+      "description": "Plateforme collaborative professionnelle. Gestion d'équipe, communication, et outils métier pour les entreprises.",
+      "url": "https://www.zhiive.com",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "EUR"
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "2Thier",
+        "url": "https://www.2thier.be"
+      }
+    }
+    </script>
     <title>Zhiive — Votre ruche vivante.</title>
-    <!-- 🔧 Configuration d'environnement runtime INLINE (AVANT tout code) -->
+    <!-- � Analytics (Plausible — privacy-friendly, no cookies) -->
+    <script defer data-domain="zhiive.com" src="https://plausible.io/js/script.js"></script>
+    <!-- �🔧 Configuration d'environnement runtime INLINE (AVANT tout code) -->
     <script>
       (function() {
         // Déterminer si c'est production ou développement
@@ -63,6 +102,8 @@
     </script>
   </head>
   <body>
+    <!-- ♿ Skip-link accessibilité -->
+    <a href="#main-content" class="skip-link" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;z-index:9999;padding:8px 16px;background:#6C5CE7;color:#fff;font-weight:700;text-decoration:none;border-radius:0 0 8px 0;" onfocus="this.style.left='0';this.style.width='auto';this.style.height='auto'" onblur="this.style.left='-9999px';this.style.width='1px';this.style.height='1px'">Aller au contenu principal</a>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

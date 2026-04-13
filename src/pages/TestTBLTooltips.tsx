@@ -40,7 +40,7 @@ const TestTBLTooltips: React.FC = () => {
               
               {/* Test direct du composant HelpTooltip */}
               <HelpTooltip
-                type={field.text_helpTooltipType as any}
+                type={field.text_helpTooltipType as unknown}
                 text={field.text_helpTooltipText}
                 image={field.text_helpTooltipImage}
               />

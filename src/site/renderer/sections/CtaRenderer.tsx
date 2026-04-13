@@ -13,7 +13,7 @@ import usePublicFormModal from '../../hooks/usePublicFormModal';
  */
 
 interface CtaRendererProps {
-  content: any;
+  content: unknown;
   mode?: 'preview' | 'edit';
 }
 
@@ -44,8 +44,8 @@ interface CTAButtonConfig {
   size?: 'large' | 'middle' | 'small';
   href?: string;
   icon?: React.ReactNode;
-  style?: Record<string, any>;
-  [key: string]: any;
+  style?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 interface NormalizedCTAButton extends CTAButtonConfig {
@@ -174,7 +174,7 @@ export const CtaRenderer: React.FC<CtaRendererProps> = ({ content, mode = 'previ
 
   const sectionBackground = style.background || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
 
-  const normalizeButton = useCallback((button: any): NormalizedCTAButton | null => {
+  const normalizeButton = useCallback((button: unknown): NormalizedCTAButton | null => {
     if (!button) return null;
 
     const legacyHref: string | undefined = button.href || button.url || undefined;
@@ -634,7 +634,7 @@ export const CtaRenderer: React.FC<CtaRendererProps> = ({ content, mode = 'previ
                 justifyContent: 'center'
               }}
             >
-              {stats.map((stat: any, index: number) => (
+              {stats.map((stat: unknown, index: number) => (
                 <motion.div
                   key={index}
                   whileHover={{ scale: 1.1 }}

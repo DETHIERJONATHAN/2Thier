@@ -5,18 +5,18 @@ import { fetchWithAuth } from './api';
 
 export interface FormulasSlice {
   // Actions pour les formules
-  updateFormula: (formulaId: string, data: any) => Promise<void>;
-  createFormula: (fieldId: string, formulaData: any) => Promise<any>;
+  updateFormula: (formulaId: string, data: unknown) => Promise<void>;
+  createFormula: (fieldId: string, formulaData: unknown) => Promise<unknown>;
   deleteFormula: (formulaId: string) => Promise<void>;
   reorderFormulaSequence: (formulaId: string, oldIndex: number, newIndex: number) => Promise<void>;
-  addItemsToFormulaSequence: (fieldId: string, formulaId: string, items: any[], index: number) => Promise<void>;
+  addItemsToFormulaSequence: (fieldId: string, formulaId: string, items: unknown[], index: number) => Promise<void>;
   moveFormulaItem: (fieldId: string, formulaId: string, fromIndex: number, toIndex: number) => Promise<void>;
   deleteFormulaSequenceItem: (fieldId: string, formulaId: string, index: number) => Promise<void>;
 }
 
 // Helper function pour s'assurer que le fieldId est présent dans une formule
-const ensureFormulasHaveFieldId = (formulas: any[], fieldId: string): any[] => {
-  return formulas.map((formula: any) => {
+const ensureFormulasHaveFieldId = (formulas: unknown[], fieldId: string): unknown[] => {
+  return formulas.map((formula: Record<string, unknown>) => {
     if (!formula.fieldId && fieldId) {
       return { ...formula, fieldId };
     }
@@ -42,7 +42,7 @@ export const createFormulasSlice: StateCreator<
     console.log(`[CRMStore][updateFormula] 🔍 TRACE - Stack:`, new Error().stack?.split('\n').slice(0, 10).join('\n'));
     
     let fieldId: string | null = null;
-    let originalFormula: any | undefined;
+    let originalFormula: unknown | undefined;
 
     const stateBeforeUpdate = get();
     
@@ -66,7 +66,7 @@ export const createFormulasSlice: StateCreator<
     // 🔍 SUPER DEBUG: Vérifier si la séquence contient des éléments invalides
     if (data.sequence) {
       console.log(`[CRMStore][updateFormula] 🔍 Vérification de la séquence (${data.sequence.length} items)...`);
-      const invalidItems = data.sequence.filter((item: any) => !item || !item.id || typeof item.id !== 'string');
+      const invalidItems = data.sequence.filter((item: Record<string, unknown>) => !item || !item.id || typeof item.id !== 'string');
       if (invalidItems.length > 0) {
         console.warn(`[CRMStore][updateFormula] ⚠️ La séquence contient ${invalidItems.length} items invalides!`);
       }
@@ -99,8 +99,8 @@ export const createFormulasSlice: StateCreator<
         console.log(`[CRMStore] Sequence update detected: ${originalFormula?.sequence?.length || 0} items => ${data.sequence.length} items`);
         
         if (originalFormula?.sequence) {
-          const oldIds = originalFormula.sequence.map((item: any) => item.id);
-          const newIds = data.sequence.map((item: any) => item.id);
+          const oldIds = originalFormula.sequence.map((item: Record<string, unknown>) => item.id);
+          const newIds = data.sequence.map((item: Record<string, unknown>) => item.id);
           
           const addedIds = newIds.filter((id: string) => !oldIds.includes(id));
           const removedIds = oldIds.filter((id: string) => !newIds.includes(id));
@@ -157,7 +157,7 @@ export const createFormulasSlice: StateCreator<
     if (updatedFormulaData.sequence) {
       console.log(`[CRMStore][updateFormula] 🔬 Vérification finale de la séquence fusionnée (${updatedFormulaData.sequence.length} items)`);
       // Vérifier et réparer les éventuels items sans ID
-      updatedFormulaData.sequence = updatedFormulaData.sequence.map((item: any, idx: number) => {
+      updatedFormulaData.sequence = updatedFormulaData.sequence.map((item: unknown, idx: number) => {
         if (!item.id) {
           console.warn(`[CRMStore][updateFormula] 🔧 Item sans ID détecté à l'index ${idx}, génération d'un ID de secours`);
           return { ...item, id: `temp-seq-item-${Date.now()}-${idx}` };
@@ -171,7 +171,7 @@ export const createFormulasSlice: StateCreator<
       console.log(`[CRMStore][updateFormula] 🧩 Séquence mise à jour: ${originalFormula?.sequence?.length || 0} items => ${data.sequence.length} items`);
       
       // 🔍 SUPER DEBUG: Examiner chaque élément de la nouvelle séquence
-      data.sequence.forEach((item: any, idx: number) => {
+      data.sequence.forEach((item: unknown, idx: number) => {
         // Correction automatique des items sans ID
         if (!item.id || typeof item.id !== 'string' || item.id.trim() === '') {
           console.warn(`[CRMStore][updateFormula] 🛠 Correction de l'item ${idx} sans ID valide`);
@@ -261,7 +261,7 @@ export const createFormulasSlice: StateCreator<
         return { blocks: newBlocks };
       });
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err.message);
       console.error('[CRMStore] updateFormula API error:', err);
       
@@ -333,7 +333,7 @@ export const createFormulasSlice: StateCreator<
       
       // S'assurer que toutes les formules ont leur fieldId
       const enhancedFormulas = ensureFormulasHaveFieldId(updatedFormulas, fieldId);
-      const newFormula = enhancedFormulas.find((f: any) => f.name === formulaData.name); // Heuristique pour retrouver la nouvelle formule
+      const newFormula = enhancedFormulas.find((f: Record<string, unknown>) => f.name === formulaData.name); // Heuristique pour retrouver la nouvelle formule
 
       set(state => {
         const newBlocks = state.blocks.map(block => ({
@@ -352,7 +352,7 @@ export const createFormulasSlice: StateCreator<
       });
       toast.success("Formule créée avec succès !");
       return newFormula || null;
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err.message);
       console.error('[CRMStore] createFormula error:', err);
       return null;
@@ -468,7 +468,7 @@ export const createFormulasSlice: StateCreator<
         return { blocks: newBlocks };
       });
       toast.success("Formule supprimée avec succès !");
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err.message);
       console.error('[CRMStore] deleteFormula error:', err);
       // En cas d'erreur, on restaure l'état d'origine
@@ -479,7 +479,7 @@ export const createFormulasSlice: StateCreator<
 
   reorderFormulaSequence: async (formulaId, oldIndex, newIndex) => {
     const stateBeforeUpdate = get();
-    let updatedFormula: any | undefined;
+    let updatedFormula: unknown | undefined;
     let fieldId: string | undefined;
 
     // 1. Mise à jour optimiste de l'état local
@@ -489,7 +489,7 @@ export const createFormulasSlice: StateCreator<
         for (const section of block.sections) {
           for (const field of section.fields) {
             if (field.formulas) {
-              const formulaIndex = field.formulas.findIndex((f: any) => f.id === formulaId);
+              const formulaIndex = field.formulas.findIndex((f: unknown) => f.id === formulaId);
               if (formulaIndex !== -1) {
                 const formula = field.formulas[formulaIndex];
                 if (formula.sequence) {
@@ -538,7 +538,7 @@ export const createFormulasSlice: StateCreator<
           for (const section of block.sections) {
             for (const field of section.fields) {
               if (field.id === fieldId && field.formulas) {
-                const formulaIndex = field.formulas.findIndex((f: any) => f.id === formulaId);
+                const formulaIndex = field.formulas.findIndex((f: unknown) => f.id === formulaId);
                 if (formulaIndex !== -1) {
                   field.formulas[formulaIndex] = finalFormula;
                 }
@@ -549,7 +549,7 @@ export const createFormulasSlice: StateCreator<
         return { blocks: newBlocks };
       });
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 4. Rollback en cas d'erreur
       toast.error(err.message || "La réorganisation a échoué. Restauration...");
       console.error('[CRMStore] reorderFormulaSequence API error:', err);
@@ -573,7 +573,7 @@ export const createFormulasSlice: StateCreator<
     }
     
     const stateBeforeUpdate = get();
-    let updatedFormula: any | undefined;
+    let updatedFormula: unknown | undefined;
     
     // 📊 ANALYSE: Récupérer toutes les formules du champ avant modification
     const fieldFormulasBeforeUpdate = stateBeforeUpdate.blocks
@@ -592,7 +592,7 @@ export const createFormulasSlice: StateCreator<
     );
 
     // 🔍 SUPER DEBUG: Vérifier la validité des items à ajouter et générer des IDs stables
-    items.forEach((item: any, idx: number) => {
+    items.forEach((item: unknown, idx: number) => {
       if (!item.id) {
         const newId = `temp-id-${Date.now()}-${idx}`;
         console.log(`[CRMStore][addItemsToFormulaSequence] 🔧 Génération d'ID pour l'item ${idx}: ${newId}`);
@@ -609,7 +609,7 @@ export const createFormulasSlice: StateCreator<
         for (const section of block.sections) {
           for (const field of section.fields) {
             if (String(field.id) === String(fieldId) && field.formulas) {
-              const formulaIndex = field.formulas.findIndex((f: any) => f.id === formulaId);
+              const formulaIndex = field.formulas.findIndex((f: unknown) => f.id === formulaId);
               if (formulaIndex !== -1) {
                 // Mettre à jour le fieldId explicitement dans la formule
                 if (!field.formulas[formulaIndex].fieldId) {
@@ -679,7 +679,7 @@ export const createFormulasSlice: StateCreator<
               if (String(f.id) === String(fieldId)) {
                 return {
                   ...f,
-                  formulas: f.formulas ? f.formulas.map((formula: any) =>
+                  formulas: f.formulas ? f.formulas.map((formula: Record<string, unknown>) =>
                     formula.id === formulaId ? finalFormulaWithFieldId : formula
                   ) : []
                 };
@@ -693,7 +693,7 @@ export const createFormulasSlice: StateCreator<
       
       console.log(`[CRMStore][addItemsToFormulaSequence] ✅ Mise à jour API réussie pour la formule ${formulaId}`);
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Rollback en cas d'erreur
       toast.error(err.message || "L'ajout des éléments a échoué");
       console.error('[CRMStore][addItemsToFormulaSequence] API error:', err);
@@ -703,7 +703,7 @@ export const createFormulasSlice: StateCreator<
 
   moveFormulaItem: async (fieldId, formulaId, fromIndex, toIndex) => {
     const stateBeforeUpdate = get();
-    let updatedFormula: any | undefined;
+    let updatedFormula: unknown | undefined;
     
     console.log(`[CRMStore][moveFormulaItem] 🚀 Déplacement de l'item de l'index ${fromIndex} vers ${toIndex} dans la formule ${formulaId} (champ: ${fieldId})`);
     
@@ -716,7 +716,7 @@ export const createFormulasSlice: StateCreator<
         for (const section of block.sections) {
           for (const field of section.fields) {
             if (String(field.id) === String(fieldId) && field.formulas) {
-              const formula = field.formulas.find((f: any) => f.id === formulaId);
+              const formula = field.formulas.find((f: Record<string, unknown>) => f.id === formulaId);
               if (formula && formula.sequence) {
                 // S'assurer que la formule a son fieldId
                 formula.fieldId = fieldId;
@@ -762,7 +762,7 @@ export const createFormulasSlice: StateCreator<
       // La mise à jour optimiste est déjà faite, pas besoin de mettre à jour à nouveau
       console.log(`[CRMStore][moveFormulaItem] ✅ Mise à jour API réussie pour la formule ${formulaId}`);
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err.message || "Le déplacement a échoué");
       console.error('[CRMStore][moveFormulaItem] API error:', err);
       // Rollback en cas d'erreur
@@ -775,7 +775,7 @@ export const createFormulasSlice: StateCreator<
     
     // Sauvegarder l'état pour pouvoir le restaurer en cas d'erreur
     const stateBeforeUpdate = get();
-    let updatedFormula: any | undefined;
+    let updatedFormula: unknown | undefined;
     
     // Validation des paramètres
     if (!formulaId || typeof formulaId !== 'string') {
@@ -805,7 +805,7 @@ export const createFormulasSlice: StateCreator<
         for (const section of block.sections) {
           for (const field of section.fields) {
             if (String(field.id) === String(fieldId) && field.formulas) {
-              const formula = field.formulas.find((f: any) => f.id === formulaId);
+              const formula = field.formulas.find((f: Record<string, unknown>) => f.id === formulaId);
               if (formula && formula.sequence) {
                 // S'assurer que la formule a son fieldId
                 formula.fieldId = fieldId;
@@ -909,7 +909,7 @@ export const createFormulasSlice: StateCreator<
       // Notification de succès
       toast.success("Élément supprimé avec succès");
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       // En cas d'erreur, restaurer l'état d'origine
       toast.error(err.message || "La suppression a échoué");
       console.error('[CRMStore][deleteFormulaSequenceItem] error:', err);

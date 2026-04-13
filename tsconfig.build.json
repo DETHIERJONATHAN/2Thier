@@ -38,6 +38,8 @@
     "src/security/**",
     "scripts/**",
     "test*",
+    "**/*.test.ts",
+    "**/*.test.tsx",
     "**/*.d.ts"
   ]
 }

@@ -55,7 +55,7 @@ export const ColorInput: React.FC<ColorInputProps> = ({
   };
 
   // Handler pour le ColorPicker
-  const handleColorPickerChange = (color: any) => {
+  const handleColorPickerChange = (color: unknown) => {
     let newValue: string;
 
     if (showAlpha && color.metaColor?.a !== undefined && color.metaColor.a < 1) {

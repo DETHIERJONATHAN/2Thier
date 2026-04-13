@@ -19,7 +19,7 @@ interface Transition {
   fromStatusId: string;
   toStatusId: string;
   triggerType: string;
-  requiredConditions?: any;
+  requiredConditions?: unknown;
   allowedRoles?: string[];
   notifyRoles?: string[];
   sendEmail: boolean;
@@ -159,7 +159,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
       }
       setTransModalVisible(false);
       fetchTransitions();
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err?.errorFields) return;
       message.error(err?.message || 'Erreur');
     }
@@ -200,7 +200,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
       }
       setTemplModalVisible(false);
       fetchTemplates();
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err?.errorFields) return;
       message.error(err?.message || 'Erreur');
     }
@@ -221,7 +221,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
     {
       title: 'De → Vers',
       key: 'transition',
-      render: (_: any, r: Transition) => (
+      render: (_: unknown, r: Transition) => (
         <Space>
           <Tag color={r.FromStatus?.color}>{r.FromStatus?.name}</Tag>
           <ArrowRightOutlined />
@@ -273,7 +273,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
       title: 'Actions',
       key: 'actions',
       width: 100,
-      render: (_: any, r: Transition) => (
+      render: (_: unknown, r: Transition) => (
         <Space>
           <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenTransModal(r)} />
           <Popconfirm title="Supprimer ?" onConfirm={() => handleDeleteTrans(r.id)}>
@@ -303,7 +303,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
     {
       title: 'Statut associé',
       key: 'status',
-      render: (_: any, r: InvoiceTemplate) => r.Status
+      render: (_: unknown, r: InvoiceTemplate) => r.Status
         ? <Tag color={r.Status.color}>{r.Status.name}</Tag>
         : <Text type="secondary">Global</Text>,
     },
@@ -325,7 +325,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
       title: 'Actions',
       key: 'actions',
       width: 100,
-      render: (_: any, r: InvoiceTemplate) => (
+      render: (_: unknown, r: InvoiceTemplate) => (
         <Space>
           <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenTemplModal(r)} />
           <Popconfirm title="Supprimer ?" onConfirm={() => handleDeleteTempl(r.id)}>
@@ -353,7 +353,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
       fetchTransitions();
       fetchTemplates();
       setResetConfirmVisible(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.data?.message || err?.message || 'Erreur à l\'initialisation');
     } finally {
       setSeeding(false);
@@ -534,7 +534,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
           </Form.Item>
           <Form.Item name="statusId" label="Associé au statut (optionnel)">
             <Select
-              options={[{ value: null as any, label: '— Global (aucun statut) —' }, ...statusOptions]}
+              options={[{ value: null as unknown, label: '— Global (aucun statut) —' }, ...statusOptions]}
               allowClear
               placeholder="Sélectionner..."
             />

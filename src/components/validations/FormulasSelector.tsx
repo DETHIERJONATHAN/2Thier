@@ -3,7 +3,7 @@ import { ValidationItem } from './types';
 
 interface FormulasSelectorProps {
   fieldId: string;
-  onSelectFormula: (formula: any) => void;
+  onSelectFormula: (formula: unknown) => void;
 }
 
 /**
@@ -41,7 +41,7 @@ const FormulasSelector: React.FC<FormulasSelectorProps> = ({ fieldId, onSelectFo
         ];
         
         setFormulas(mockFormulas);
-      } catch (err: any) {
+      } catch (err: unknown) {
         setError(err.message || 'Erreur lors du chargement des formules');
         console.error('Erreur de chargement des formules:', err);
       } finally {

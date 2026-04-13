@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest, requireRole } from '../middlewares/auth.js';
 import { db } from '../lib/database.js';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -26,7 +27,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     res.json({ success: true, data: org });
     
   } catch (error) {
-    console.error('❌ [CompanyAPI] Erreur récupération entreprise:', error);
+    logger.error('❌ [CompanyAPI] Erreur récupération entreprise:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la récupération des informations de l\'entreprise' 
@@ -65,7 +66,7 @@ router.put('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
     });
     
   } catch (error) {
-    console.error('❌ [CompanyAPI] Erreur mise à jour entreprise:', error);
+    logger.error('❌ [CompanyAPI] Erreur mise à jour entreprise:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la mise à jour des informations de l\'entreprise' 
@@ -102,7 +103,7 @@ router.get('/settings', requireRole(['admin', 'super_admin']), async (req: Authe
     res.json({ success: true, data: settings });
     
   } catch (error) {
-    console.error('❌ [CompanyAPI] Erreur paramètres entreprise:', error);
+    logger.error('❌ [CompanyAPI] Erreur paramètres entreprise:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la récupération des paramètres' 

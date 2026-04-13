@@ -62,7 +62,7 @@ const ThemeManager: React.FC<ThemeManagerProps> = ({ websiteId }) => {
     customCss: ''
   });
 
-  const updateField = (field: string, value: any) => {
+  const updateField = (field: string, value: unknown) => {
     setTheme({ ...theme, [field]: value });
     setHasChanges(true);
   };
@@ -86,7 +86,7 @@ const ThemeManager: React.FC<ThemeManagerProps> = ({ websiteId }) => {
   };
 
   const applyPreset = (presetName: string) => {
-    const presets: any = {
+    const presets: unknown = {
       'vert-energie': {
         name: 'Vert Énergie',
         primaryColor: WEBSITE_DEFAULTS.primaryColor,

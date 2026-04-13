@@ -38,7 +38,7 @@ export function usePushNotifications() {
         console.log('[SW] Service Worker enregistré');
 
         // 2. Récupérer la clé VAPID publique
-        const vapidResp = await api.get('/api/push/vapid-key') as any;
+        const vapidResp = await api.get('/api/push/vapid-key') as unknown;
         if (!vapidResp?.publicKey) {
           console.warn('[PUSH] Pas de clé VAPID configurée côté serveur');
           return;

@@ -25,9 +25,9 @@ interface GoogleConnectionStatus {
       lastSync: string;
     };
     scopes: string[];
-    userInfo?: any;
+    userInfo?: unknown;
   };
-  userInfo?: any;
+  userInfo?: unknown;
 }
 
 interface GoogleConnectionCardProps {

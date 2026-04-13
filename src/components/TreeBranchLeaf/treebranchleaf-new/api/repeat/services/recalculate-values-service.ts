@@ -116,7 +116,7 @@ export async function recalculateValuesAfterCopy(
       if (forceRecalculation || newValue !== oldValue) {
         await prisma.treeBranchLeafNode.update({
           where: { id: node.id },
-          data: { calculatedValue: newValue as any }
+          data: { calculatedValue: newValue as unknown }
         });
 
         result.recalculatedCount++;

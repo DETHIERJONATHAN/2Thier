@@ -99,7 +99,7 @@ export interface CopyVariableOptions {
   /** Flag indiquant que la copie provient d'une duplication par repeater */
   isFromRepeaterDuplication?: boolean;
   /** Contexte rÃ©pÃ©teur si applicable (pour journalisation) */
-  repeatContext?: any;
+  repeatContext?: unknown;
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -286,7 +286,7 @@ export async function copyVariableWithCapacities(
     const cacheKey = `${originalVarId}|${newNodeId}`; // Scope le cache par nÅ“ud cible pour ne pas rÃ©utiliser une copie d'un autre nÅ“ud
     
     // Si trouvÃ© en cache et autoCreateDisplayNode, on va rÃ©utiliser la variable du cache
-    let cachedVariable: any = null;
+    let cachedVariable: unknown = null;
     
     if (variableCopyCache.has(cacheKey)) {
       const cachedId = variableCopyCache.get(cacheKey)!;
@@ -555,7 +555,7 @@ export async function copyVariableWithCapacities(
             treeId: originalOwnerNode.treeId,
             parentId: displayParentId,
             type: 'leaf_field' as const,
-            subType: null as any,
+            subType: null as unknown,
             label: originalVar.displayName || 'DonnÃ©e',
             description: null as string | null,
             value: null as string | null,
@@ -563,16 +563,16 @@ export async function copyVariableWithCapacities(
             isRequired: false,
             isVisible: true,
             isActive: true,
-            isMultiple: false as any,
-            fieldConfig: null as any,
-            conditionConfig: null as any,
-            formulaConfig: null as any,
-            tableConfig: null as any,
-            apiConfig: null as any,
-            linkConfig: null as any,
-            defaultValue: null as any,
-            calculatedValue: null as any,
-            metadata: { fromVariableId: appendSuffixOnce(originalVar.id) } as any,
+            isMultiple: false as unknown,
+            fieldConfig: null as unknown,
+            conditionConfig: null as unknown,
+            formulaConfig: null as unknown,
+            tableConfig: null as unknown,
+            apiConfig: null as unknown,
+            linkConfig: null as unknown,
+            defaultValue: null as unknown,
+            calculatedValue: null as unknown,
+            metadata: { fromVariableId: appendSuffixOnce(originalVar.id) } as unknown,
             // ðŸ”‘ IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
             subtab: originalOwnerNode.subtab,
             subtabs: originalOwnerNode.subtabs,
@@ -632,29 +632,29 @@ export async function copyVariableWithCapacities(
                 }
               }
               return updatedInstances;
-            })() as any,
+            })() as unknown,
             linkedTableIds: Array.isArray(originalOwnerNode.linkedTableIds) 
               // âœ… AJOUTER LES SUFFIXES aux IDs de table ici aussi!
               ? originalOwnerNode.linkedTableIds.map(id => `${id}-${suffix}`)
-              : [] as any,
-            linkedConditionIds: [] as any,
-            linkedFormulaIds: [] as any,
-            linkedVariableIds: [] as any,
-            appearance_size: originalOwnerNode?.appearance_size ?? 'md' as any,
-            appearance_variant: originalOwnerNode?.appearance_variant ?? null as any,
-            appearance_width: originalOwnerNode?.appearance_width ?? '100%' as any,
-            appearance_displayIcon: originalOwnerNode?.appearance_displayIcon ?? null as any,
-            field_full_width: originalOwnerNode?.field_full_width ?? null as any,
-            fieldType: 'TEXT' as any,
-            fieldSubType: null as any,
-            field_label: originalVar.displayName as any,
+              : [] as unknown,
+            linkedConditionIds: [] as unknown,
+            linkedFormulaIds: [] as unknown,
+            linkedVariableIds: [] as unknown,
+            appearance_size: originalOwnerNode?.appearance_size ?? 'md' as unknown,
+            appearance_variant: originalOwnerNode?.appearance_variant ?? null as unknown,
+            appearance_width: originalOwnerNode?.appearance_width ?? '100%' as unknown,
+            appearance_displayIcon: originalOwnerNode?.appearance_displayIcon ?? null as unknown,
+            field_full_width: originalOwnerNode?.field_full_width ?? null as unknown,
+            fieldType: 'TEXT' as unknown,
+            fieldSubType: null as unknown,
+            field_label: originalVar.displayName as unknown,
           };
 
           const maybeExisting = await prisma.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
           if (maybeExisting) {
             await prisma.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...displayNodeData, createdAt: maybeExisting.createdAt, updatedAt: now } });
           } else {
-            await prisma.treeBranchLeafNode.create({ data: displayNodeData as any });
+            await prisma.treeBranchLeafNode.create({ data: displayNodeData as unknown });
           }
 
           // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -747,7 +747,7 @@ export async function copyVariableWithCapacities(
     // Ã‰vite la violation d'unicitÃ© sur nodeId (1 variable par nÅ“ud) quand
     // plusieurs duplications pointent vers le mÃªme nÅ“ud d'affichage dÃ©diÃ©.
     let _reusingExistingVariable = false;
-    let _existingVariableForReuse: any = null;
+    let _existingVariableForReuse: unknown = null;
     
     try {
       const existingForNode = await prisma.treeBranchLeafNodeVariable.findUnique({ where: { nodeId: finalNodeId } });
@@ -768,7 +768,7 @@ export async function copyVariableWithCapacities(
               data_unit: existingForNode.unit,
               data_visibleToUser: existingForNode.visibleToUser,
               label: existingForNode.displayName || undefined,
-              field_label: (existingForNode.displayName as any) || undefined
+              field_label: (existingForNode.displayName as unknown) || undefined
             }
           });
           await addToNodeLinkedField(prisma, finalNodeId, 'linkedVariableIds', [existingForNode.id]);
@@ -787,7 +787,7 @@ export async function copyVariableWithCapacities(
     }
 
     // Utiliser la variable rÃ©utilisÃ©e, la variable en cache, ou en crÃ©er une nouvelle
-    let newVariable: any;
+    let newVariable: unknown;
     
     if (cachedVariable) {
       newVariable = cachedVariable;
@@ -813,7 +813,7 @@ export async function copyVariableWithCapacities(
             : null,
           sourceRef: newSourceRef,
           sourceType: originalVar.sourceType,
-          metadata: originalVar.metadata as any,
+          metadata: originalVar.metadata as unknown,
           createdAt: new Date(),
           updatedAt: new Date()
         }
@@ -846,7 +846,7 @@ export async function copyVariableWithCapacities(
           data_visibleToUser: newVariable.visibleToUser,
           // Harmoniser le label du nÅ“ud d'affichage sur le displayName de la variable
           label: newVariable.displayName || undefined,
-          field_label: (newVariable.displayName as any) || undefined
+          field_label: (newVariable.displayName as unknown) || undefined
         }
       });
     } catch (e) {
@@ -923,7 +923,7 @@ export async function copyVariableWithCapacities(
                   hasTable: true,
                   table_activeId: capId,
                   table_name: tbl?.name || null,
-                  table_type: (tbl?.type as any) || null
+                  table_type: (tbl?.type as unknown) || null
                 }
               });
               await addToNodeLinkedField(prisma, finalNodeId, 'linkedTableIds', [capId]);
@@ -1066,7 +1066,7 @@ export async function createDisplayNodeForExistingVariable(
     treeId: owner.treeId,
     parentId: displayParentId,
     type: 'leaf_field' as const,
-    subType: null as any,
+    subType: null as unknown,
     label: v.displayName || 'DonnÃ©e',
     description: null as string | null,
     value: null as string | null,
@@ -1074,16 +1074,16 @@ export async function createDisplayNodeForExistingVariable(
     isRequired: false,
     isVisible: true,
     isActive: true,
-    isMultiple: false as any,
-    fieldConfig: null as any,
-    conditionConfig: null as any,
-    formulaConfig: null as any,
-    tableConfig: null as any,
-    apiConfig: null as any,
-    linkConfig: null as any,
-    defaultValue: null as any,
-    calculatedValue: null as any,
-    metadata: { fromVariableId: variableId } as any,
+    isMultiple: false as unknown,
+    fieldConfig: null as unknown,
+    conditionConfig: null as unknown,
+    formulaConfig: null as unknown,
+    tableConfig: null as unknown,
+    apiConfig: null as unknown,
+    linkConfig: null as unknown,
+    defaultValue: null as unknown,
+    calculatedValue: null as unknown,
+    metadata: { fromVariableId: variableId } as unknown,
     // ðŸ”‘ IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
     subtab: owner.subtab,
     subtabs: owner.subtabs,
@@ -1099,26 +1099,26 @@ export async function createDisplayNodeForExistingVariable(
     hasTable: owner.hasTable ?? false,
     table_name: owner.table_name,
     table_activeId: owner.table_activeId,
-    table_instances: owner.table_instances as any,
-    linkedTableIds: Array.isArray(owner.linkedTableIds) ? owner.linkedTableIds : [] as any,
-    linkedConditionIds: [] as any,
-    linkedFormulaIds: [] as any,
-    linkedVariableIds: [variableId] as any,
-    appearance_size: owner?.appearance_size ?? 'md' as any,
-    appearance_variant: owner?.appearance_variant ?? null as any,
-    appearance_width: owner?.appearance_width ?? '100%' as any,
-    appearance_displayIcon: owner?.appearance_displayIcon ?? null as any,
-    field_full_width: owner?.field_full_width ?? null as any,
-    fieldType: 'TEXT' as any,
-    fieldSubType: null as any,
-    field_label: v.displayName as any,
+    table_instances: owner.table_instances as unknown,
+    linkedTableIds: Array.isArray(owner.linkedTableIds) ? owner.linkedTableIds : [] as unknown,
+    linkedConditionIds: [] as unknown,
+    linkedFormulaIds: [] as unknown,
+    linkedVariableIds: [variableId] as unknown,
+    appearance_size: owner?.appearance_size ?? 'md' as unknown,
+    appearance_variant: owner?.appearance_variant ?? null as unknown,
+    appearance_width: owner?.appearance_width ?? '100%' as unknown,
+    appearance_displayIcon: owner?.appearance_displayIcon ?? null as unknown,
+    field_full_width: owner?.field_full_width ?? null as unknown,
+    fieldType: 'TEXT' as unknown,
+    fieldSubType: null as unknown,
+    field_label: v.displayName as unknown,
   };
 
   const existing = await prisma.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
   if (existing) {
     await prisma.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...baseData, createdAt: existing.createdAt, updatedAt: now } });
   } else {
-    await prisma.treeBranchLeafNode.create({ data: baseData as any });
+    await prisma.treeBranchLeafNode.create({ data: baseData as unknown });
   }
 
   await prisma.treeBranchLeafNode.update({

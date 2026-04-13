@@ -11,8 +11,8 @@ import { getVariantsForSection } from '../../data/sectionStyleVariants';
 const { TextArea } = Input;
 
 interface SectionConfigPanelProps {
-  section: any;
-  onUpdate: (config: any) => void;
+  section: unknown;
+  onUpdate: (config: unknown) => void;
   onDelete: () => void;
   treeId?: string; // ID de l'arbre TBL pour le sélecteur
   nodeId?: string; // ID du nœud TBL actuel
@@ -123,7 +123,7 @@ const SectionConfigPanel = ({ section, onUpdate, onDelete }: SectionConfigPanelP
     }
   }, [section, form]); // Surveiller toute la section
 
-  const handleValuesChange = (_: any, allValues: any) => {
+  const handleValuesChange = (_: unknown, allValues: unknown) => {
     // Mettre à jour immédiatement la section avec les nouvelles valeurs
     console.log('[SectionConfigPanel] Form values changed:', allValues);
     console.log('[SectionConfigPanel] Current section before update:', section);

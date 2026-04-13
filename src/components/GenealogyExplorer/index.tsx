@@ -78,7 +78,7 @@ function useExplorerData(fieldId: string) {
       const response = await api.get(`/api/option-nodes/field/${fieldId}/tree`);
       if (response.success && response.tree) {
         // Convertir en format NodeData avec types O, O+C, C
-        const convertedTree = response.tree.map((node: any) => ({
+        const convertedTree = response.tree.map((node: Record<string, unknown>) => ({
           id: node.id,
           label: node.label,
           type: node.fieldType ? 'O+C' : 'O' as 'O' | 'O+C' | 'C',
@@ -104,7 +104,7 @@ function useExplorerData(fieldId: string) {
     label: string, 
     type: 'O' | 'O+C' | 'C',
     fieldType?: string,
-    fieldConfig?: any
+    fieldConfig?: unknown
   ) => {
     try {
       const response = await api.post('/api/option-nodes', {

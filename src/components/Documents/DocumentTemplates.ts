@@ -26,7 +26,7 @@ export interface DocumentTemplate {
 export interface TemplateModule {
   moduleType: string;
   theme?: string;
-  config?: Record<string, any>;
+  config?: Record<string, unknown>;
   order: number;
 }
 
@@ -37,7 +37,7 @@ const createModule = (
   moduleType: string, 
   order: number, 
   theme?: string, 
-  configOverrides?: Record<string, any>
+  configOverrides?: Record<string, unknown>
 ): TemplateModule => ({
   moduleType,
   order,

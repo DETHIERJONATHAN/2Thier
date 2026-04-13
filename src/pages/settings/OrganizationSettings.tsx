@@ -240,12 +240,12 @@ const OrganizationSettings: React.FC = () => {
   const userRole = user?.role;
   const isAdmin = userRole === 'admin' || userRole === 'super_admin';
 
-  const orgLogo = (currentOrganization as any)?.logoUrl || null;
+  const orgLogo = (currentOrganization as unknown)?.logoUrl || null;
 
   useEffect(() => {
     if (currentOrganization) {
       setName(currentOrganization.name);
-      const org = currentOrganization as any;
+      const org = currentOrganization as unknown;
       setLegalName(org.legalName || '');
       setVatNumber(org.vatNumber || '');
       setIban(org.iban || '');
@@ -280,7 +280,7 @@ const OrganizationSettings: React.FC = () => {
     try {
       const formData = new FormData();
       formData.append('logo', file);
-      const resp: any = await api.post(`/api/organizations/${currentOrganization.id}/logo`, formData);
+      const resp: unknown = await api.post(`/api/organizations/${currentOrganization.id}/logo`, formData);
       if (resp.success) {
         message.success('Logo mis à jour !');
         if (refetchUser) await refetchUser();
@@ -309,7 +309,7 @@ const OrganizationSettings: React.FC = () => {
       } else {
         throw new Error(response.message || "Une erreur est survenue.");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error(error.message || "Erreur lors de la mise à jour.");
     } finally { setIsLoading(false); }
   };
@@ -319,7 +319,7 @@ const OrganizationSettings: React.FC = () => {
     setBillingSaving(true);
     const fullAddress = [billingStreet, billingZip, billingCity, billingCountry].filter(Boolean).join(', ');
     try {
-      const resp: any = await api.put(`/api/organizations/${currentOrganization.id}`, {
+      const resp: unknown = await api.put(`/api/organizations/${currentOrganization.id}`, {
         legalName: legalName || null,
         vatNumber: vatNumber || null,
         iban: iban || null,
@@ -339,7 +339,7 @@ const OrganizationSettings: React.FC = () => {
       } else {
         throw new Error(resp.message || 'Erreur');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error(error.message || 'Erreur lors de la mise à jour.');
     } finally { setBillingSaving(false); }
   };

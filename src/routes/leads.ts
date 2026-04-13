@@ -3,6 +3,7 @@ import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth";
 import { impersonationMiddleware } from "../middlewares/impersonation";
 import { prisma } from '../lib/prisma';
 import { createBusinessAutoPost } from '../services/business-auto-post';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -17,7 +18,7 @@ router.get('/debug-orgs', async (_req: Request, res: Response): Promise<void> =>
             organizations: organizations.map(o => ({ id: o.id, name: o.name }))
         });
     } catch (error) {
-        console.error('[DEBUG] Erreur lors de la liste des organisations:', error);
+        logger.error('[DEBUG] Erreur lors de la liste des organisations:', error);
         res.status(500).json({ success: false, message: 'Impossible de lister les organisations' });
     }
 });
@@ -31,7 +32,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     }
     
     // 🐛 Debug logs pour comprendre le problème SuperAdmin
-    console.log('[LEADS] 🔍 Utilisateur connecté:', {
+    logger.info('[LEADS] 🔍 Utilisateur connecté:', {
         id: authReq.user.id,
         email: authReq.user.email,
         role: authReq.user.role,
@@ -44,7 +45,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
                         authReq.user.isSuperAdmin === true ||
                         authReq.user.role?.toLowerCase().includes('super');
     
-    console.log('[LEADS] 👑 Vérification SuperAdmin:', { 
+    logger.info('[LEADS] 👑 Vérification SuperAdmin:', { 
         isSuperAdmin, 
         conditions: {
             roleCheck: authReq.user.role === 'super_admin',
@@ -54,7 +55,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     });
     
     if (isSuperAdmin) {
-        console.log('[LEADS] 🌍 SuperAdmin détecté - récupération de TOUS les leads');
+        logger.info('[LEADS] 🌍 SuperAdmin détecté - récupération de TOUS les leads');
         try {
                                     // Filtres optionnels
                                     const { from, to, source, status, statusId, assignedTo, origin } = req.query as Record<string, string | undefined>;
@@ -105,8 +106,8 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
                 }
             });
             
-            console.log('[LEADS] 📊 Total leads récupérés pour SuperAdmin:', allLeads.length);
-            console.log('[LEADS] 📋 Leads par organisation:', allLeads.reduce((acc, lead) => {
+            logger.info('[LEADS] 📊 Total leads récupérés pour SuperAdmin:', allLeads.length);
+            logger.info('[LEADS] 📋 Leads par organisation:', allLeads.reduce((acc, lead) => {
                 const orgName = lead.organization?.name || 'Sans organisation';
                 acc[orgName] = (acc[orgName] || 0) + 1;
                 return acc;
@@ -115,7 +116,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
             res.json({ success: true, data: allLeads });
             return;
         } catch (error) {
-            console.error('[LEADS] Erreur lors de la récupération des leads pour SuperAdmin:', error);
+            logger.error('[LEADS] Erreur lors de la récupération des leads pour SuperAdmin:', error);
             res.status(500).json({ success: false, message: 'Impossible de récupérer les leads.' });
             return;
         }
@@ -128,7 +129,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     }
     const { organizationId } = authReq.user;
     
-    console.log('[LEADS] 👤 Utilisateur normal - filtrage par organisation:', organizationId);
+    logger.info('[LEADS] 👤 Utilisateur normal - filtrage par organisation:', organizationId);
 
     try {
                         const { from, to, source, status, statusId, assignedTo, origin, q } = req.query as Record<string, string | undefined>;
@@ -181,29 +182,29 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
             return hay.includes(textFilter);
         }) : leads;
 
-        console.log('[LEADS] 📊 Total leads pour organisation:', filteredLeads.length);
-        console.log('[LEADS] 📋 IDs des leads:', leads.map(l => l.id.slice(0,8)));
+        logger.info('[LEADS] 📊 Total leads pour organisation:', filteredLeads.length);
+        logger.info('[LEADS] 📋 IDs des leads:', leads.map(l => l.id.slice(0,8)));
         
         res.json({ success: true, data: filteredLeads });
     } catch (error) {
-        console.error('Erreur lors de la récupération des leads:', error);
+        logger.error('Erreur lors de la récupération des leads:', error);
         res.status(500).json({ success: false, message: 'Impossible de récupérer les leads.' });
     }
 });
 
 // POST /api/leads - Créer un nouveau lead
 router.post('/', async (req: Request, res: Response): Promise<void> => {
-    console.log('[TS-LEADS] POST /api/leads - Requête reçue:', req.body);
-    console.log('[TS-LEADS] Headers:', req.headers);
+    logger.info('[TS-LEADS] POST /api/leads - Requête reçue:', req.body);
+    logger.info('[TS-LEADS] Headers:', req.headers);
     
     const authReq = req as AuthenticatedRequest;
     if (!authReq.user || !authReq.user.organizationId) {
-        console.log('[TS-LEADS] Erreur: Utilisateur non authentifié ou sans organisation');
+        logger.info('[TS-LEADS] Erreur: Utilisateur non authentifié ou sans organisation');
         res.status(401).json({ success: false, message: 'Authentification requise.' });
         return;
     }
     
-    console.log('[TS-LEADS] Utilisateur authentifié:', { 
+    logger.info('[TS-LEADS] Utilisateur authentifié:', { 
         userId: authReq.user.userId,
         role: authReq.user.role,
         orgId: authReq.user.organizationId
@@ -212,21 +213,21 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     const organizationId = authReq.user.organizationId;
     const { status, data, assignedToId, source } = req.body;
 
-    console.log('[TS-LEADS] Données extraites:', { status, data, source, assignedToId, organizationId });
+    logger.info('[TS-LEADS] Données extraites:', { status, data, source, assignedToId, organizationId });
 
     if (!status) {
-        console.log('[TS-LEADS] Erreur: Status manquant');
+        logger.info('[TS-LEADS] Erreur: Status manquant');
         res.status(400).json({ success: false, message: 'Le statut est requis.' });
         return;
     }
     
     // Vérifier que l'organisation existe
     try {
-        console.log('[TS-LEADS] Vérification de l\'existence de l\'organisation:', organizationId);
+        logger.info('[TS-LEADS] Vérification de l\'existence de l\'organisation:', organizationId);
         
         // Vérification de la validité de l'organizationId
         if (!organizationId || typeof organizationId !== 'string' || organizationId.trim() === '') {
-            console.log('[TS-LEADS] ID d\'organisation invalide ou manquant');
+            logger.info('[TS-LEADS] ID d\'organisation invalide ou manquant');
             res.status(400).json({ success: false, message: 'ID d\'organisation invalide ou manquant.' });
             return;
         }
@@ -237,12 +238,12 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         });
         
         if (!organization) {
-            console.log('[TS-LEADS] Organisation non trouvée:', organizationId);
+            logger.info('[TS-LEADS] Organisation non trouvée:', organizationId);
             res.status(400).json({ success: false, message: 'Organisation non trouvée.' });
             return;
         }
         
-        console.log('[TS-LEADS] Organisation trouvée:', organization.name);
+        logger.info('[TS-LEADS] Organisation trouvée:', organization.name);
         
         // Vérifier l'assignedToId s'il est fourni
         let finalAssignedToId = assignedToId;
@@ -251,15 +252,15 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
                 where: { id: assignedToId }
             });
             if (!user) {
-                console.log('[TS-LEADS] Utilisateur assigné non trouvé:', assignedToId);
+                logger.info('[TS-LEADS] Utilisateur assigné non trouvé:', assignedToId);
                 finalAssignedToId = null; // Ignorer l'assignation si l'utilisateur n'existe pas
             } else {
-                console.log('[TS-LEADS] Utilisateur assigné trouvé:', user.email);
+                logger.info('[TS-LEADS] Utilisateur assigné trouvé:', user.email);
             }
         } else {
             // Si pas d'assignation, utiliser l'utilisateur actuel
             finalAssignedToId = authReq.user.userId; // Correction: userId au lieu de id
-            console.log('[TS-LEADS] Assignation au créateur du lead:', finalAssignedToId);
+            logger.info('[TS-LEADS] Assignation au créateur du lead:', finalAssignedToId);
             
             // En production, on vérifie toujours que l'utilisateur existe réellement dans la DB
             const existingUser = await prisma.user.findUnique({
@@ -267,7 +268,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
             });
             
             if (!existingUser) {
-                console.log('[TS-LEADS] L\'utilisateur assigné n\'existe pas, recherche d\'un utilisateur valide...');
+                logger.info('[TS-LEADS] L\'utilisateur assigné n\'existe pas, recherche d\'un utilisateur valide...');
                 const anyUser = await prisma.user.findFirst({
                     where: {
                         UserOrganization: {
@@ -280,15 +281,15 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
                 
                 if (anyUser) {
                     finalAssignedToId = anyUser.id;
-                    console.log('[TS-LEADS] Utilisateur trouvé dans l\'organisation:', { id: finalAssignedToId, email: anyUser.email });
+                    logger.info('[TS-LEADS] Utilisateur trouvé dans l\'organisation:', { id: finalAssignedToId, email: anyUser.email });
                 } else {
                     finalAssignedToId = null; // Si aucun utilisateur n'est trouvé, mettre null
-                    console.log('[TS-LEADS] Aucun utilisateur trouvé dans l\'organisation, assignedToId=null');
+                    logger.info('[TS-LEADS] Aucun utilisateur trouvé dans l\'organisation, assignedToId=null');
                 }
             }
         }
         
-        console.log('[TS-LEADS] Tentative de création du lead avec:', {
+        logger.info('[TS-LEADS] Tentative de création du lead avec:', {
             organizationId,
             status,
             source: source || (data && data.source ? data.source : 'direct'), // Utiliser source explicite ou extraire de data
@@ -306,11 +307,11 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
             },
         });
         
-        console.log('[TS-LEADS] Lead créé avec succès:', { id: newLead.id, status: newLead.status });
+        logger.info('[TS-LEADS] Lead créé avec succès:', { id: newLead.id, status: newLead.status });
 
         // 🐝 Auto-post social : nouveau client (si statut client)
         if (status === 'client' || status === 'converti') {
-          const leadData = (data || {}) as Record<string, any>;
+          const leadData = (data || {}) as Record<string, unknown>;
           createBusinessAutoPost({
             orgId: organizationId,
             userId: authReq.user?.userId || authReq.user?.id,
@@ -318,15 +319,15 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
             entityId: newLead.id,
             entityLabel: leadData.company || leadData.name || 'Nouveau client',
             clientName: leadData.name || leadData.company || undefined,
-          }).catch(err => console.error('[TS-LEADS] Auto-post error:', err));
+          }).catch(err => logger.error('[TS-LEADS] Auto-post error:', err));
         }
 
         res.status(201).json(newLead);
     } catch (error: unknown) {
-        console.error('[TS-LEADS] Erreur détaillée lors de la création du lead:', error);
+        logger.error('[TS-LEADS] Erreur détaillée lors de la création du lead:', error);
         const errObj = (typeof error === 'object' && error !== null) ? (error as Record<string, unknown>) : {};
-        console.error('[TS-LEADS] Message d\'erreur:', String(errObj['message'] || ''));
-        console.error('[TS-LEADS] Stack trace:', String(errObj['stack'] || ''));
+        logger.error('[TS-LEADS] Message d\'erreur:', String(errObj['message'] || ''));
+        logger.error('[TS-LEADS] Stack trace:', String(errObj['stack'] || ''));
         
         // Détection plus précise du type d'erreur pour un meilleur message
         let errorMessage = 'Impossible de créer le lead.';
@@ -372,7 +373,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
         }
         res.json({ success: true, data: lead });
     } catch (error) {
-        console.error(`Erreur lors de la récupération du lead ${id}:`, error);
+        logger.error(`Erreur lors de la récupération du lead ${id}:`, error);
         res.status(500).json({ success: false, message: 'Impossible de récupérer le lead.' });
     }
 });
@@ -454,9 +455,9 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
             if (leadStatus) {
                 finalStatusId = leadStatus.id;
                 finalStatus = status; // Garder l'ancien status pour compatibilité
-                console.log(`[LEADS] Conversion status: "${status}" -> statusId: ${leadStatus.id} (${leadStatus.name})`);
+                logger.info(`[LEADS] Conversion status: "${status}" -> statusId: ${leadStatus.id} (${leadStatus.name})`);
             } else {
-                console.warn(`[LEADS] Statut non trouvé pour: "${status}" -> "${statusName}"`);
+                logger.warn(`[LEADS] Statut non trouvé pour: "${status}" -> "${statusName}"`);
             }
         }
 
@@ -483,7 +484,7 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
         });
         res.json({ success: true, data: updatedLead });
     } catch (error) {
-        console.error(`Erreur lors de la mise à jour du lead ${id}:`, error);
+        logger.error(`Erreur lors de la mise à jour du lead ${id}:`, error);
         res.status(500).json({ success: false, message: 'Impossible de mettre à jour le lead.' });
     }
 });
@@ -512,7 +513,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
         await prisma.lead.delete({ where: { id } });
         res.status(204).send();
     } catch (error) {
-        console.error(`Erreur lors de la suppression du lead ${id}:`, error);
+        logger.error(`Erreur lors de la suppression du lead ${id}:`, error);
         res.status(500).json({ success: false, message: 'Impossible de supprimer le lead.' });
     }
 });

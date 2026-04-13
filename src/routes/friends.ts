@@ -2,11 +2,12 @@ import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { sendPushToUser } from './push';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
 // All routes require authentication
-router.use(authenticateToken as any);
+router.use(authenticateToken as unknown);
 
 // ═══════════════════════════════════════════════════════════════
 // GET /friends — List all friends (accepted) + pending requests
@@ -79,7 +80,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       pendingSent: pendingSent.map(p => ({ friendshipId: p.id, ...p.addressee })),
     });
   } catch (err) {
-    console.error('[FRIENDS] Error fetching friends:', err);
+    logger.error('[FRIENDS] Error fetching friends:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -125,7 +126,7 @@ router.post('/sync-org', async (req: Request, res: Response): Promise<void> => {
 
     res.json({ success: true, added, total: orgMembers.length });
   } catch (err) {
-    console.error('[FRIENDS] Error syncing org:', err);
+    logger.error('[FRIENDS] Error syncing org:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -202,12 +203,12 @@ router.post('/request', async (req: Request, res: Response): Promise<void> => {
         type: 'notification',
       }).catch(() => {});
     } catch (notifErr) {
-      console.error('[FRIENDS] Notification error (non-blocking):', notifErr);
+      logger.error('[FRIENDS] Notification error (non-blocking):', notifErr);
     }
 
     res.json({ success: true, friendship });
   } catch (err) {
-    console.error('[FRIENDS] Error sending request:', err);
+    logger.error('[FRIENDS] Error sending request:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -249,7 +250,7 @@ router.post('/block-user', async (req: Request, res: Response): Promise<void> =>
         for (const notif of notifs) {
           await db.notification.update({
             where: { id: notif.id },
-            data: { status: 'READ', readAt: new Date(), updatedAt: new Date(), data: { ...(notif.data as any), handled: 'blocked' } },
+            data: { status: 'READ', readAt: new Date(), updatedAt: new Date(), data: { ...(notif.data as unknown), handled: 'blocked' } },
           });
         }
       } catch (_) {}
@@ -262,7 +263,7 @@ router.post('/block-user', async (req: Request, res: Response): Promise<void> =>
       res.json({ success: true, friendshipId: friendship.id });
     }
   } catch (err) {
-    console.error('[FRIENDS] Error blocking user:', err);
+    logger.error('[FRIENDS] Error blocking user:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -292,7 +293,7 @@ router.post('/unblock-user', async (req: Request, res: Response): Promise<void> 
     await db.friendship.delete({ where: { id: existing.id } });
     res.json({ success: true });
   } catch (err) {
-    console.error('[FRIENDS] Error unblocking user:', err);
+    logger.error('[FRIENDS] Error unblocking user:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -326,7 +327,7 @@ router.get('/blocked', async (req: Request, res: Response): Promise<void> => {
 
     res.json({ blockedUsers });
   } catch (err) {
-    console.error('[FRIENDS] Error listing blocked:', err);
+    logger.error('[FRIENDS] Error listing blocked:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -370,12 +371,12 @@ router.post('/:id/accept', async (req: Request, res: Response): Promise<void> =>
             status: 'READ',
             readAt: new Date(),
             updatedAt: new Date(),
-            data: { ...(originalNotif.data as any), handled: 'accepted' },
+            data: { ...(originalNotif.data as unknown), handled: 'accepted' },
           },
         });
       }
     } catch (updateErr) {
-      console.error('[FRIENDS] Update original notif error (non-blocking):', updateErr);
+      logger.error('[FRIENDS] Update original notif error (non-blocking):', updateErr);
     }
 
     // Send notification to the requester that their request was accepted
@@ -413,12 +414,12 @@ router.post('/:id/accept', async (req: Request, res: Response): Promise<void> =>
         type: 'notification',
       }).catch(() => {});
     } catch (notifErr) {
-      console.error('[FRIENDS] Notification error (non-blocking):', notifErr);
+      logger.error('[FRIENDS] Notification error (non-blocking):', notifErr);
     }
 
     res.json({ success: true });
   } catch (err) {
-    console.error('[FRIENDS] Error accepting:', err);
+    logger.error('[FRIENDS] Error accepting:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -462,17 +463,17 @@ router.post('/:id/block', async (req: Request, res: Response): Promise<void> => 
             status: 'READ',
             readAt: new Date(),
             updatedAt: new Date(),
-            data: { ...(originalNotif.data as any), handled: 'blocked' },
+            data: { ...(originalNotif.data as unknown), handled: 'blocked' },
           },
         });
       }
     } catch (updateErr) {
-      console.error('[FRIENDS] Update notif on block error (non-blocking):', updateErr);
+      logger.error('[FRIENDS] Update notif on block error (non-blocking):', updateErr);
     }
 
     res.json({ success: true });
   } catch (err) {
-    console.error('[FRIENDS] Error blocking:', err);
+    logger.error('[FRIENDS] Error blocking:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -505,13 +506,13 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
         await db.notification.delete({ where: { id: notif.id } });
       }
     } catch (updateErr) {
-      console.error('[FRIENDS] Delete notif on cancel/reject error (non-blocking):', updateErr);
+      logger.error('[FRIENDS] Delete notif on cancel/reject error (non-blocking):', updateErr);
     }
 
     await db.friendship.delete({ where: { id: req.params.id } });
     res.json({ success: true });
   } catch (err) {
-    console.error('[FRIENDS] Error removing:', err);
+    logger.error('[FRIENDS] Error removing:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -544,7 +545,7 @@ router.get('/status/:userId', async (req: Request, res: Response): Promise<void>
     const direction = friendship.requesterId === user.id ? 'sent' : 'received';
     res.json({ status: friendship.status, friendshipId: friendship.id, direction });
   } catch (err) {
-    console.error('[FRIENDS] Error checking status:', err);
+    logger.error('[FRIENDS] Error checking status:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -595,7 +596,7 @@ router.get('/search', async (req: Request, res: Response): Promise<void> => {
       friendshipId: friendshipMap.get(u.id)?.id || null,
     })));
   } catch (err) {
-    console.error('[FRIENDS] Error searching:', err);
+    logger.error('[FRIENDS] Error searching:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -625,7 +626,7 @@ router.post('/block-org', async (req: Request, res: Response): Promise<void> => 
     });
     res.json({ success: true, block });
   } catch (err) {
-    console.error('[FRIENDS] Error blocking org:', err);
+    logger.error('[FRIENDS] Error blocking org:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -648,7 +649,7 @@ router.post('/unblock-org', async (req: Request, res: Response): Promise<void> =
     await db.orgBlock.delete({ where: { id: existing.id } });
     res.json({ success: true });
   } catch (err) {
-    console.error('[FRIENDS] Error unblocking org:', err);
+    logger.error('[FRIENDS] Error unblocking org:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -671,7 +672,7 @@ router.get('/blocked-orgs', async (req: Request, res: Response): Promise<void> =
 
     res.json({ blockedOrgs: blocks.map(b => ({ blockId: b.id, id: b.blockedOrg.id, name: b.blockedOrg.name, avatarUrl: b.blockedOrg.logoUrl, blockedAt: b.createdAt, reason: b.reason })) });
   } catch (err) {
-    console.error('[FRIENDS] Error listing blocked orgs:', err);
+    logger.error('[FRIENDS] Error listing blocked orgs:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

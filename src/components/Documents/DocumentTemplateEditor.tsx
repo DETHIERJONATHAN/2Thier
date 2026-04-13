@@ -11,7 +11,7 @@ interface Section {
   id: string;
   type: string;
   order: number;
-  config: any;
+  config: unknown;
 }
 
 interface DocumentTemplateEditorProps {
@@ -106,7 +106,7 @@ const DocumentTemplateEditor = ({ templateId, onSave, onClose }: DocumentTemplat
     }
   };
 
-  const handleDragEnd = (result: any) => {
+  const handleDragEnd = (result: unknown) => {
     if (!result.destination) return;
 
     const items = Array.from(sections);

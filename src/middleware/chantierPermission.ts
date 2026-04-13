@@ -10,7 +10,7 @@ const CHANTIERS_MODULE_ID = 'module-chantiers-87ba0db4-2eb9-4096-8bbb-2259da444c
  *   - technicianIds: les IDs filtrés selon le scope (null = pas de filtre = tout)
  */
 export async function resolveChantierScope(
-  user: any,
+  user: unknown,
   organizationId: string,
   action: string
 ): Promise<{ scope: string; technicianIds: string[] | null }> {
@@ -91,7 +91,7 @@ export async function resolveChantierScope(
  * Attache aussi req.chantierScope et req.chantierTechIds pour le filtrage des GET.
  */
 export function requireChantierAction(...actions: string[]) {
-  return async (req: any, res: Response, next: NextFunction) => {
+  return async (req: unknown, res: Response, next: NextFunction) => {
     try {
       const user = req.user;
       if (!user) return res.status(401).json({ success: false, message: 'Non authentifié' });
@@ -137,7 +137,7 @@ export function requireChantierAction(...actions: string[]) {
       req.chantierTechIds = resolved.technicianIds;
 
       next();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[ChantierPerm] Erreur vérification permission:', error);
       return res.status(500).json({ success: false, message: 'Erreur vérification permission' });
     }

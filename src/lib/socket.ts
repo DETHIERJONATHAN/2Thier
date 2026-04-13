@@ -229,7 +229,7 @@ export function getIO(): SocketIOServer | null {
 /**
  * Emit event to a specific conversation room
  */
-export function emitToConversation(conversationId: string, event: string, data: any) {
+export function emitToConversation(conversationId: string, event: string, data: unknown) {
   if (io) {
     io.to(`conv:${conversationId}`).emit(event, data);
   }
@@ -238,7 +238,7 @@ export function emitToConversation(conversationId: string, event: string, data: 
 /**
  * Emit event to a specific user (all their connected sockets)
  */
-export function emitToUser(userId: string, event: string, data: any) {
+export function emitToUser(userId: string, event: string, data: unknown) {
   const sockets = userSockets.get(userId);
   if (io && sockets) {
     for (const socketId of sockets) {
@@ -289,7 +289,7 @@ async function updateUserPresence(userId: string, online: boolean) {
   }
 }
 
-async function broadcastToUserContacts(userId: string, event: string, data: any) {
+async function broadcastToUserContacts(userId: string, event: string, data: unknown) {
   if (!io) return;
   try {
     const participations = await db.conversationParticipant.findMany({

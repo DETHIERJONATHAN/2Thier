@@ -103,7 +103,7 @@ interface FormSubmission {
   ipAddress: string;
   userAgent: string;
   leadId?: string;
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   status: 'new' | 'processed' | 'spam' | 'duplicate';
 }
 
@@ -119,7 +119,7 @@ interface FormStats {
 interface FormBuilderModalProps {
   visible: boolean;
   onCancel: () => void;
-  onSubmit: (values: any) => void;
+  onSubmit: (values: unknown) => void;
   loading: boolean;
   form?: PublicForm;
   isEdit?: boolean;
@@ -479,7 +479,7 @@ export default function PublicFormsPage() {
     loadData();
   }, [loadData]);
 
-  const handleCreateForm = async (values: any) => {
+  const handleCreateForm = async (values: unknown) => {
     setFormLoading(true);
     try {
       await api.post('/api/public-forms', values);
@@ -497,7 +497,7 @@ export default function PublicFormsPage() {
     }
   };
 
-  const handleUpdateForm = async (values: any) => {
+  const handleUpdateForm = async (values: unknown) => {
     if (!selectedForm) return;
     
     setFormLoading(true);
@@ -769,7 +769,7 @@ export default function PublicFormsPage() {
       dataIndex: 'data',
       key: 'message',
       width: 250,
-      render: (data: any) => (
+      render: (data: unknown) => (
         <Text className="text-xs" ellipsis>
           {data.message || data.description || 'Pas de message'}
         </Text>

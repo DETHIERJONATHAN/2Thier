@@ -44,7 +44,7 @@ export class GoogleOAuthService {
   }
   
   private formatOAuthError(error: unknown): Record<string, unknown> {
-    const asAny = error as any;
+    const asAny = error as unknown;
     const responseData = asAny?.response?.data;
     return {
       message: asAny instanceof Error ? asAny.message : String(error),

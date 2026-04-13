@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { UserService as PrismaUserService } from '@prisma/client';
 import { authMiddleware as authenticateToken } from '../middlewares/auth.js';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = express.Router();
 
@@ -51,7 +52,7 @@ const handleServiceToggle = async (res: express.Response, userId: string, servic
       data: { userId: validatedUserId, serviceType, isActive }
     });
   } catch (error) {
-    console.error(`[API/Services] Erreur lors de la mise à jour du service ${serviceType}:`, error);
+    logger.error(`[API/Services] Erreur lors de la mise à jour du service ${serviceType}:`, error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ success: false, message: 'Paramètres invalides', errors: error.errors });
     }
@@ -79,10 +80,10 @@ const mapService = (s: PrismaUserService) => ({
 router.get('/status/:userId', async (req, res) => {
   try {
     const { userId } = z.object({ userId: z.string().min(1) }).parse(req.params);
-    const services = await prisma.userService.findMany({ where: { userId } });
+    const services = await prisma.userService.findMany({ where: { userId }, take: 200 });
     res.json({ success: true, data: services.map(mapService) });
   } catch (error) {
-    console.error(`[API/Services] Erreur GET /status/${req.params.userId}:`, error);
+    logger.error(`[API/Services] Erreur GET /status/${req.params.userId}:`, error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ success: false, message: 'ID utilisateur invalide.' });
     }
@@ -107,7 +108,7 @@ router.post('/status/bulk', async (req, res) => {
     }, {});
     res.json({ success: true, data: servicesByUser });
   } catch (error) {
-    console.error('[API/Services] Erreur POST /status/bulk:', error);
+    logger.error('[API/Services] Erreur POST /status/bulk:', error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ success: false, message: 'Données invalides.' });
     }

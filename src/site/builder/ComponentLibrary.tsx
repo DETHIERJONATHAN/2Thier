@@ -38,7 +38,7 @@ const { Search } = Input;
  */
 
 interface ComponentLibraryProps {
-  onSelectComponent: (sectionType: string, defaultContent: any) => void;
+  onSelectComponent: (sectionType: string, defaultContent: unknown) => void;
 }
 
 // 🎨 Mapping icônes par type de section

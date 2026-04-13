@@ -101,7 +101,7 @@ const DocumentGlobalThemeEditor = ({ open, onClose, onSave, initialTheme }: Docu
   const uploadProps = {
     name: 'file',
     action: '/api/upload',
-    onChange(info: any) {
+    onChange(info: unknown) {
       if (info.file.status === 'done') {
         // Mettre à jour le champ correspondant
       }

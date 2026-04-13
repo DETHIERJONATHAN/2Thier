@@ -123,7 +123,7 @@ const StyleToggleButton: React.FC<{
   icon: React.ReactNode;
   title: string;
   fieldName: (string | number)[];
-  form: any;
+  form: unknown;
   value?: boolean;
   onChange?: (v: boolean) => void;
 }> = ({ icon, title, fieldName, form }) => {
@@ -137,7 +137,7 @@ const StyleToggleButton: React.FC<{
         onClick={() => {
           const current = form.getFieldValue(fieldName);
           form.setFieldsValue(
-            fieldName.reduceRight((acc, key) => ({ [key]: acc }), !current as any)
+            fieldName.reduceRight((acc, key) => ({ [key]: acc }), !current as unknown)
           );
         }}
         style={isActive ? {} : { borderColor: '#d9d9d9' }}
@@ -461,7 +461,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
       title: '#',
       dataIndex: 'order',
       width: 50,
-      render: (_: any, __: any, index: number) => index + 1,
+      render: (_: unknown, __: unknown, index: number) => index + 1,
     },
     {
       title: 'Type',
@@ -564,7 +564,7 @@ const PricingLinesEditor: React.FC<PricingLinesEditorProps> = ({
     {
       title: 'Actions',
       width: 150,
-      render: (_: any, record: PricingLine, index: number) => (
+      render: (_: unknown, record: PricingLine, index: number) => (
         <Space size={4}>
           <Tooltip title="Éditer">
             <Button size="small" icon={<EditOutlined />} onClick={() => handleEditLine(record)} />

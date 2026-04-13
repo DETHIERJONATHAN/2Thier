@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth.js';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.get('/lead-statuses', async (req, res) => {
     res.json(statuses);
     
   } catch (error) {
-    console.error('[LEAD-STATUSES] Erreur lors de la récupération des statuts:', error);
+    logger.error('[LEAD-STATUSES] Erreur lors de la récupération des statuts:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des statuts',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -80,7 +81,7 @@ router.post('/lead-statuses', async (req, res) => {
     res.status(201).json(newStatus);
     
   } catch (error) {
-    console.error('[LEAD-STATUSES] Erreur lors de la création du statut:', error);
+    logger.error('[LEAD-STATUSES] Erreur lors de la création du statut:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création du statut',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -113,7 +114,7 @@ router.put('/lead-statuses/reorder', async (req, res) => {
     // Vérifier que chaque statut a un id et un order
     for (const status of statuses) {
       if (!status.id || status.order === undefined) {
-        console.error('[LEAD-STATUSES] ❌ Statut invalide:', status);
+        logger.error('[LEAD-STATUSES] ❌ Statut invalide:', status);
         return res.status(400).json({ 
           error: `Statut invalide: ${JSON.stringify(status)}` 
         });
@@ -136,7 +137,7 @@ router.put('/lead-statuses/reorder', async (req, res) => {
       message: 'Ordre mis à jour avec succès'
     });
   } catch (error) {
-    console.error('[LEAD-STATUSES] Erreur lors de la réorganisation:', error);
+    logger.error('[LEAD-STATUSES] Erreur lors de la réorganisation:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la réorganisation' 
     });
@@ -181,11 +182,11 @@ router.get('/call-statuses', async (req, res) => {
     
       // Si aucun statut d'appel, ne rien créer par défaut
       if (callStatuses.length === 0) {
-      }    console.log(`[CALL-STATUSES] ${callStatuses.length} statuts trouvés`);
+      }    logger.info(`[CALL-STATUSES] ${callStatuses.length} statuts trouvés`);
     res.json(callStatuses);
     
   } catch (error) {
-    console.error('[CALL-STATUSES] Erreur lors de la récupération des statuts:', error);
+    logger.error('[CALL-STATUSES] Erreur lors de la récupération des statuts:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des statuts d\'appel',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -239,7 +240,7 @@ router.post('/call-statuses', async (req, res) => {
     res.json(savedStatuses);
     
   } catch (error) {
-    console.error('[CALL-STATUSES] Erreur lors de la sauvegarde des statuts:', error);
+    logger.error('[CALL-STATUSES] Erreur lors de la sauvegarde des statuts:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la sauvegarde des statuts d\'appel',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -294,7 +295,7 @@ router.post('/call-statuses/reorder', async (req, res) => {
     res.json(updatedStatuses);
     
   } catch (error) {
-    console.error('[CALL-STATUSES] Erreur lors de la réorganisation:', error);
+    logger.error('[CALL-STATUSES] Erreur lors de la réorganisation:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la réorganisation des statuts d\'appel',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -338,7 +339,7 @@ router.put('/call-statuses/reorder', async (req, res) => {
       message: 'Ordre mis à jour avec succès'
     });
   } catch (error) {
-    console.error('[CALL-STATUSES] PUT Erreur lors de la réorganisation:', error);
+    logger.error('[CALL-STATUSES] PUT Erreur lors de la réorganisation:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la réorganisation des statuts d\'appel',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -390,7 +391,7 @@ router.post('/call-statuses/add', async (req, res) => {
     res.status(201).json(newStatus);
     
   } catch (error) {
-    console.error('[CALL-STATUSES] Erreur lors de la création du statut:', error);
+    logger.error('[CALL-STATUSES] Erreur lors de la création du statut:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création du statut d\'appel',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -428,7 +429,7 @@ router.put('/call-statuses/:id', async (req, res) => {
     res.json(updatedStatus);
     
   } catch (error) {
-    console.error('[CALL-STATUSES] Erreur lors de la mise à jour du statut:', error);
+    logger.error('[CALL-STATUSES] Erreur lors de la mise à jour du statut:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la mise à jour du statut d\'appel',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -461,7 +462,7 @@ router.delete('/call-statuses/:id', async (req, res) => {
     res.status(204).send();
     
   } catch (error) {
-    console.error('[CALL-STATUSES] Erreur lors de la suppression du statut:', error);
+    logger.error('[CALL-STATUSES] Erreur lors de la suppression du statut:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la suppression du statut d\'appel',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -501,7 +502,7 @@ router.get('/call-to-lead-mappings', async (req, res) => {
     res.json(mappings);
     
   } catch (error) {
-    console.error('[MAPPINGS] Erreur lors de la récupération des mappings:', error);
+    logger.error('[MAPPINGS] Erreur lors de la récupération des mappings:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des mappings',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -547,7 +548,7 @@ router.post('/call-to-lead-mappings', async (req, res) => {
     res.status(201).json(mapping);
     
   } catch (error) {
-    console.error('[MAPPINGS] Erreur lors de la création du mapping:', error);
+    logger.error('[MAPPINGS] Erreur lors de la création du mapping:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création du mapping',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -592,7 +593,7 @@ router.put('/call-to-lead-mappings/:id', async (req, res) => {
     res.json(mapping);
     
   } catch (error) {
-    console.error('[MAPPINGS] Erreur lors de la mise à jour du mapping:', error);
+    logger.error('[MAPPINGS] Erreur lors de la mise à jour du mapping:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la mise à jour du mapping',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -625,7 +626,7 @@ router.delete('/call-to-lead-mappings/:id', async (req, res) => {
     res.status(204).send();
     
   } catch (error) {
-    console.error('[MAPPINGS] Erreur lors de la suppression du mapping:', error);
+    logger.error('[MAPPINGS] Erreur lors de la suppression du mapping:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la suppression du mapping',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -685,7 +686,7 @@ router.post('/call-to-lead-mappings/bulk', async (req, res) => {
     res.json(savedMappings);
     
   } catch (error) {
-    console.error('[MAPPINGS] Erreur lors de la sauvegarde des mappings:', error);
+    logger.error('[MAPPINGS] Erreur lors de la sauvegarde des mappings:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la sauvegarde des mappings',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -722,7 +723,7 @@ router.get('/call-lead-mappings', async (req, res) => {
     res.json(mappings);
     
   } catch (error) {
-    console.error('[MAPPINGS] Erreur lors de la récupération des mappings:', error);
+    logger.error('[MAPPINGS] Erreur lors de la récupération des mappings:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des mappings',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -759,7 +760,7 @@ router.get('/call-lead-mappings', async (req, res) => {
     res.json(mappings);
     
   } catch (error) {
-    console.error('[MAPPINGS] Erreur lors de la récupération des mappings:', error);
+    logger.error('[MAPPINGS] Erreur lors de la récupération des mappings:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des mappings',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -785,7 +786,7 @@ router.get('/email-templates', async (req, res) => {
 
     res.json(templates);
   } catch (error) {
-    console.error('[TEMPLATES] Erreur lors de la récupération des modèles:', error);
+    logger.error('[TEMPLATES] Erreur lors de la récupération des modèles:', error);
     res.status(500).json({
       error: 'Erreur lors de la récupération des modèles',
       message: error instanceof Error ? error.message : 'Erreur inconnue'  
@@ -817,7 +818,7 @@ router.post('/email-templates', async (req, res) => {
 
     res.status(201).json(template);
   } catch (error) {
-    console.error('[TEMPLATES] Erreur création template:', error);
+    logger.error('[TEMPLATES] Erreur création template:', error);
     res.status(500).json({ error: 'Erreur lors de la création du modèle', message: error instanceof Error ? error.message : 'Erreur inconnue' });
   }
 });
@@ -843,7 +844,7 @@ router.put('/email-templates/:id', async (req, res) => {
 
     res.json(template);
   } catch (error) {
-    console.error('[TEMPLATES] Erreur modification template:', error);
+    logger.error('[TEMPLATES] Erreur modification template:', error);
     res.status(500).json({ error: 'Erreur lors de la modification du modèle', message: error instanceof Error ? error.message : 'Erreur inconnue' });
   }
 });
@@ -858,7 +859,7 @@ router.delete('/email-templates/:id', async (req, res) => {
     await prisma.emailTemplate.delete({ where: { id: req.params.id } });
     res.json({ success: true });
   } catch (error) {
-    console.error('[TEMPLATES] Erreur suppression template:', error);
+    logger.error('[TEMPLATES] Erreur suppression template:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du modèle', message: error instanceof Error ? error.message : 'Erreur inconnue' });
   }
 });
@@ -881,7 +882,7 @@ router.get('/lead-sources', async (req, res) => {
 
     res.json(sources);
   } catch (error) {
-    console.error('[SOURCES] Erreur lors de la récupération des sources:', error); 
+    logger.error('[SOURCES] Erreur lors de la récupération des sources:', error); 
     res.status(500).json({
       error: 'Erreur lors de la récupération des sources',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -920,7 +921,7 @@ router.post('/call-lead-mappings', async (req, res) => {
     res.status(201).json(newMapping);
     
   } catch (error) {
-    console.error('[MAPPINGS] Erreur lors de la création du mapping:', error);
+    logger.error('[MAPPINGS] Erreur lors de la création du mapping:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création du mapping',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -964,7 +965,7 @@ router.put('/call-lead-mappings/:id', async (req, res) => {
     res.json(updatedMapping);
     
   } catch (error) {
-    console.error('[MAPPINGS] Erreur lors de la mise à jour du mapping:', error);
+    logger.error('[MAPPINGS] Erreur lors de la mise à jour du mapping:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la mise à jour du mapping',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -996,7 +997,7 @@ router.delete('/call-lead-mappings/:id', async (req, res) => {
     res.status(204).send();
     
   } catch (error) {
-    console.error('[MAPPINGS] Erreur lors de la suppression du mapping:', error);
+    logger.error('[MAPPINGS] Erreur lors de la suppression du mapping:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la suppression du mapping',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -1067,7 +1068,7 @@ router.post('/call-lead-mappings', async (req, res) => {
     }
     
   } catch (error) {
-    console.error('[MAPPING] Erreur lors de la création du mapping:', error);
+    logger.error('[MAPPING] Erreur lors de la création du mapping:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création du mapping',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -1110,7 +1111,7 @@ router.put('/call-lead-mappings/:id', async (req, res) => {
     res.json(updatedMapping);
     
   } catch (error) {
-    console.error('[MAPPING] Erreur lors de la modification du mapping:', error);
+    logger.error('[MAPPING] Erreur lors de la modification du mapping:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la modification du mapping',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -1142,7 +1143,7 @@ router.delete('/call-lead-mappings/:id', async (req, res) => {
     res.json({ success: true, message: 'Mapping supprimé avec succès' });
     
   } catch (error) {
-    console.error('[MAPPING] Erreur lors de la suppression du mapping:', error);
+    logger.error('[MAPPING] Erreur lors de la suppression du mapping:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la suppression du mapping',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -1309,7 +1310,7 @@ router.post('/initialize-default-statuses', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [INIT] Erreur lors de l\'initialisation des statuts:', error);
+    logger.error('❌ [INIT] Erreur lors de l\'initialisation des statuts:', error);
     res.status(500).json({ 
       error: 'Erreur lors de l\'initialisation des statuts',
       details: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -1335,7 +1336,7 @@ router.get('/ai-measure', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('[AI-MEASURE] Erreur récupération config:', error);
+    logger.error('[AI-MEASURE] Erreur récupération config:', error);
     res.status(500).json({ 
       success: false,
       error: 'Erreur lors de la récupération de la configuration',
@@ -1354,7 +1355,7 @@ router.post('/ai-measure', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('[AI-MEASURE] Erreur sauvegarde config:', error);
+    logger.error('[AI-MEASURE] Erreur sauvegarde config:', error);
     res.status(500).json({ 
       success: false,
       error: 'Erreur lors de la sauvegarde de la configuration',

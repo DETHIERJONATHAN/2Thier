@@ -3,6 +3,7 @@ import { db } from '../../lib/database';
 import type { Request, Response } from 'express';
 import * as mockFormulas from '../../global-mock-formulas.js';
 import { evaluateFormula } from '../../utils/formulaEvaluator';
+import { logger } from '../lib/logger';
 
 // Interface pour les requêtes avec paramètres fusionnés
 interface MergedParamsRequest extends Request {
@@ -45,7 +46,7 @@ router.get('/all', async (_req, res) => {
     
     res.json(formattedFormulas);
   } catch (error) {
-    console.error('Erreur lors de la récupération des formules:', error);
+    logger.error('Erreur lors de la récupération des formules:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des formules' });
   }
 });
@@ -100,7 +101,7 @@ router.get('/field/:fieldId', async (req, res) => {
     
     res.json(formattedFormulas);
   } catch (error) {
-    console.error(`Erreur lors de la récupération des formules pour le champ ${req.params.fieldId}:`, error);
+    logger.error(`Erreur lors de la récupération des formules pour le champ ${req.params.fieldId}:`, error);
     res.status(500).json({ error: `Erreur lors de la récupération des formules pour le champ ${req.params.fieldId}` });
   }
 });
@@ -125,7 +126,7 @@ router.get('/:formulaId/debug', async (req: MergedParamsRequest, res: Response) 
     const result = evaluateFormula({ id: f.id, name: f.name || f.id, sequence: Array.isArray(seq)?seq:[], targetProperty: '' }, testValues, { rawValues: testValues });
     return res.json({ id: f.id, name: f.name, fieldId: f.fieldId, sequence: seq, evaluation: result });
   } catch (e) {
-    console.error('[API][FormulaDebug] Erreur', e);
+    logger.error('[API][FormulaDebug] Erreur', e);
     return res.status(500).json({ error: 'Erreur debug formule', details: (e as Error).message });
   }
 });
@@ -164,7 +165,7 @@ router.put('/:formulaId', async (req: MergedParamsRequest, res: Response) => {
         });
       }
     } catch (createError) {
-      console.error(`[API] Erreur lors de la création de la formule:`, createError);
+      logger.error(`[API] Erreur lors de la création de la formule:`, createError);
     }
 
   const dataToUpdate: Record<string, unknown> = {};
@@ -187,7 +188,7 @@ router.put('/:formulaId', async (req: MergedParamsRequest, res: Response) => {
         data: dataToUpdate
       });
     } catch (updateError) {
-      console.error(`[API] Erreur lors de la mise à jour de la formule:`, updateError);
+      logger.error(`[API] Erreur lors de la mise à jour de la formule:`, updateError);
       
       // Si la mise à jour échoue, essayer de créer la formule
       updatedFormula = await prisma.fieldFormula.create({
@@ -218,7 +219,7 @@ router.put('/:formulaId', async (req: MergedParamsRequest, res: Response) => {
   } catch (err: unknown) {
     const { formulaId } = req.params;
     const fieldId = req.params.id || '';
-    console.error(`Erreur API PUT /api/fields/.../formulas/${formulaId}:`, err);
+    logger.error(`Erreur API PUT /api/fields/.../formulas/${formulaId}:`, err);
     
     // En mode développement, utiliser le système de mock pour simuler la persistance
     if (process.env.NODE_ENV === 'development') {
@@ -286,7 +287,7 @@ router.delete('/:formulaId', async (req: MergedParamsRequest, res: Response) => 
     return res.status(200).json(processedFormulas);
 
   } catch (err: unknown) {
-    console.error(`[API] Erreur lors de la suppression de la formule ${req.params.formulaId}:`, err);
+    logger.error(`[API] Erreur lors de la suppression de la formule ${req.params.formulaId}:`, err);
     const e = err as { code?: string };
     if (e.code === 'P2025') {
       return res.status(404).json({ error: 'Formule non trouvée' });

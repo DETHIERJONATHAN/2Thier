@@ -19,6 +19,7 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import PDFDocument from 'pdfkit';
 import { emailService } from '../services/EmailService';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -103,7 +104,7 @@ router.get('/stats', authenticateToken, async (req: Request, res: Response) => {
       data: { totalEmises, totalRecues, totalPaid, totalPending, totalOverdue, totalAmount, totalDrafts },
     });
   } catch (error: unknown) {
-    console.error('[INVOICES] Stats error:', error);
+    logger.error('[INVOICES] Stats error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -243,7 +244,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 
     return res.json({ success: true, data: results });
   } catch (error: unknown) {
-    console.error('[INVOICES] List error:', error);
+    logger.error('[INVOICES] List error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -315,7 +316,7 @@ router.post('/clients/save', authenticateToken, async (req: Request, res: Respon
 
     return res.json({ success: true, data: client });
   } catch (error: unknown) {
-    console.error('[INVOICES] Client save error:', error);
+    logger.error('[INVOICES] Client save error:', error);
     return res.status(500).json({ success: false, message: 'Erreur interne' });
   }
 });
@@ -346,7 +347,7 @@ router.get('/clients/search', authenticateToken, async (req: Request, res: Respo
 
     return res.json({ success: true, data: clients });
   } catch (error: unknown) {
-    console.error('[INVOICES] Client search error:', error);
+    logger.error('[INVOICES] Client search error:', error);
     return res.status(500).json({ success: false, message: 'Erreur interne' });
   }
 });
@@ -410,7 +411,7 @@ router.get('/next-number', authenticateToken, async (req: Request, res: Response
     const result = await getNextInvoiceNumber(organizationId);
     return res.json({ success: true, data: result });
   } catch (error: unknown) {
-    console.error('[INVOICES] Next number error:', error);
+    logger.error('[INVOICES] Next number error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -549,12 +550,12 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       }
     } catch (clientErr) {
       // Ne pas bloquer la création de facture si le save client échoue
-      console.warn('[INVOICES] Auto-save client warning:', clientErr);
+      logger.warn('[INVOICES] Auto-save client warning:', clientErr);
     }
 
     return res.status(201).json({ success: true, data: invoice });
   } catch (error: unknown) {
-    console.error('[INVOICES] Create error:', error);
+    logger.error('[INVOICES] Create error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -574,7 +575,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
 
     return res.json({ success: true, data: invoice });
   } catch (error: unknown) {
-    console.error('[INVOICES] Get error:', error);
+    logger.error('[INVOICES] Get error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -654,7 +655,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
 
     return res.json({ success: true, data: invoice });
   } catch (error: unknown) {
-    console.error('[INVOICES] Update error:', error);
+    logger.error('[INVOICES] Update error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -678,7 +679,7 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
 
     return res.json({ success: true, message: 'Facture supprimée' });
   } catch (error: unknown) {
-    console.error('[INVOICES] Delete error:', error);
+    logger.error('[INVOICES] Delete error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -715,7 +716,7 @@ router.post('/:id/mark-paid', authenticateToken, async (req: Request, res: Respo
 
     return res.status(404).json({ success: false, message: 'Facture introuvable' });
   } catch (error: unknown) {
-    console.error('[INVOICES] Mark-paid error:', error);
+    logger.error('[INVOICES] Mark-paid error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -743,7 +744,7 @@ router.post('/:id/mark-sent', authenticateToken, async (req: Request, res: Respo
 
     return res.status(404).json({ success: false, message: 'Facture introuvable' });
   } catch (error: unknown) {
-    console.error('[INVOICES] Mark-sent error:', error);
+    logger.error('[INVOICES] Mark-sent error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -793,7 +794,7 @@ router.post('/:id/mark-peppol-sent', authenticateToken, async (req: Request, res
 
     return res.status(404).json({ success: false, message: 'Facture introuvable' });
   } catch (error: unknown) {
-    console.error('[INVOICES] Mark-peppol-sent error:', error);
+    logger.error('[INVOICES] Mark-peppol-sent error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -836,7 +837,7 @@ export async function generateInvoicePdf(invoice: {
   taxAmount: number;
   totalAmount: number;
   notes?: string | null;
-  lines: any;
+  lines: unknown;
 }, org: OrgData): Promise<Buffer> {
   const logoBuffer = org.logoUrl ? await fetchLogoBuffer(org.logoUrl) : null;
 
@@ -1117,7 +1118,7 @@ router.get('/:id/pdf', authenticateToken, async (req: Request, res: Response) =>
     res.setHeader('Content-Disposition', `inline; filename="${invoice.invoiceNumber.replace(/\s+/g, '_')}.pdf"`);
     return res.send(pdfBuffer);
   } catch (error: unknown) {
-    console.error('[INVOICES] PDF error:', error);
+    logger.error('[INVOICES] PDF error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -1180,7 +1181,7 @@ router.post('/:id/send-email', authenticateToken, async (req: Request, res: Resp
           attachments: [{ filename: pdfFilename, content: pdfBuffer, contentType: 'application/pdf' }],
         });
       } catch (err) {
-        console.error(`[INVOICES] Email send failed to ${recipient}:`, err);
+        logger.error(`[INVOICES] Email send failed to ${recipient}:`, err);
         errors.push(recipient);
       }
     }
@@ -1199,7 +1200,7 @@ router.post('/:id/send-email', authenticateToken, async (req: Request, res: Resp
 
     return res.json({ success: true, message: `Facture envoyée à ${to.length} destinataire(s)` });
   } catch (error: unknown) {
-    console.error('[INVOICES] Send-email error:', error);
+    logger.error('[INVOICES] Send-email error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });

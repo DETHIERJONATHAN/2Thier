@@ -123,7 +123,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
   // Charger le plan de facturation (per-chantier ou templates)
   const fetchBillingPlan = useCallback(async () => {
     try {
-      const res = await api.get(`/api/chantier-workflow/chantiers/${chantierId}/billing-plan`) as any;
+      const res = await api.get(`/api/chantier-workflow/chantiers/${chantierId}/billing-plan`) as unknown;
       setBillingPlan(res.data || []);
       setBillingSource(res.source || 'templates');
     } catch {
@@ -190,7 +190,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
       }
       setModalVisible(false);
       fetchInvoices();
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err?.errorFields) return; // validation error
       message.error(err?.message || 'Erreur');
     }
@@ -258,7 +258,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
           });
           message.success('Facture envoyée via Peppol !');
           fetchInvoices();
-        } catch (err: any) {
+        } catch (err: unknown) {
           if (err?.message === 'cancelled') throw err;
           message.error(err?.data?.message || err?.message || 'Erreur envoi Peppol');
         }
@@ -352,7 +352,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
     setBillingPlan(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  const handleUpdatePlanItem = useCallback((index: number, field: string, value: any) => {
+  const handleUpdatePlanItem = useCallback((index: number, field: string, value: unknown) => {
     setBillingPlan(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
   }, []);
 
@@ -370,7 +370,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
       setEditingPlan(false);
       setBillingSource('chantier');
       fetchBillingPlan();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.data?.message || err?.message || 'Erreur sauvegarde plan');
     } finally {
       setSavingPlan(false);
@@ -382,7 +382,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
       const res = await api.post(`/api/chantier-workflow/chantiers/${chantierId}/billing-plan/init`, {});
       message.success(res.message || 'Plan initialisé depuis les templates');
       fetchBillingPlan();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur initialisation');
     }
   }, [api, chantierId, fetchBillingPlan]);
@@ -400,7 +400,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
           await api.post(`/api/chantier-workflow/chantiers/${chantierId}/validate`, {});
           message.success('Chantier validé !');
           onValidationChanged?.();
-        } catch (err: any) {
+        } catch (err: unknown) {
           message.error(err?.data?.message || err?.message || 'Erreur validation');
         }
       },
@@ -458,7 +458,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
       width: 120,
       render: (status: string) => {
         const s = STATUS_LABELS[status];
-        return <Badge status={s?.color as any || 'default'} text={s?.label || status} />;
+        return <Badge status={s?.color as unknown || 'default'} text={s?.label || status} />;
       }
     },
     {
@@ -472,7 +472,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
       title: 'Actions',
       key: 'actions',
       width: 240,
-      render: (_: any, record: ChantierInvoice) => (
+      render: (_: unknown, record: ChantierInvoice) => (
         <Space size="small" wrap>
           {record.status === 'DRAFT' && (
             <Button size="small" icon={<SendOutlined />} onClick={() => handleStatusChange(record.id, 'SENT')}>
@@ -739,7 +739,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <Tag color={t?.color} style={{ margin: 0 }}>{t?.label || inv.type}</Tag>
-                      <Badge status={s?.color as any || 'default'} text={s?.label || inv.status} />
+                      <Badge status={s?.color as unknown || 'default'} text={s?.label || inv.status} />
                     </div>
                     <Space size={4}>
                       <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenModal(inv)} style={{ minWidth: 32, minHeight: 32 }} />

@@ -41,7 +41,7 @@ const PageTabs = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const handleDragEnd = (result: any) => {
+  const handleDragEnd = (result: unknown) => {
     if (!result.destination) return;
 
     const items = Array.from(pages);

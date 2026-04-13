@@ -17,14 +17,15 @@ import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { getOrgSocialSettings } from '../lib/feed-visibility';
 import { sendPushToUser } from './push';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
 // Apply auth middleware to all wax routes
-router.use(authenticateToken as any);
+router.use(authenticateToken as unknown);
 
 // ── Middleware: extract user from request ──
-function extractUser(req: any) {
+function extractUser(req: unknown) {
 	return req.user || req.authUser || null;
 }
 
@@ -130,7 +131,7 @@ router.get('/locations', async (req, res) => {
 			},
 		});
 	} catch (e) {
-		console.error('[wax] GET /locations error:', e);
+		logger.error('[wax] GET /locations error:', e);
 		res.status(500).json({ success: false, message: 'Error fetching locations' });
 	}
 });
@@ -159,7 +160,7 @@ router.post('/location', async (req, res) => {
 
 		res.json({ success: true, data: location });
 	} catch (e) {
-		console.error('[wax] POST /location error:', e);
+		logger.error('[wax] POST /location error:', e);
 		res.status(500).json({ success: false, message: 'Error updating location' });
 	}
 });
@@ -185,7 +186,7 @@ router.put('/ghost-mode', async (req, res) => {
 
 		res.json({ success: true, data: { ghostMode: location.ghostMode } });
 	} catch (e) {
-		console.error('[wax] PUT /ghost-mode error:', e);
+		logger.error('[wax] PUT /ghost-mode error:', e);
 		res.status(500).json({ success: false, message: 'Error updating ghost mode' });
 	}
 });
@@ -237,7 +238,7 @@ router.get('/pins', async (req, res) => {
 			})),
 		});
 	} catch (e) {
-		console.error('[wax] GET /pins error:', e);
+		logger.error('[wax] GET /pins error:', e);
 		res.status(500).json({ success: false, message: 'Error fetching pins' });
 	}
 });
@@ -279,10 +280,10 @@ router.post('/pins', async (req, res) => {
 
 		// 🐝 Alertes de proximité — Notifier les utilisateurs proches (async, non bloquant)
 		notifyNearbyUsers(pin, user).catch(err =>
-			console.error('[wax] proximity alert error:', err)
+			logger.error('[wax] proximity alert error:', err)
 		);
 	} catch (e) {
-		console.error('[wax] POST /pins error:', e);
+		logger.error('[wax] POST /pins error:', e);
 		res.status(500).json({ success: false, message: 'Error creating pin' });
 	}
 });
@@ -318,7 +319,7 @@ router.delete('/pins/:id', async (req, res) => {
 		await db.waxPin.delete({ where: { id: req.params.id } });
 		res.json({ success: true });
 	} catch (e) {
-		console.error('[wax] DELETE /pins error:', e);
+		logger.error('[wax] DELETE /pins error:', e);
 		res.status(500).json({ success: false, message: 'Error deleting pin' });
 	}
 });
@@ -355,10 +356,10 @@ router.post('/cleanup', async (_req, res) => {
 			data: { isExpired: true, content: null, mediaUrls: null },
 		});
 
-		console.log(`[wax/cleanup] Deleted ${deletedPins.count} pins, expired ${expiredMessages.count} messages`);
+		logger.info(`[wax/cleanup] Deleted ${deletedPins.count} pins, expired ${expiredMessages.count} messages`);
 		res.json({ success: true, deletedPins: deletedPins.count, expiredMessages: expiredMessages.count });
 	} catch (e) {
-		console.error('[wax] POST /cleanup error:', e);
+		logger.error('[wax] POST /cleanup error:', e);
 		res.status(500).json({ success: false, message: 'Cleanup error' });
 	}
 });
@@ -425,7 +426,7 @@ router.get('/route', async (req, res) => {
 				geometry: route.geometry,             // GeoJSON LineString
 				distance: route.distance,             // meters
 				duration: route.duration,             // seconds
-				steps: route.legs[0].steps.map((s: any) => ({
+				steps: route.legs[0].steps.map((s: Record<string, unknown>) => ({
 					instruction: s.maneuver.type === 'depart' ? 'Départ'
 						: s.maneuver.type === 'arrive' ? 'Arrivée'
 						: `${getManeuverText(s.maneuver.type, s.maneuver.modifier)} ${s.name || ''}`.trim(),
@@ -438,7 +439,7 @@ router.get('/route', async (req, res) => {
 			},
 		});
 	} catch (e) {
-		console.error('[wax] GET /route error:', e);
+		logger.error('[wax] GET /route error:', e);
 		res.status(500).json({ success: false, message: 'Error computing route' });
 	}
 });
@@ -495,7 +496,7 @@ router.get('/geocode', async (req, res) => {
 
 		const results = await response.json();
 
-		let data = results.map((r: any) => ({
+		let data = results.map((r: Record<string, unknown>) => ({
 			displayName: r.display_name,
 			lat: parseFloat(r.lat),
 			lng: parseFloat(r.lon),
@@ -512,7 +513,7 @@ router.get('/geocode', async (req, res) => {
 					Math.cos(userLat * Math.PI / 180) * Math.cos(d.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
 				d.distance = Math.round(6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 10) / 10; // km
 			}
-			data.sort((a: any, b: any) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+			data.sort((a: unknown, b: unknown) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
 		}
 
 		res.json({
@@ -520,7 +521,7 @@ router.get('/geocode', async (req, res) => {
 			data: data.slice(0, 8),
 		});
 	} catch (e) {
-		console.error('[wax] GET /geocode error:', e);
+		logger.error('[wax] GET /geocode error:', e);
 		res.status(500).json({ success: false, message: 'Geocoding error' });
 	}
 });
@@ -601,7 +602,7 @@ async function notifyNearbyUsers(pin: { id: string; latitude: number; longitude:
 	}
 
 	if (sent > 0) {
-		console.log(`[wax] Proximity alerts: ${sent} user(s) notified for pin ${pin.id}`);
+		logger.info(`[wax] Proximity alerts: ${sent} user(s) notified for pin ${pin.id}`);
 	}
 }
 

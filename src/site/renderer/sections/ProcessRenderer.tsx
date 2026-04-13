@@ -57,7 +57,7 @@ export const ProcessRenderer: React.FC<ProcessRendererProps> = ({ content }) => 
     <div style={{ background: backgroundColor, padding: '80px 24px' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         {/* Titre */}
-        <div style={{ textAlign: textAlign as any, marginBottom: '60px' }}>
+        <div style={{ textAlign: textAlign as unknown, marginBottom: '60px' }}>
           <Title level={2} style={{ fontSize: 'clamp(28px, 6vw, 42px)', margin: 0 }}>
             {title}
           </Title>

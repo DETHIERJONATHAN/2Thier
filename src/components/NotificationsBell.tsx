@@ -16,7 +16,7 @@ import { useBookmarks, Bookmark } from '../hooks/useBookmarks';
 interface NotificationItem {
   id: string;
   type: string;
-  data: any;
+  data: unknown;
   status: string;
   priority?: string;
   actionUrl?: string;
@@ -108,7 +108,7 @@ const NotificationsBell = () => {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const response: any = await api.get('/api/notifications?includeRead=true');
+      const response: unknown = await api.get('/api/notifications?includeRead=true');
       const notifs: NotificationItem[] = (Array.isArray(response) ? response : response?.data) || [];
       const pendingCount = notifs.filter(n => n.status === 'PENDING').length;
       if (pendingCount > lastCountRef.current && lastCountRef.current > 0 && !isOpenRef.current) {
@@ -167,7 +167,7 @@ const NotificationsBell = () => {
       try {
         await api.patch(`/api/notifications/${notif.id}/read`);
       } catch (_) {}
-    } catch (err: any) {
+    } catch (err: unknown) {
       // If 404 = friendship was cancelled by the other party, remove notification
       const status = err?.status || err?.response?.status || err?.data?.status;
       if (status === 404 || err?.message?.includes('404')) {

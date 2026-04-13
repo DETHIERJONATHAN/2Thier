@@ -471,7 +471,7 @@ interface DraggedItem {
 }
 
 // Fonction utilitaire pour transformer les donnÃ©es API en structure TreeBranchLeafTree
-const transformApiTreeToLocal = (apiTree: any, phantomNodes: Set<string> = new Set()): TreeBranchLeafTree => {
+const transformApiTreeToLocal = (apiTree: unknown, phantomNodes: Set<string> = new Set()): TreeBranchLeafTree => {
   console.log('ðŸ”„ [TRANSFORM] DÃ©but transformation API vers local');
   console.log('ðŸ” [TRANSFORM] DonnÃ©es API reÃ§ues:', apiTree);
   console.log('ðŸ” [TRANSFORM] Nodes dans API:', apiTree.Nodes?.length);

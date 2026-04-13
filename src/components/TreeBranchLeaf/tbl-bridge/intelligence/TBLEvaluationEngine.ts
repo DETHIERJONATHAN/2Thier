@@ -141,7 +141,7 @@ export class TBLEvaluationEngine {
    * 🧮 ÉVALUATION DES FORMULES
    */
   private async evaluateFormulas(
-    analysis: any,
+    analysis: unknown,
     request: TBLEvaluationRequest,
     result: TBLEvaluationResult
   ): Promise<void> {
@@ -187,7 +187,7 @@ export class TBLEvaluationEngine {
    * ⚖️ ÉVALUATION DES CONDITIONS
    */
   private async evaluateConditions(
-    analysis: any,
+    analysis: unknown,
     request: TBLEvaluationRequest,
     result: TBLEvaluationResult
   ): Promise<void> {
@@ -245,7 +245,7 @@ export class TBLEvaluationEngine {
    * 📊 ÉVALUATION DES TABLEAUX
    */
   private async evaluateTables(
-    analysis: any,
+    analysis: unknown,
     request: TBLEvaluationRequest,
     result: TBLEvaluationResult
   ): Promise<void> {
@@ -286,7 +286,7 @@ export class TBLEvaluationEngine {
    * Détecte automatiquement le type d'évaluation selon la capacité TBL
    */
   private async evaluateAuto(
-    analysis: any,
+    analysis: unknown,
     request: TBLEvaluationRequest,
     result: TBLEvaluationResult
   ): Promise<void> {
@@ -314,7 +314,7 @@ export class TBLEvaluationEngine {
    * 🔄 RÉSOLUTION RÉCURSIVE DES DÉPENDANCES
    */
   private async resolveDeepDependencies(
-    analysis: any,
+    analysis: unknown,
     request: TBLEvaluationRequest,
     result: TBLEvaluationResult
   ): Promise<void> {

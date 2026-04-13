@@ -53,13 +53,13 @@ export interface FieldDefinition {
   description?: string;
   
   /** Valeur par défaut */
-  default?: any;
+  default?: unknown;
   
   /** Champ obligatoire ? */
   required?: boolean;
   
   /** Condition pour afficher le champ */
-  condition?: (values: any) => boolean;
+  condition?: (values: unknown) => boolean;
   
   /** Options spécifiques au type de champ */
   options?: FieldOptions;
@@ -134,7 +134,7 @@ export interface SectionSchema {
   fields: FieldDefinition[];
   
   /** Valeurs par défaut de la section */
-  defaults?: Record<string, any>;
+  defaults?: Record<string, unknown>;
   
   /** Template de prévisualisation */
   previewTemplate?: string;
@@ -164,7 +164,7 @@ export interface SectionInstance {
   name: string;
   
   /** Contenu (valeurs des champs) */
-  content: Record<string, any>;
+  content: Record<string, unknown>;
   
   /** Ordre d'affichage */
   order: number;

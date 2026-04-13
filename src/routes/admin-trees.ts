@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -56,6 +57,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: 200,
     });
 
     // Enrichir avec l'organisation propriétaire
@@ -78,7 +80,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 
     res.json(enrichedTrees);
   } catch (error) {
-    console.error('[ADMIN-TREES] Erreur GET /:', error);
+    logger.error('[ADMIN-TREES] Erreur GET /:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des arbres' });
   }
 });
@@ -136,7 +138,7 @@ router.get('/:treeId', async (req: Request, res: Response): Promise<void> => {
             parsedSubTabs = raw;
           }
         } catch (e) {
-          console.warn(`[ADMIN-TREES] Erreur parsing subtabs pour ${tab.label}:`, e);
+          logger.warn(`[ADMIN-TREES] Erreur parsing subtabs pour ${tab.label}:`, e);
         }
       }
 
@@ -190,7 +192,7 @@ router.get('/:treeId', async (req: Request, res: Response): Promise<void> => {
       where: {
         treeId,
         hasProduct: true,
-        product_options: { not: null as any },
+        product_options: { not: null as unknown },
       },
       select: {
         id: true,
@@ -210,7 +212,7 @@ router.get('/:treeId', async (req: Request, res: Response): Promise<void> => {
           productOptions = raw;
         }
       } catch (e) {
-        console.warn('[ADMIN-TREES] Erreur parsing product_options:', e);
+        logger.warn('[ADMIN-TREES] Erreur parsing product_options:', e);
       }
     }
 
@@ -227,7 +229,7 @@ router.get('/:treeId', async (req: Request, res: Response): Promise<void> => {
       } : null,
     });
   } catch (error) {
-    console.error('[ADMIN-TREES] Erreur GET /:treeId:', error);
+    logger.error('[ADMIN-TREES] Erreur GET /:treeId:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération de l\'arbre' });
   }
 });
@@ -288,7 +290,7 @@ router.post('/:treeId/access', async (req: Request, res: Response): Promise<void
 
     res.json(access);
   } catch (error) {
-    console.error('[ADMIN-TREES] Erreur POST /:treeId/access:', error);
+    logger.error('[ADMIN-TREES] Erreur POST /:treeId/access:', error);
     res.status(500).json({ error: 'Erreur lors de la création de l\'accès' });
   }
 });
@@ -322,7 +324,7 @@ router.put('/:treeId/access/:organizationId', async (req: Request, res: Response
 
     res.json(access);
   } catch (error) {
-    console.error('[ADMIN-TREES] Erreur PUT access:', error);
+    logger.error('[ADMIN-TREES] Erreur PUT access:', error);
     res.status(500).json({ error: 'Erreur lors de la mise à jour de l\'accès' });
   }
 });
@@ -345,7 +347,7 @@ router.delete('/:treeId/access/:organizationId', async (req: Request, res: Respo
 
     res.json({ success: true });
   } catch (error) {
-    console.error('[ADMIN-TREES] Erreur DELETE access:', error);
+    logger.error('[ADMIN-TREES] Erreur DELETE access:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression de l\'accès' });
   }
 });
@@ -441,7 +443,7 @@ router.post('/:treeId/duplicate', async (req: Request, res: Response): Promise<v
       nodesCount: sourceTree.TreeBranchLeafNode.length,
     });
   } catch (error) {
-    console.error('[ADMIN-TREES] Erreur POST duplicate:', error);
+    logger.error('[ADMIN-TREES] Erreur POST duplicate:', error);
     res.status(500).json({ error: 'Erreur lors de la duplication de l\'arbre' });
   }
 });
@@ -462,7 +464,7 @@ router.get('/organizations/list', async (req: Request, res: Response): Promise<v
 
     res.json(organizations);
   } catch (error) {
-    console.error('[ADMIN-TREES] Erreur GET organizations:', error);
+    logger.error('[ADMIN-TREES] Erreur GET organizations:', error);
     res.status(500).json({ error: 'Erreur' });
   }
 });
@@ -482,7 +484,7 @@ router.get('/roles/list', async (req: Request, res: Response): Promise<void> => 
 
     res.json(roles);
   } catch (error) {
-    console.error('[ADMIN-TREES] Erreur GET roles:', error);
+    logger.error('[ADMIN-TREES] Erreur GET roles:', error);
     res.status(500).json({ error: 'Erreur' });
   }
 });

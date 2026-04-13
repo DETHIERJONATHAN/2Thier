@@ -25,7 +25,7 @@ export interface SubmissionField {
   type: string;
   fieldType?: string;
   fieldSubType?: string;
-  value: any;
+  value: unknown;
   rawValue: string;
 }
 

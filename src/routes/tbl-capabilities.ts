@@ -1,6 +1,7 @@
 import express from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 // NOTE: requireRole peut être importé si restriction fine nécessaire
 // import { requireRole } from '../middleware/auth';
@@ -219,7 +220,7 @@ router.get('/capabilities', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     const err = error as Error;
-    console.error('❌ [TBL Capabilities] Erreur:', err);
+    logger.error('❌ [TBL Capabilities] Erreur:', err);
     res.status(500).json({ error: 'Erreur serveur capabilities', details: err.message });
   }
 });

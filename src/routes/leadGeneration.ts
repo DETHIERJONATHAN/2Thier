@@ -4,6 +4,7 @@ import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.j
 import { requireRole } from '../middlewares/requireRole.js';
 import { db, Prisma } from '../lib/database';
 import rateLimit from 'express-rate-limit';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -93,7 +94,7 @@ router.get('/campaigns', requireRole(['admin', 'super_admin']), async (req: Auth
 
     res.json({ success: true, data: campaigns });
   } catch (error) {
-    console.error('❌ [LEAD-GEN] Erreur récupération campagnes (LeadSource):', error);
+    logger.error('❌ [LEAD-GEN] Erreur récupération campagnes (LeadSource):', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération des campagnes' });
   }
 });
@@ -113,7 +114,7 @@ router.post('/campaigns', requireRole(['admin', 'super_admin']), async (req: Aut
 
     res.json({ success: true, data: created, message: 'Campagne créée avec succès' });
   } catch (error) {
-    console.error('❌ [LEAD-GEN] Erreur création campagne (LeadSource):', error);
+    logger.error('❌ [LEAD-GEN] Erreur création campagne (LeadSource):', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la création de la campagne' });
   }
 });
@@ -141,7 +142,7 @@ router.get('/stats', requireRole(['admin', 'super_admin']), async (req: Authenti
 
     res.json({ success: true, data: { totalCampaigns, activeCampaigns, totalLeads, thisMonthLeads } });
   } catch (error) {
-    console.error('❌ [LEAD-GEN] Erreur stats (LeadSource/Lead):', error);
+    logger.error('❌ [LEAD-GEN] Erreur stats (LeadSource/Lead):', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération des statistiques' });
   }
 });
@@ -161,7 +162,7 @@ router.put('/campaigns/:id', requireRole(['admin', 'super_admin']), async (req: 
     const updated = await prisma.leadSource.update({ where: { id }, data: { name, description, isActive } });
     res.json({ success: true, data: updated, message: 'Campagne modifiée avec succès' });
   } catch (error) {
-    console.error('❌ [LEAD-GEN] Erreur modification campagne (LeadSource):', error);
+    logger.error('❌ [LEAD-GEN] Erreur modification campagne (LeadSource):', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la modification de la campagne' });
   }
 });
@@ -177,7 +178,7 @@ router.delete('/campaigns/:id', requireRole(['admin', 'super_admin']), async (re
     if (deleted.count === 0) return res.status(404).json({ success: false, message: 'Campagne non trouvée' });
     res.json({ success: true, message: 'Campagne supprimée avec succès' });
   } catch (error) {
-    console.error('❌ [LEAD-GEN] Erreur suppression campagne (LeadSource):', error);
+    logger.error('❌ [LEAD-GEN] Erreur suppression campagne (LeadSource):', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la suppression de la campagne' });
   }
 });
@@ -197,7 +198,7 @@ router.patch('/campaigns/:id/status', requireRole(['admin', 'super_admin']), asy
     const updated = await prisma.leadSource.update({ where: { id }, data: { isActive: status === 'active' } });
     res.json({ success: true, data: updated, message: 'Statut mis à jour' });
   } catch (error) {
-    console.error('❌ [LEAD-GEN] Erreur MAJ statut (LeadSource):', error);
+    logger.error('❌ [LEAD-GEN] Erreur MAJ statut (LeadSource):', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la mise à jour du statut' });
   }
 });
@@ -224,7 +225,7 @@ router.post('/campaigns/:id/duplicate', requireRole(['admin', 'super_admin']), a
     });
     res.json({ success: true, data: copy, message: 'Campagne dupliquée avec succès' });
   } catch (error) {
-    console.error('❌ [LEAD-GEN] Erreur duplication campagne (LeadSource):', error);
+    logger.error('❌ [LEAD-GEN] Erreur duplication campagne (LeadSource):', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la duplication de la campagne' });
   }
 });
@@ -268,7 +269,7 @@ router.get('/stats/timeseries', requireRole(['admin', 'super_admin']), async (re
     const series = Array.from(byDay.entries()).map(([date, v]) => ({ date, created: v.created, completed: v.completed }));
     res.json({ success: true, data: { start: start.toISOString(), days, series } });
   } catch (error) {
-    console.error('❌ [LEAD-GEN] Erreur timeseries:', error);
+    logger.error('❌ [LEAD-GEN] Erreur timeseries:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération des séries temporelles' });
   }
 });

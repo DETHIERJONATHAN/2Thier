@@ -38,8 +38,8 @@ export type AIContext =
 
 interface AIAssistantProps {
   context: AIContext;
-  currentValue?: any;
-  onSuggestion: (suggestion: any) => void;
+  currentValue?: unknown;
+  onSuggestion: (suggestion: unknown) => void;
   sectionType?: string;
   buttonSize?: 'small' | 'middle' | 'large';
   buttonType?: 'default' | 'primary' | 'text' | 'link' | 'dashed';
@@ -47,7 +47,7 @@ interface AIAssistantProps {
 }
 
 interface AISuggestion {
-  value: any;
+  value: unknown;
   reason?: string;
   score?: number;
 }
@@ -98,7 +98,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       } else {
         throw new Error(data.error || 'Aucune suggestion générée');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('AI Generation Error:', err);
       setError(err.message || 'Erreur lors de la génération des suggestions');
       message.error('Erreur IA : ' + (err.message || 'Erreur inconnue'));
@@ -107,7 +107,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
     }
   };
 
-  const buildPrompt = (context: AIContext, value: any, sectionType: string): string => {
+  const buildPrompt = (context: AIContext, value: unknown, sectionType: string): string => {
     const baseContext = `Tu es un expert en web design, copywriting et UX. Tu crées du contenu engageant et optimisé pour le web.`;
 
     switch (context) {
@@ -211,7 +211,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                 <List
                   size="small"
                   dataSource={suggestion.value.items || []}
-                  renderItem={(item: any) => (
+                  renderItem={(item: unknown) => (
                     <List.Item>
                       <List.Item.Meta
                         title={item.title}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { SF } from './zhiive/ZhiiveTheme';
+import { useTranslation } from 'react-i18next';
+import { SF, COLORS, FB } from './zhiive/ZhiiveTheme';
 import { useAuth } from '../auth/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Typography, Alert, Divider } from 'antd';
@@ -9,6 +10,7 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 const { Title, Text } = Typography;
 
 export default function Connexion() {
+  const { t } = useTranslation();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [emailNotVerified, setEmailNotVerified] = useState(false);
@@ -31,7 +33,7 @@ export default function Connexion() {
       
       // Smart Landing : rediriger selon le rôle de l'utilisateur
       const orgs = loginResponse?.organizations || [];
-      const mainOrg = orgs.find((o: any) => o.status === 'ACTIVE') || orgs[0];
+      const mainOrg = orgs.find((o: Record<string, unknown>) => o.status === 'ACTIVE') || orgs[0];
       const roleName = mainOrg?.role || loginResponse?.user?.role || '';
       
       if (roleName === 'technicien' || roleName === 'Technicien') {
@@ -39,12 +41,12 @@ export default function Connexion() {
       } else {
         navigate('/dashboard');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Connexion] Erreur lors du login:', err);
       // Détecter l'erreur email non vérifié (403 avec emailNotVerified)
-      if (err?.emailNotVerified || err?.status === 403 || (err?.body as any)?.emailNotVerified) {
+      if (err?.emailNotVerified || err?.status === 403 || (err?.body as unknown)?.emailNotVerified) {
         setEmailNotVerified(true);
-        setUnverifiedEmail(err?.email || (err?.body as any)?.email || values.email);
+        setUnverifiedEmail(err?.email || (err?.body as unknown)?.email || values.email);
         setError('');
       } else if (err?.status === 429) {
         setError('Trop de tentatives. Veuillez patienter quelques minutes avant de réessayer.');
@@ -71,9 +73,9 @@ export default function Connexion() {
   };
 
   const features = [
-    { icon: <TeamOutlined style={{ fontSize: 22, color: '#93c5fd' }} />, title: 'Votre Crew, connectée', desc: 'Collaborez en temps réel au sein de votre Colony.' },
-    { icon: <RocketOutlined style={{ fontSize: 22, color: '#93c5fd' }} />, title: 'Du Nectar au Gold', desc: 'Devis, suivi, facturation — tout dans le Hive.' },
-    { icon: <SafetyOutlined style={{ fontSize: 22, color: '#93c5fd' }} />, title: 'Sécurisé & fiable', desc: 'Données protégées, hébergées en Europe.' },
+    { icon: <TeamOutlined style={{ fontSize: 22, color: COLORS.authAccent }} />, title: t('auth.featureCrew'), desc: t('auth.featureCrewDesc') },
+    { icon: <RocketOutlined style={{ fontSize: 22, color: COLORS.authAccent }} />, title: t('auth.featureNectar'), desc: t('auth.featureNectarDesc') },
+    { icon: <SafetyOutlined style={{ fontSize: 22, color: COLORS.authAccent }} />, title: t('auth.featureSecure'), desc: t('auth.featureSecureDesc') },
   ];
 
   return (
@@ -102,9 +104,9 @@ export default function Connexion() {
           <div style={{ position: 'absolute', top: 0, right: 0, width: 380, height: 380, borderRadius: '50%', opacity: 0.08, background: 'radial-gradient(circle, #60a5fa 0%, transparent 70%)', transform: 'translate(30%, -30%)' }} />
           <div style={{ position: 'absolute', bottom: 0, left: 0, width: 280, height: 280, borderRadius: '50%', opacity: 0.08, background: `radial-gradient(circle, ${SF.blue} 0%, transparent 70%)`, transform: 'translate(-20%, 20%)' }} />
           {/* Points lumineux animés */}
-          <div className="zhiive-dot" style={{ top: '25%', right: '25%', width: 6, height: 6, background: '#60a5fa' }} />
-          <div className="zhiive-dot" style={{ top: '60%', right: '35%', width: 8, height: 8, background: '#93c5fd', animationDelay: '1s', animationDuration: '4s' }} />
-          <div className="zhiive-dot" style={{ top: '45%', left: '20%', width: 5, height: 5, background: '#38bdf8', animationDelay: '0.5s', animationDuration: '3.5s' }} />
+          <div className="zhiive-dot" style={{ top: '25%', right: '25%', width: 6, height: 6, background: COLORS.authAccentStrong }} />
+          <div className="zhiive-dot" style={{ top: '60%', right: '35%', width: 8, height: 8, background: COLORS.authAccent, animationDelay: '1s', animationDuration: '4s' }} />
+          <div className="zhiive-dot" style={{ top: '45%', left: '20%', width: 5, height: 5, background: COLORS.authAccentAlt, animationDelay: '0.5s', animationDuration: '3.5s' }} />
 
           {/* Logo + Nom */}
           <div style={{ position: 'relative', zIndex: 10, textAlign: 'center' }}>
@@ -112,7 +114,7 @@ export default function Connexion() {
               <img src="/zhiive-logo.png" alt="Zhiive" style={{ width: 56, height: 56, borderRadius: 14, objectFit: 'contain' }} />
               <img src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 44, objectFit: 'contain' }} />
             </div>
-            <p style={{ color: '#93c5fd', fontSize: 16, margin: 0, textAlign: 'center' }}>Votre ruche vivante.</p>
+            <p style={{ color: COLORS.authAccent, fontSize: 16, margin: 0, textAlign: 'center' }}>{t('auth.tagline')}</p>
           </div>
 
           {/* Features */}
@@ -123,8 +125,8 @@ export default function Connexion() {
                   {f.icon}
                 </div>
                 <div>
-                  <p style={{ color: '#fff', fontWeight: 600, fontSize: 15, margin: '0 0 4px 0' }}>{f.title}</p>
-                  <p style={{ color: '#93c5fd', fontSize: 13, margin: 0, lineHeight: 1.5 }}>{f.desc}</p>
+                  <p style={{ color: COLORS.white, fontWeight: 600, fontSize: 15, margin: '0 0 4px 0' }}>{f.title}</p>
+                  <p style={{ color: COLORS.authAccent, fontSize: 13, margin: 0, lineHeight: 1.5 }}>{f.desc}</p>
                 </div>
               </div>
             ))}
@@ -145,13 +147,13 @@ export default function Connexion() {
                 <img src="/zhiive-logo.png" alt="Zhiive" style={{ width: 56, height: 56, borderRadius: 16, objectFit: 'contain', boxShadow: '0 4px 14px rgba(37,99,235,0.3)' }} />
                 <img src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 40, objectFit: 'contain' }} />
               </div>
-              <p style={{ color: '#93c5fd', fontSize: 15, margin: 0 }}>Votre ruche vivante.</p>
+              <p style={{ color: COLORS.authAccent, fontSize: 15, margin: 0 }}>{t('auth.tagline')}</p>
             </div>
 
-            <div style={{ background: '#fff', borderRadius: 20, padding: '40px 36px', boxShadow: '0 4px 24px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' }}>
+            <div style={{ background: COLORS.white, borderRadius: 20, padding: '40px 36px', boxShadow: '0 4px 24px rgba(0,0,0,0.05)', border: `1px solid ${COLORS.authBorder}` }}>
               <div style={{ textAlign: 'center', marginBottom: 32 }}>
-                <Title level={2} style={{ margin: '0 0 8px 0', fontSize: 26, color: '#111827' }}>Welcome back 👋</Title>
-                <Text style={{ color: '#9ca3af', fontSize: 14 }}>Retrouvez votre Hive</Text>
+                <Title level={2} style={{ margin: '0 0 8px 0', fontSize: 26, color: COLORS.authTitle }}>{t('auth.welcomeBack')}</Title>
+                <Text style={{ color: COLORS.authMuted, fontSize: 14 }}>{t('auth.findYourHive')}</Text>
               </div>
 
               {error && (
@@ -170,7 +172,7 @@ export default function Connexion() {
                   type="warning"
                   showIcon
                   style={{ borderRadius: 12, marginBottom: 24 }}
-                  message="Compte pas encore activé"
+                  message="{t('auth.notActivated')}"
                   description={
                     <div>
                       <p style={{ margin: '4px 0 8px', lineHeight: 1.6 }}>
@@ -178,7 +180,7 @@ export default function Connexion() {
                         en cliquant sur le lien envoyé par email
                         {unverifiedEmail ? ` à ${unverifiedEmail}` : ''}.
                       </p>
-                      <p style={{ margin: '0 0 12px', fontSize: 13, color: '#78350f' }}>
+                      <p style={{ margin: '0 0 12px', fontSize: 13, color: COLORS.authWarning }}>
                         💡 Pensez à vérifier vos <strong>spams / courrier indésirable</strong>.
                       </p>
                       {resendSuccess ? (
@@ -205,13 +207,13 @@ export default function Connexion() {
                 <Form.Item
                   name="email"
                   rules={[
-                    { required: true, message: 'Veuillez entrer votre email' },
-                    { type: 'email', message: "Format d'email invalide" },
+                    { required: true, message: t('auth.requiredEmail') },
+                    { type: 'email', message: t('auth.invalidEmail') },
                   ]}
                 >
                   <Input
-                    prefix={<MailOutlined style={{ color: '#9ca3af' }} />}
-                    placeholder="votre@email.com"
+                    prefix={<MailOutlined style={{ color: COLORS.authMuted }} />}
+                    placeholder={t('auth.emailPlaceholder')}
                     autoComplete="email"
                     style={{ borderRadius: 12, height: 48 }}
                   />
@@ -219,11 +221,11 @@ export default function Connexion() {
 
                 <Form.Item
                   name="password"
-                  rules={[{ required: true, message: 'Veuillez entrer votre mot de passe' }]}
+                  rules={[{ required: true, message: t('auth.requiredPassword') }]}
                 >
                   <Input.Password
-                    prefix={<LockOutlined style={{ color: '#9ca3af' }} />}
-                    placeholder="Mot de passe"
+                    prefix={<LockOutlined style={{ color: COLORS.authMuted }} />}
+                    placeholder={t('auth.password')}
                     autoComplete="current-password"
                     style={{ borderRadius: 12, height: 48 }}
                   />
@@ -245,13 +247,13 @@ export default function Connexion() {
                       boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
                     }}
                   >
-                    Se connecter
+                    {t('auth.login')}
                   </Button>
                 </Form.Item>
               </Form>
 
               <Divider plain style={{ margin: '20px 0' }}>
-                <Text style={{ color: '#d1d5db', fontSize: 12 }}>Pas encore de compte ?</Text>
+                <Text style={{ color: COLORS.authDivider, fontSize: 12 }}>{t('auth.noAccount')}</Text>
               </Divider>
 
               <Button
@@ -262,7 +264,7 @@ export default function Connexion() {
                   borderRadius: 12,
                   height: 50,
                   border: '2px solid #dbeafe',
-                  color: '#2563eb',
+                  color: COLORS.authLink,
                   fontWeight: 600,
                   fontSize: 15,
                 }}
@@ -271,7 +273,7 @@ export default function Connexion() {
               </Button>
             </div>
 
-            <p style={{ textAlign: 'center', marginTop: 24, color: '#d1d5db', fontSize: 11 }}>
+            <p style={{ textAlign: 'center', marginTop: 24, color: COLORS.authDivider, fontSize: 11 }}>
               En vous connectant, vous acceptez nos conditions d'utilisation.
             </p>
           </div>

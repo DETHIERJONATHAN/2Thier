@@ -21,12 +21,12 @@ interface ApiTestResult {
   endpoint: string;
   status: number;
   success: boolean;
-  data?: any;
+  data?: unknown;
   error?: string;
   responseTime: number;
 }
 
-async function testEndpoint(url: string, options: any = {}): Promise<ApiTestResult> {
+async function testEndpoint(url: string, options: unknown = {}): Promise<ApiTestResult> {
   const startTime = Date.now();
   
   try {

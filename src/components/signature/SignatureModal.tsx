@@ -142,7 +142,7 @@ const SignatureModal: React.FC<SignatureModalProps> = ({
         signerEmail: signerEmail.trim(),
         signerPhone: signerPhone.trim() || undefined,
         expiresInHours: 72,
-      }) as any;
+      }) as unknown;
 
       if (!initRes?.success || !initRes?.signatureId) {
         throw new Error(initRes?.message || 'Erreur initiation');
@@ -152,7 +152,7 @@ const SignatureModal: React.FC<SignatureModalProps> = ({
       setSignatureId(newSigId);
 
       // 2. Envoyer le code OTP
-      const otpRes = await api.post(`/api/e-signature/${newSigId}/send-otp`, {}) as any;
+      const otpRes = await api.post(`/api/e-signature/${newSigId}/send-otp`, {}) as unknown;
       if (!otpRes?.success) {
         throw new Error(otpRes?.message || 'Erreur envoi OTP');
       }
@@ -161,7 +161,7 @@ const SignatureModal: React.FC<SignatureModalProps> = ({
       setCurrentStep(1);
       message.success(`Code de vérification envoyé à ${signerEmail}`);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[SignatureModal] Erreur initiation/OTP:', err);
       message.error(err?.message || 'Erreur lors de l\'initiation');
     } finally {
@@ -180,7 +180,7 @@ const SignatureModal: React.FC<SignatureModalProps> = ({
 
     try {
       setOtpLoading(true);
-      const res = await api.post(`/api/e-signature/${signatureId}/verify-otp`, { otp: otpCode }) as any;
+      const res = await api.post(`/api/e-signature/${signatureId}/verify-otp`, { otp: otpCode }) as unknown;
 
       if (res?.success) {
         setOtpVerified(true);
@@ -190,7 +190,7 @@ const SignatureModal: React.FC<SignatureModalProps> = ({
         setRemainingAttempts(res?.remainingAttempts ?? remainingAttempts - 1);
         message.error(res?.message || 'Code incorrect');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = err?.message || 'Erreur vérification';
       if (err?.remainingAttempts !== undefined) {
         setRemainingAttempts(err.remainingAttempts);
@@ -207,11 +207,11 @@ const SignatureModal: React.FC<SignatureModalProps> = ({
     try {
       setOtpLoading(true);
       setOtpCode('');
-      const res = await api.post(`/api/e-signature/${signatureId}/send-otp`, {}) as any;
+      const res = await api.post(`/api/e-signature/${signatureId}/send-otp`, {}) as unknown;
       if (res?.success) {
         message.success('Nouveau code envoyé');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur renvoi code');
     } finally {
       setOtpLoading(false);
@@ -241,7 +241,7 @@ const SignatureModal: React.FC<SignatureModalProps> = ({
       const res = await api.post(`/api/e-signature/${signatureId}/sign`, {
         signatureData,
         legalAccepted: true,
-      }) as any;
+      }) as unknown;
 
       if (res?.success) {
         const result = {
@@ -256,7 +256,7 @@ const SignatureModal: React.FC<SignatureModalProps> = ({
       } else {
         throw new Error(res?.message || 'Erreur signature');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[SignatureModal] Erreur signature:', err);
       message.error(err?.message || 'Erreur lors de la signature');
     } finally {

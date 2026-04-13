@@ -28,7 +28,7 @@ export function useSubmissionSummary(submissionId?: string | null, refreshTrigge
         setError(null);
         const res = await api.get<SummaryResponse>(`/api/treebranchleaf/submissions/${submissionId}/summary`);
         if (!cancelled) setData(res);
-      } catch (e: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      } catch (e: unknown) { // eslint-disable-line @typescript-eslint/no-explicit-any
         if (!cancelled) setError(e?.message || 'Erreur lors du chargement du résumé');
       } finally {
         if (!cancelled) setLoading(false);

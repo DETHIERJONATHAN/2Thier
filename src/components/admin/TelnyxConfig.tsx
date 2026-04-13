@@ -207,7 +207,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
       });
 
       // Déduire un warning depuis le diagnostic (pas via headers, car useAuthenticatedApi retourne directement les données)
-      const checks: any[] = Array.isArray(diagnostic?.checks) ? diagnostic.checks : [];
+      const checks: unknown[] = Array.isArray(diagnostic?.checks) ? diagnostic.checks : [];
       const firstKo = checks.find(c => c && c.ok === false && c.details && typeof c.details === 'object');
       const code = firstKo?.details?.code;
       setTelnyxWarning(typeof code === 'string' ? code : null);
@@ -307,12 +307,12 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
         message.warning('Impossible de récupérer les numéros Telnyx (API).');
       }
 
-      const assigned = result?.actions?.find?.((a: any) => a?.type === 'assign_numbers')?.connection_id;
+      const assigned = result?.actions?.find?.((a: unknown) => a?.type === 'assign_numbers')?.connection_id;
       message.success(assigned ? `Provisioning Telnyx appliqué (connection_id: ${assigned})` : 'Provisioning Telnyx appliqué');
       loadTelnyxData();
     } catch (error) {
       console.error('❌ Erreur provisioning Telnyx:', error);
-      const anyErr: any = error as any;
+      const anyErr: unknown = error as unknown;
       const errMsg = anyErr?.response?.data?.error || anyErr?.response?.data?.message || anyErr?.message || 'Erreur provisioning Telnyx';
       message.error(errMsg);
     } finally {
@@ -329,7 +329,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
       message.success({ content: `Appels actifs: ${attempted} tentés, ${ok} raccrochés`, key: 'hangupActive', duration: 6 });
       loadRecentCalls();
     } catch (error) {
-      const anyErr: any = error as any;
+      const anyErr: unknown = error as unknown;
       const errMsg = anyErr?.response?.data?.error || anyErr?.response?.data?.message || anyErr?.message || 'Erreur lors du raccrochage';
       message.error({ content: errMsg, key: 'hangupActive', duration: 6 });
     }
@@ -339,7 +339,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
   const handleSaveConfig = async (values: { api_key?: string; webhook_url?: string; default_connection?: string; fallback_pstn_number?: string; call_control_app_id?: string }) => {
     try {
       const apiKey = (values.api_key || '').trim();
-      const payload: any = {
+      const payload: unknown = {
         organizationId,
         webhook_url: webhookMode === 'auto' ? '__AUTO__' : values.webhook_url,
         default_connection: values.default_connection,
@@ -394,7 +394,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
     setIsSipEndpointModalVisible(true);
   };
 
-  const handleSaveSipEndpoint = async (values: any) => {
+  const handleSaveSipEndpoint = async (values: unknown) => {
     try {
       if (editingSipEndpoint) {
         const updateValues = { ...values };
@@ -456,7 +456,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
         message.error({ content: `❌ ${result?.error || 'Test invalide'}`, key: 'siptest', duration: 6 });
       }
     } catch (error) {
-      const msg = (error as any)?.message || 'Test échoué';
+      const msg = (error as unknown)?.message || 'Test échoué';
       message.error({ content: `❌ ${msg}`, key: 'siptest', duration: 6 });
     }
   };
@@ -490,7 +490,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
       const color = low === 'answered' ? 'green' : (low === 'dialing' ? 'blue' : (low === 'pending' ? 'default' : 'red'));
       return <Tag color={color}>{String(s)}</Tag>;
     } },
-    { title: 'Endpoint', dataIndex: 'Endpoint', key: 'Endpoint', width: 180, render: (ep: any) => ep?.name ? ep.name : <Text type="secondary">—</Text> },
+    { title: 'Endpoint', dataIndex: 'Endpoint', key: 'Endpoint', width: 180, render: (ep: unknown) => ep?.name ? ep.name : <Text type="secondary">—</Text> },
   ];
 
   const sipEndpointColumns = [
@@ -558,7 +558,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, record: SipEndpoint) => (
+      render: (_: unknown, record: SipEndpoint) => (
         <Space>
           <Button
             size="small"
@@ -794,7 +794,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
             />
             <Table
               dataSource={recentCalls}
-              columns={recentCallColumns as any}
+              columns={recentCallColumns as unknown}
               rowKey="id"
               size="small"
               loading={recentCallsLoading}
@@ -804,7 +804,7 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
                 expandedRowRender: (record: RecentTelnyxCall) => (
                   <Table
                     dataSource={Array.isArray(record.TelnyxCallLeg) ? record.TelnyxCallLeg : []}
-                    columns={recentLegColumns as any}
+                    columns={recentLegColumns as unknown}
                     rowKey="id"
                     size="small"
                     pagination={false}
@@ -1256,9 +1256,9 @@ const TelnyxConfig: React.FC<TelnyxConfigProps> = ({
 };
 
 // Modal Diagnostic Telnyx
-const renderDiag = (diag: any) => {
+const renderDiag = (diag: unknown) => {
   if (!diag) return null;
-  const checks: any[] = Array.isArray(diag.checks) ? diag.checks : [];
+  const checks: unknown[] = Array.isArray(diag.checks) ? diag.checks : [];
   const apiKeyMeta = diag.apiKeyMeta && typeof diag.apiKeyMeta === 'object' ? diag.apiKeyMeta : null;
   const cfg = diag.config && typeof diag.config === 'object' ? diag.config : null;
 

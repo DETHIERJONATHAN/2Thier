@@ -29,7 +29,7 @@ interface SearchResult {
   firstName?: string;
   imageUrl?: string;
   favicon?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface SearchResponse {
@@ -176,7 +176,7 @@ const FeedWidget: React.FC<{
         cursor: 'grab',
       }}>
         {feed.favicon ? (
-          <img src={feed.favicon} alt="" style={{ width: 20, height: 20, borderRadius: 4, flexShrink: 0 }}
+          <img src={feed.favicon} alt="" loading="lazy" style={{ width: 20, height: 20, borderRadius: 4, flexShrink: 0 }}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         ) : (
           <GlobalOutlined style={{ fontSize: 18, color: SF.textSecondary, flexShrink: 0 }} />
@@ -199,7 +199,7 @@ const FeedWidget: React.FC<{
           <div onClick={() => onOpenUrl(feed.url, ext)} style={{ cursor: 'pointer', transition: 'background 0.15s' }} className="hover:bg-gray-50">
             {feed.imageUrl && (
               <div style={{ width: '100%', height: 140, overflow: 'hidden', background: SF.bg }}>
-                <img src={feed.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                <img src={feed.imageUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }} />
               </div>
             )}
@@ -226,7 +226,7 @@ const FeedWidget: React.FC<{
                 style={{ cursor: 'pointer', transition: 'background 0.15s', borderBottom: idx < feed.items.length - 1 ? `1px solid ${SF.border}` : undefined }}
                 className="hover:bg-gray-50">
                 <div style={{ width: '100%', height: 160, overflow: 'hidden', background: SF.bg }}>
-                  <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  <img src={item.imageUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }} />
                 </div>
                 <div style={{ padding: '8px 16px' }}>
@@ -245,7 +245,7 @@ const FeedWidget: React.FC<{
               className="hover:bg-gray-50">
               {item.imageUrl && (
                 <div style={{ width: 72, height: 72, borderRadius: SF.radiusSm, overflow: 'hidden', flexShrink: 0, background: SF.bg }}>
-                  <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  <img src={item.imageUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }} />
                 </div>
               )}
@@ -300,7 +300,7 @@ const FeedButton: React.FC<{
       className="hover:shadow-md hover:-translate-y-0.5"
     >
       {feed.favicon ? (
-        <img src={feed.favicon} alt="" style={{ width: 24, height: 24, borderRadius: 4, flexShrink: 0 }}
+        <img src={feed.favicon} alt="" loading="lazy" style={{ width: 24, height: 24, borderRadius: 4, flexShrink: 0 }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
       ) : (
         <GlobalOutlined style={{ fontSize: 20, color: SF.textSecondary, flexShrink: 0 }} />
@@ -375,8 +375,8 @@ const SearchPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
     if (q.length < MIN_QUERY_LENGTH) { setWebResults([]); return; }
     setWebLoading(true);
     try {
-      const data = await apiStable.get(`/api/search/web?q=${encodeURIComponent(q)}&limit=10`) as { results: any[] };
-      setWebResults((data.results || []).map((r: any, i: number) => ({
+      const data = await apiStable.get(`/api/search/web?q=${encodeURIComponent(q)}&limit=10`) as { results: unknown[] };
+      setWebResults((data.results || []).map((r: unknown, i: number) => ({
         id: `web-${i}`, _type: 'web', _label: r.title || r.url,
         _desc: r.content || r.snippet || '', _route: r.url, _icon: 'search',
         imageUrl: r.img_src || r.thumbnail || undefined,
@@ -398,8 +398,8 @@ const SearchPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
     if (isListening) { stopListening(); return; }
     const recognition = new SR();
     recognition.lang = 'fr-FR'; recognition.continuous = false; recognition.interimResults = true;
-    recognition.onresult = (event: any) => {
-      const transcript = Array.from(event.results).map((r: any) => r[0].transcript).join('');
+    recognition.onresult = (event: unknown) => {
+      const transcript = Array.from(event.results).map((r: Record<string, unknown>) => r[0].transcript).join('');
       setQuery(transcript);
       if (event.results[0]?.isFinal) {
         if (debounceRef.current) clearTimeout(debounceRef.current);

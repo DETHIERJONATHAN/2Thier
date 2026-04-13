@@ -43,7 +43,7 @@ export const createSectionsSlice: StateCreator<
       }));
 
       toast.success("Section ajoutée avec succès !");
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err.message);
       console.error('[CRMStore] addSectionToBlock error:', err);
     }
@@ -69,7 +69,7 @@ export const createSectionsSlice: StateCreator<
       }));
       
       toast.success("Section supprimée avec succès !");
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err.message);
       console.error('[CRMStore] removeSectionFromBlock error:', err);
     }
@@ -137,7 +137,7 @@ export const createSectionsSlice: StateCreator<
       }));
 
       toast.success("Sections réordonnées avec succès !");
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err.message);
       console.error('[CRMStore] reorderSectionsOfBlock error:', err);
     }

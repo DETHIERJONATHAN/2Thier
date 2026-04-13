@@ -7,25 +7,25 @@
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
 export const performanceLogger = {
-  debug: (message: string, ...data: any[]) => {
+  debug: (message: string, ...data: unknown[]) => {
     if (isDevelopment) {
       // console.log(`🔍 ${message}`, ...data); // ✨ Log réduit
     }
   },
   
-  info: (message: string, ...data: any[]) => {
+  info: (message: string, ...data: unknown[]) => {
     if (isDevelopment) {
       // console.info(`ℹ️ ${message}`, ...data); // ✨ Log réduit
     }
   },
   
-  warn: (message: string, ...data: any[]) => {
+  warn: (message: string, ...data: unknown[]) => {
     if (isDevelopment) {
       // console.warn(`⚠️ ${message}`, ...data); // ✨ Log réduit
     }
   },
   
-  error: (message: string, ...data: any[]) => {
+  error: (message: string, ...data: unknown[]) => {
     console.error(`❌ ${message}`, ...data);
   },
   
@@ -38,7 +38,7 @@ export const performanceLogger = {
   }
 };
 
-export const withPerformanceMeasure = <T extends (...args: any[]) => any>(
+export const withPerformanceMeasure = <T extends (...args: unknown[]) => any>(
   fn: T,
   label: string
 ): T => {

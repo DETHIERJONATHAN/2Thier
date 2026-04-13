@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ router.post('/devis', authenticateToken, requireRole(['user', 'admin', 'super_ad
       metadata
     } = req.body;
 
-    console.log('💾 [TBL API] Sauvegarde devis TBL:', {
+    logger.info('💾 [TBL API] Sauvegarde devis TBL:', {
       clientId,
       treeId,
       projectName,
@@ -67,8 +68,8 @@ router.post('/devis', authenticateToken, requireRole(['user', 'admin', 'super_ad
       where: { id: `tbl_${treeId}_${clientId}_${organizationId}` },
       update: {
         status: isDraft ? 'draft' : 'completed',
-        summary: devisData as any,
-        exportData: formData as any,
+        summary: devisData as unknown,
+        exportData: formData as unknown,
         updatedAt: new Date(),
         completedAt: isDraft ? null : new Date(),
       },
@@ -79,13 +80,13 @@ router.post('/devis', authenticateToken, requireRole(['user', 'admin', 'super_ad
         leadId: clientId,
         organizationId,
         status: isDraft ? 'draft' : 'completed',
-        summary: devisData as any,
-        exportData: formData as any,
+        summary: devisData as unknown,
+        exportData: formData as unknown,
         updatedAt: new Date(),
         completedAt: isDraft ? null : new Date(),
       },
     });
-    console.log('✅ [TBL API] Devis sauvegardé avec succès:', submission.id);
+    logger.info('✅ [TBL API] Devis sauvegardé avec succès:', submission.id);
 
     res.json({
       success: true,
@@ -95,7 +96,7 @@ router.post('/devis', authenticateToken, requireRole(['user', 'admin', 'super_ad
     });
 
   } catch (error) {
-    console.error('❌ [TBL API] Erreur sauvegarde devis:', error);
+    logger.error('❌ [TBL API] Erreur sauvegarde devis:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur serveur lors de la sauvegarde'
@@ -109,7 +110,7 @@ router.get('/devis/client/:clientId', authenticateToken, requireRole(['user', 'a
     const { clientId } = req.params;
     const { organizationId, role } = req.user || {};
 
-    console.log('📖 [TBL API] Récupération devis client:', clientId);
+    logger.info('📖 [TBL API] Récupération devis client:', clientId);
 
     if (!organizationId && role !== 'super_admin') {
       return res.status(403).json({
@@ -125,7 +126,7 @@ router.get('/devis/client/:clientId', authenticateToken, requireRole(['user', 'a
     res.json(submissions.map(s => ({ devisId: s.id, ...((s.summary as Record<string, unknown>) ?? {}), formData: s.exportData, status: s.status, updatedAt: s.updatedAt })));
 
   } catch (error) {
-    console.error('❌ [TBL API] Erreur récupération devis client:', error);
+    logger.error('❌ [TBL API] Erreur récupération devis client:', error);
     res.status(500).json({
       error: 'Erreur serveur lors de la récupération des devis'
     });
@@ -138,7 +139,7 @@ router.get('/devis/:devisId', authenticateToken, requireRole(['user', 'admin', '
     const { devisId } = req.params;
     const { organizationId, role } = req.user || {};
 
-    console.log('📖 [TBL API] Chargement devis:', devisId);
+    logger.info('📖 [TBL API] Chargement devis:', devisId);
 
     if (!organizationId && role !== 'super_admin') {
       return res.status(403).json({
@@ -154,7 +155,7 @@ router.get('/devis/:devisId', authenticateToken, requireRole(['user', 'admin', '
     res.json({ devisId: submission.id, formData: submission.exportData ?? null, status: submission.status, summary: submission.summary });
 
   } catch (error) {
-    console.error('❌ [TBL API] Erreur chargement devis:', error);
+    logger.error('❌ [TBL API] Erreur chargement devis:', error);
     res.status(500).json({
       error: 'Erreur serveur lors du chargement du devis'
     });
@@ -167,7 +168,7 @@ router.get('/clients/:clientId/access-check', authenticateToken, requireRole(['u
     const { clientId } = req.params;
     const { organizationId, role } = req.user || {};
 
-    console.log('🔒 [TBL API] Vérification accès client:', clientId);
+    logger.info('🔒 [TBL API] Vérification accès client:', clientId);
 
     // SuperAdmin a accès à tout
     if (role === 'super_admin') {
@@ -185,7 +186,7 @@ router.get('/clients/:clientId/access-check', authenticateToken, requireRole(['u
     res.json({ hasAccess: !!lead });
 
   } catch (error) {
-    console.error('❌ [TBL API] Erreur vérification accès client:', error);
+    logger.error('❌ [TBL API] Erreur vérification accès client:', error);
     res.status(500).json({
       hasAccess: false,
       error: 'Erreur serveur lors de la vérification d\'accès'

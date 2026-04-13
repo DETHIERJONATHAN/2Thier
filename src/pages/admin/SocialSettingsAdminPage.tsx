@@ -167,7 +167,7 @@ interface SocialSettingsData {
   gdprDataExportEnabled: boolean;
   gdprRetentionDays: number;
   // Advanced
-  customReactions: any;
+  customReactions: unknown;
   bannedWords: string[];
   pinnedPostsLimit: number;
   autoArchiveDays: number;
@@ -194,7 +194,7 @@ export default function SocialSettingsAdminPage() {
   const [saving, setSaving] = useState(false);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [allOrgs, setAllOrgs] = useState<OrgOption[]>([]);
-  const [_orgStats, setOrgStats] = useState<Record<string, any>>({});
+  const [_orgStats, setOrgStats] = useState<Record<string, unknown>>({});
   const [_dirty, setDirty] = useState(false);
 
   // Determine which org to load settings for
@@ -209,14 +209,14 @@ export default function SocialSettingsAdminPage() {
     try {
       const data = await api.api.get('/social-settings/all');
       const orgs: OrgOption[] = [
-        ...data.settings.map((s: any) => s.organization),
+        ...data.settings.map((s: Record<string, unknown>) => s.organization),
         ...data.orgsWithoutSettings,
       ].sort((a: OrgOption, b: OrgOption) => a.name.localeCompare(b.name));
       setAllOrgs(orgs);
       
       // Build stats map
-      const stats: Record<string, any> = {};
-      data.settings.forEach((s: any) => {
+      const stats: Record<string, unknown> = {};
+      data.settings.forEach((s: Record<string, unknown>) => {
         stats[s.organizationId] = {
           wallEnabled: s.wallEnabled,
           storiesEnabled: s.storiesEnabled,
@@ -256,7 +256,7 @@ export default function SocialSettingsAdminPage() {
   useEffect(() => { loadSettings(); }, [loadSettings]);
 
   // Update a single setting
-  const updateSetting = useCallback(async (key: string, value: any) => {
+  const updateSetting = useCallback(async (key: string, value: unknown) => {
     if (!settings || !targetOrgId) return;
     
     const newSettings = { ...settings, [key]: value };
@@ -277,7 +277,7 @@ export default function SocialSettingsAdminPage() {
   }, [api.api, settings, targetOrgId]);
 
   // Reset a section to its defaults
-  const SECTION_DEFAULTS: Record<string, Record<string, any>> = {
+  const SECTION_DEFAULTS: Record<string, Record<string, unknown>> = {
     apps: { wallEnabled: true, storiesEnabled: true, reelsEnabled: true, sparksEnabled: true, battlesEnabled: true, exploreEnabled: true, hiveLiveEnabled: true, messengerEnabled: true, callsEnabled: true },
     nectar: { questsEnabled: true, eventsEnabled: true, capsulesEnabled: true, orbitEnabled: true, pulseEnabled: true },
     wax: { waxEnabled: true, waxAlertsEnabled: true, waxDefaultRadiusKm: 10, waxGhostModeAllowed: true },

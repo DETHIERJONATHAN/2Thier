@@ -49,7 +49,7 @@ const { TextArea } = Input;
 interface ConditionRule {
   field: string;      // nom du champ à vérifier
   operator: 'equals' | 'notEquals' | 'in' | 'notIn' | 'greaterThan' | 'lessThan' | 'contains' | 'exists';
-  value: any;         // valeur à comparer
+  value: unknown;         // valeur à comparer
 }
 
 interface FieldCondition {
@@ -86,7 +86,7 @@ interface FormField {
   defaultValue?: string;
   value?: string;
   options?: CardOption[] | SelectOption[];
-  validation?: any;
+  validation?: unknown;
   tblNodeId?: string;
   tblNodeLabel?: string;
   isRequired: boolean;
@@ -119,7 +119,7 @@ interface WebsiteForm {
 }
 
 // ==================== ÉVALUATION DES CONDITIONS ====================
-const evaluateCondition = (rule: ConditionRule, values: Record<string, any>): boolean => {
+const evaluateCondition = (rule: ConditionRule, values: Record<string, unknown>): boolean => {
   const fieldValue = values[rule.field];
   
   switch (rule.operator) {
@@ -144,7 +144,7 @@ const evaluateCondition = (rule: ConditionRule, values: Record<string, any>): bo
   }
 };
 
-const shouldShowField = (field: FormField, values: Record<string, any>): boolean => {
+const shouldShowField = (field: FormField, values: Record<string, unknown>): boolean => {
   if (!field.condition) return true;
   
   const { showIf, hideIf, logic = 'and' } = field.condition;
@@ -270,7 +270,7 @@ const PublicFormRenderer: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
-  const [values, setValues] = useState<Record<string, any>>({});
+  const [values, setValues] = useState<Record<string, unknown>>({});
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -297,7 +297,7 @@ const PublicFormRenderer: React.FC = () => {
         setFormData(data);
         
         // Initialiser les valeurs par défaut
-        const defaults: Record<string, any> = {};
+        const defaults: Record<string, unknown> = {};
         data.steps.forEach((step: FormStep) => {
           step.fields.forEach((field: FormField) => {
             if (field.defaultValue) {
@@ -324,7 +324,7 @@ const PublicFormRenderer: React.FC = () => {
   }, [slug]);
 
   // Gestion des valeurs avec useCallback pour stabilité
-  const handleValueChange = useCallback((name: string, value: any) => {
+  const handleValueChange = useCallback((name: string, value: unknown) => {
     setValues(prev => ({ ...prev, [name]: value }));
   }, []);
 

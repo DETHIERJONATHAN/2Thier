@@ -27,8 +27,8 @@ export interface Category {
   active: boolean;
   organizationId?: string;
   superAdminOnly: boolean;
-  allowedRoles?: any;
-  requiredPermissions?: any;
+  allowedRoles?: unknown;
+  requiredPermissions?: unknown;
   createdAt: string;
   updatedAt: string;
 }

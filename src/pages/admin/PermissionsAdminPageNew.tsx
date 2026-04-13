@@ -159,7 +159,7 @@ const PermissionsAdminPage: React.FC = () => {
       const modulesArr = modulesRes?.modules || modulesRes?.data || (Array.isArray(modulesRes) ? modulesRes : []);
       setRoles(Array.isArray(rolesArr) ? rolesArr : []);
       setModules(Array.isArray(modulesArr) ? modulesArr : []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(err.message || 'Erreur de chargement');
       antdMessage.error('Erreur lors du chargement des données');
     } finally {

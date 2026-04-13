@@ -17,6 +17,7 @@ import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { z } from 'zod';
 import { GoogleGeminiService } from '../services/GoogleGeminiService';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -107,7 +108,7 @@ router.get('/stats', authenticateToken, async (req: Request, res: Response) => {
       },
     });
   } catch (error: unknown) {
-    console.error('[EXPENSES] Stats error:', error);
+    logger.error('[EXPENSES] Stats error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -152,7 +153,7 @@ router.get('/monthly', authenticateToken, async (req: Request, res: Response) =>
 
     return res.json({ success: true, data: Object.values(monthlyMap) });
   } catch (error: unknown) {
-    console.error('[EXPENSES] Monthly stats error:', error);
+    logger.error('[EXPENSES] Monthly stats error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -168,7 +169,7 @@ router.get('/export/csv', authenticateToken, async (req: Request, res: Response)
 
     const { category, status, from, to } = req.query;
 
-    const where: any = { organizationId };
+    const where: unknown = { organizationId };
     if (category && category !== 'all') where.category = category;
     if (status && status !== 'all') where.status = status;
     if (from || to) {
@@ -211,7 +212,7 @@ router.get('/export/csv', authenticateToken, async (req: Request, res: Response)
     res.setHeader('Content-Disposition', `attachment; filename="depenses-${new Date().toISOString().split('T')[0]}.csv"`);
     return res.send(csv);
   } catch (error: unknown) {
-    console.error('[EXPENSES] CSV export error:', error);
+    logger.error('[EXPENSES] CSV export error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -244,7 +245,7 @@ router.get('/overdue', authenticateToken, async (req: Request, res: Response) =>
       totalOverdue: overdue.reduce((s, e) => s + (e.totalAmount || 0), 0),
     });
   } catch (error: unknown) {
-    console.error('[EXPENSES] Overdue error:', error);
+    logger.error('[EXPENSES] Overdue error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -260,7 +261,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 
     const { category, status, search } = req.query;
 
-    const where: any = { organizationId };
+    const where: unknown = { organizationId };
     if (category && category !== 'all') where.category = category;
     if (status && status !== 'all') where.status = status;
     if (search) {
@@ -279,7 +280,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 
     return res.json({ success: true, data: expenses });
   } catch (error: unknown) {
-    console.error('[EXPENSES] List error:', error);
+    logger.error('[EXPENSES] List error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -340,7 +341,7 @@ RÈGLES:
     const result = await gemini.callVisionAPIPublic(imageBase64, mimeType, prompt);
 
     if (!result.success || !result.content) {
-      console.error('[EXPENSES] ❌ Scan Vision échoué:', result.error, '| Modèle:', result.modelUsed);
+      logger.error('[EXPENSES] ❌ Scan Vision échoué:', result.error, '| Modèle:', result.modelUsed);
       return res.json({
         success: false,
         message: `Impossible d'analyser l'image (${result.error || 'erreur inconnue'}). Veuillez saisir les données manuellement.`,
@@ -349,7 +350,7 @@ RÈGLES:
     }
 
     // Parser la réponse JSON de Gemini
-    let extracted: any;
+    let extracted: unknown;
     try {
       let jsonStr = result.content.trim();
       // Méthode 1: Extraire depuis un bloc markdown ```json ... ```
@@ -367,7 +368,7 @@ RÈGLES:
       }
       extracted = JSON.parse(jsonStr);
     } catch {
-      console.warn('[EXPENSES] Gemini returned non-JSON:', result.content?.substring(0, 500));
+      logger.warn('[EXPENSES] Gemini returned non-JSON:', result.content?.substring(0, 500));
       return res.json({
         success: false,
         message: 'L\'IA n\'a pas pu structurer les données. Veuillez saisir manuellement.',
@@ -396,7 +397,7 @@ RÈGLES:
       },
     });
   } catch (error: unknown) {
-    console.error('[EXPENSES] Scan error:', error);
+    logger.error('[EXPENSES] Scan error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -472,7 +473,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
 
     return res.json({ success: true, data: expense });
   } catch (error: unknown) {
-    console.error('[EXPENSES] Create error:', error);
+    logger.error('[EXPENSES] Create error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -501,7 +502,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
 
     return res.json({ success: true, data: updated });
   } catch (error: unknown) {
-    console.error('[EXPENSES] Update error:', error);
+    logger.error('[EXPENSES] Update error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -523,7 +524,7 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
     await db.expense.delete({ where: { id: req.params.id } });
     return res.json({ success: true, message: 'Dépense supprimée' });
   } catch (error: unknown) {
-    console.error('[EXPENSES] Delete error:', error);
+    logger.error('[EXPENSES] Delete error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });
@@ -551,7 +552,7 @@ router.post('/:id/mark-paid', authenticateToken, async (req: Request, res: Respo
 
     return res.json({ success: true, data: updated });
   } catch (error: unknown) {
-    console.error('[EXPENSES] Mark paid error:', error);
+    logger.error('[EXPENSES] Mark paid error:', error);
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur interne' });
   }
 });

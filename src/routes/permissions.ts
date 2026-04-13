@@ -3,6 +3,7 @@ import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { db } from '../lib/database';
 import { User } from '@prisma/client';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 const router = Router();
@@ -91,7 +92,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
         const accessCount = permissions.filter(p => p.action === 'access' && p.allowed).length;
         res.json({ success: true, data: permissions });
     } catch (error) {
-        console.error('[API][permissions] Erreur lors de la récupération des permissions :', error);
+        logger.error('[API][permissions] Erreur lors de la récupération des permissions :', error);
         res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
     }
 });
@@ -173,7 +174,7 @@ router.post('/bulk', async (req: AuthenticatedRequest, res: Response): Promise<v
 
     res.status(200).json({ success: true, message: 'Permissions mises à jour avec succès' });
   } catch (error) {
-    console.error('[API][permissions/bulk] Erreur lors de la mise à jour en masse:', error);
+    logger.error('[API][permissions/bulk] Erreur lors de la mise à jour en masse:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -252,7 +253,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
 
     res.status(200).json({ success: true, message: 'Permissions mises à jour avec succès' });
   } catch (error) {
-    console.error('[API][permissions] Erreur lors de la mise à jour:', error);
+    logger.error('[API][permissions] Erreur lors de la mise à jour:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });

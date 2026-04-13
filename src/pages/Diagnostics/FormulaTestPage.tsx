@@ -72,15 +72,15 @@ const FormulaTestPage: React.FC = () => {
     
     // Préparer des valeurs de test
     const fieldsInFormula = selectedFormula.sequence
-      .filter((item: any) => item.type === 'field')
-      .map((item: any) => ({
+      .filter((item: Record<string, unknown>) => item.type === 'field')
+      .map((item: Record<string, unknown>) => ({
         id: item.fieldId || String(item.value),
         label: item.label || String(item.value)
       }));
       
     // Valeurs de test (toutes à 10 par défaut)
     const testValues: Record<string, number> = {};
-    fieldsInFormula.forEach((field: any) => {
+    fieldsInFormula.forEach((field: Record<string, unknown>) => {
       testValues[field.id] = 10;
     });
     

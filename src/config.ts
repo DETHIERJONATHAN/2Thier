@@ -30,11 +30,12 @@ const getJWTSecretFromConfig = (): string => {
     }
   }
 
-  // ❌ FALLBACK: Clé de développement/production par défaut
-  const fallbackSecret = isProduction ? 'prod_secret_key' : 'dev_secret_key';
+  // ❌ FALLBACK: En production, JWT_SECRET est OBLIGATOIRE
   if (isProduction) {
-    console.warn('[CONFIG] ⚠️ JWT_SECRET non disponible en production, utilisateur une clé par défaut');
+    console.error('[CONFIG] ❌ FATAL: JWT_SECRET non disponible en production — arrêt immédiat');
+    process.exit(1);
   }
+  const fallbackSecret = 'dev_secret_key';
   return fallbackSecret;
 };
 

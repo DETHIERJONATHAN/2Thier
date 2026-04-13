@@ -26,7 +26,7 @@ import '../../../styles/site-responsive.css';
  */
 
 interface HeaderRendererProps {
-  content: any;
+  content: unknown;
   mode: 'preview' | 'edit';
 }
 
@@ -55,7 +55,7 @@ interface HeaderCtaConfig {
   href?: string;
   buttonType?: string;
   buttonSize?: string;
-  style?: Record<string, any> | undefined;
+  style?: Record<string, unknown> | undefined;
 }
 
 interface NormalizedHeaderCta {
@@ -66,7 +66,7 @@ interface NormalizedHeaderCta {
   actionType: HeaderActionType;
   buttonType?: string;
   buttonSize?: string;
-  style?: Record<string, any> | undefined;
+  style?: Record<string, unknown> | undefined;
   formId?: string;
   anchor?: string;
   simulatorSlug?: string;
@@ -126,7 +126,7 @@ const determineHeaderAction = (button: HeaderCtaConfig, legacyHref?: string): He
   return 'contact-form';
 };
 
-const normalizeHeaderCta = (cta: any): NormalizedHeaderCta | null => {
+const normalizeHeaderCta = (cta: unknown): NormalizedHeaderCta | null => {
   if (!cta) return null;
 
   const text = cta.text || cta.label || '';
@@ -337,7 +337,7 @@ export const HeaderRenderer: React.FC<HeaderRendererProps> = ({ content }) => {
   // 🎨 Styles dynamiques : RESPECTER les styles du seed ! + RESPONSIVE
   const headerStyles = {
     // ✅ Utiliser style.position du seed (fixed) au lieu de behavior.sticky
-    position: (style.position || 'relative') as any,
+    position: (style.position || 'relative') as unknown,
     top: style.top || 0,
     zIndex: style.zIndex || 1000,
     // 🔥 FIX: Utiliser ensureUnit pour ajouter 'px' si absent
@@ -444,7 +444,7 @@ export const HeaderRenderer: React.FC<HeaderRendererProps> = ({ content }) => {
             padding: '0 clamp(16px, 3vw, 32px)'
           }}
         >
-          {menuItems.map((item: any, index: number) => {
+          {menuItems.map((item: unknown, index: number) => {
             const hasIcon = item.icon && resolveIconValue(item.icon).type !== 'none';
             const iconColor = item.iconColor || menuStyle.iconColor || menuStyle.color || style.color || '#000';
             const href = pickFirst(item.href) || item.url || '#';  // 🔥 Support des arrays
@@ -585,7 +585,7 @@ export const HeaderRenderer: React.FC<HeaderRendererProps> = ({ content }) => {
         }}
       >
         <Menu mode="vertical" style={{ border: 'none' }}>
-          {menuItems.map((item: any, index: number) => {
+          {menuItems.map((item: unknown, index: number) => {
             const hasIcon = item.icon && resolveIconValue(item.icon).type !== 'none';
             const iconColor = item.iconColor || menuStyle.iconColor || menuStyle.color || style.color || '#000';
             

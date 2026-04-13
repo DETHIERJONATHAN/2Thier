@@ -107,7 +107,7 @@ export const TBLEditorWithAutoSave: React.FC<TBLEditorWithAutoSaveProps> = ({
         message.success('✅ Devis enregistré avec succès');
         onSaveSuccess?.(result.submissionId);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Détecter les conflits (HTTP 409)
       if (error?.response?.status === 409 && error?.response?.data?.conflicts) {
         console.log('⚠️ Conflits détectés, affichage modal');
@@ -156,7 +156,7 @@ export const TBLEditorWithAutoSave: React.FC<TBLEditorWithAutoSaveProps> = ({
         }
       }, 500);
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error('Erreur lors de la résolution: ' + (error?.message || 'Erreur inconnue'));
     }
   };

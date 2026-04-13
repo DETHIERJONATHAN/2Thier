@@ -307,7 +307,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ urls, mediaType, voice
         destroyOnClose
       >
         {previewType === 'image' && previewUrl && (
-          <img src={previewUrl} alt="Preview" style={{ width: '100%', maxHeight: '85vh', objectFit: 'contain' }} />
+          <img src={previewUrl} alt="Preview" loading="lazy" style={{ width: '100%', maxHeight: '85vh', objectFit: 'contain' }} />
         )}
         {previewType === 'video' && previewUrl && (
           <video src={previewUrl} controls autoPlay style={{ width: '100%', maxHeight: '85vh' }} />

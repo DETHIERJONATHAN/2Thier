@@ -46,19 +46,19 @@ const { Option } = Select;
 interface MobileCanvasWrapperProps {
   imageUrl: string;
   calibration?: CalibrationData;
-  initialPoints?: any[];
+  initialPoints?: unknown[];
   onMeasurementsChange?: (measurements: MeasurementResults) => void;
   onValidate?: (annotations: ImageAnnotations) => void;
   onCancel?: () => void;
   minPoints?: number;
   maxWidth?: number;
-  referenceDetected?: any;
+  referenceDetected?: unknown;
   referenceRealSize?: { width: number; height: number };
-  onReferenceAdjusted?: (newBoundingBox: any, newPixelPerCmX: number, newPixelPerCmY?: number) => void;
+  onReferenceAdjusted?: (newBoundingBox: unknown, newPixelPerCmX: number, newPixelPerCmY?: number) => void;
   imageBase64?: string;
   mimeType?: string;
-  api?: any;
-  fusedCorners?: any;
+  api?: unknown;
+  fusedCorners?: unknown;
   homographyReady?: boolean;
   referenceConfig?: {
     referenceType: 'a4' | 'card' | 'meter' | 'custom';
@@ -66,8 +66,8 @@ interface MobileCanvasWrapperProps {
     customWidth?: number;
     customHeight?: number;
   };
-  measurementObjectConfig?: any;
-  allPhotos?: any[];
+  measurementObjectConfig?: unknown;
+  allPhotos?: unknown[];
   children: React.ReactNode; // Le ImageMeasurementCanvas sera passé en children
 }
 

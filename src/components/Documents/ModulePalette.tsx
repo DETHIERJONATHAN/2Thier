@@ -239,7 +239,7 @@ const ModulePalette = ({
           onChange={(keys) => setExpandedCategories(keys as string[])}
           bordered={false}
           style={{ backgroundColor: 'transparent' }}
-          items={collapseItems as any}
+          items={collapseItems as unknown}
         />
 
         {/* Si recherche sans résultat */}

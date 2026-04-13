@@ -13,7 +13,7 @@ export interface TooltipData {
  * Extrait les données tooltip d'un nœud TreeBranchLeaf
  * Gère les différentes sources possibles (appearanceConfig, metadata, colonnes TBL)
  */
-export const useNodeTooltip = (node?: any): TooltipData => {
+export const useNodeTooltip = (node?: unknown): TooltipData => {
   return useMemo(() => {
     // 🚨 DEBUG GLOBAL - Log TOUS les appels du hook
     console.log(`🚨 [useNodeTooltip] APPELÉ avec:`, {

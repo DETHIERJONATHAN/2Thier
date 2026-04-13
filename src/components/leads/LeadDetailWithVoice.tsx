@@ -39,7 +39,7 @@ const LeadDetailWithVoice: React.FC<LeadDetailWithVoiceProps> = ({ lead, onLeadU
     setVoiceStatus(status);
   };
 
-  const handleCallComplete = (callData: any) => {
+  const handleCallComplete = (callData: unknown) => {
     console.log('Appel terminé:', callData);
     // Ici on pourrait mettre à jour le statut du lead ou ajouter une note
     if (onLeadUpdate) {

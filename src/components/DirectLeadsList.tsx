@@ -6,7 +6,7 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 interface Lead {
   id: string;
   status: string;
-  data: any;
+  data: unknown;
   createdAt: string;
   updatedAt: string;
   assignedToId?: string;
@@ -50,7 +50,7 @@ export default function DirectLeadsList({ organizationId }: DirectLeadsListProps
         // suppress error scenario
         setLeads([]);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erreur lors de la récupération des leads:', err);
       setError(err.message || 'Erreur lors de la récupération des leads');
       // En cas d'erreur, utiliser des données vides

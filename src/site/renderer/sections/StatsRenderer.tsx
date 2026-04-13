@@ -16,7 +16,7 @@ const ensureUnit = (value: string | number | undefined, defaultValue: string): s
 };
 
 interface StatsRendererProps {
-  content: any;
+  content: unknown;
   mode: 'preview' | 'edit';
 }
 
@@ -50,7 +50,7 @@ export const StatsRenderer: React.FC<StatsRendererProps> = ({ content }) => {
       padding: style.padding || '60px 24px'
     }}>
       <Row gutter={[gutterValue, gutterValue]} justify="center">
-        {items.map((stat: any, index: number) => {
+        {items.map((stat: unknown, index: number) => {
           const iconNode = renderIconNode(stat.icon, {
             size: ensureUnit(style.iconSize, '48px'),
             color: style.iconColor

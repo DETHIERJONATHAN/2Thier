@@ -88,7 +88,7 @@ export class GoogleGmailNotificationService {
   /**
    * 🔧 CONFIGURER LA SURVEILLANCE POUR UN UTILISATEUR
    */
-  private async setupUserGmailWatch(userToken: any): Promise<void> {
+  private async setupUserGmailWatch(userToken: unknown): Promise<void> {
     try {
       if (!isGoogleOAuthConfigured()) {
         throw new Error('Configuration Google OAuth manquante pour GoogleGmailNotificationService.');
@@ -151,7 +151,7 @@ export class GoogleGmailNotificationService {
   /**
    * 🔔 TRAITER UNE NOTIFICATION GMAIL WEBHOOK
    */
-  async handleGmailWebhook(data: any): Promise<void> {
+  async handleGmailWebhook(data: unknown): Promise<void> {
     try {
       const message = JSON.parse(Buffer.from(data.message.data, 'base64').toString());
       const emailAddress = message.emailAddress;
@@ -183,7 +183,7 @@ export class GoogleGmailNotificationService {
   /**
    * 📬 RÉCUPÉRER ET ANALYSER LES NOUVEAUX EMAILS
    */
-  private async fetchNewEmails(userToken: any, currentHistoryId: string): Promise<void> {
+  private async fetchNewEmails(userToken: unknown, currentHistoryId: string): Promise<void> {
     try {
       if (!isGoogleOAuthConfigured()) {
         throw new Error('Configuration Google OAuth manquante pour fetchNewEmails.');
@@ -242,7 +242,7 @@ export class GoogleGmailNotificationService {
   /**
    * 🧠 TRAITER ET ANALYSER UN NOUVEL EMAIL AVEC IA
    */
-  private async processNewEmail(gmail: any, messageId: string, userToken: any): Promise<void> {
+  private async processNewEmail(gmail: unknown, messageId: string, userToken: unknown): Promise<void> {
     try {
       // Récupérer les détails du message
       const messageResponse = await gmail.users.messages.get({
@@ -255,10 +255,10 @@ export class GoogleGmailNotificationService {
       const headers = message.payload.headers;
 
       // Extraire les informations de base
-      const from = headers.find((h: any) => h.name === 'From')?.value || '';
-      const subject = headers.find((h: any) => h.name === 'Subject')?.value || '';
-      const date = headers.find((h: any) => h.name === 'Date')?.value || '';
-      const to = headers.find((h: any) => h.name === 'To')?.value || '';
+      const from = headers.find((h: Record<string, unknown>) => h.name === 'From')?.value || '';
+      const subject = headers.find((h: Record<string, unknown>) => h.name === 'Subject')?.value || '';
+      const date = headers.find((h: Record<string, unknown>) => h.name === 'Date')?.value || '';
+      const to = headers.find((h: Record<string, unknown>) => h.name === 'To')?.value || '';
 
       // Extraire le contenu du message
       let emailBody = '';
@@ -398,7 +398,7 @@ export class GoogleGmailNotificationService {
   /**
    * 🔔 CRÉER UNE NOTIFICATION INTELLIGENTE
    */
-  private async createIntelligentNotification(email: any, analysis: EmailAnalysis, userToken: any): Promise<void> {
+  private async createIntelligentNotification(email: unknown, analysis: EmailAnalysis, userToken: unknown): Promise<void> {
     try {
       // Construire le message intelligent
       const priorityEmoji = {
@@ -462,7 +462,7 @@ export class GoogleGmailNotificationService {
   /**
    * 👥 CRÉER UN LEAD AUTOMATIQUEMENT DEPUIS UN EMAIL COMMERCIAL
    */
-  private async createLeadFromEmail(email: any, analysis: EmailAnalysis, userToken: any): Promise<void> {
+  private async createLeadFromEmail(email: unknown, analysis: EmailAnalysis, userToken: unknown): Promise<void> {
     try {
       if (!analysis.extractedData.email && !analysis.extractedData.phone) {
         return; // Pas assez d'infos pour créer un lead
@@ -522,7 +522,7 @@ export class GoogleGmailNotificationService {
   /**
    * 📊 STATISTIQUES GMAIL
    */
-  async getGmailStats(organizationId: string): Promise<any> {
+  async getGmailStats(organizationId: string): Promise<unknown> {
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);

@@ -198,7 +198,7 @@ const DependencyZone: React.FC<DependencyZoneProps> = ({
       
       // Ensuite, vérifier les données JSON
       let data = e.dataTransfer.getData('application/json');
-      let itemData: any = null;
+      let itemData: unknown = null;
       
       if (data) {
         try {

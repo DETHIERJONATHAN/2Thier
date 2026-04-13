@@ -1,6 +1,7 @@
 import express from 'express';
 import { db } from '../lib/database';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
+import { logger } from '../lib/logger';
 
 const router = express.Router();
 const prisma = db;
@@ -102,7 +103,7 @@ router.get('/stats', authMiddleware, async (req: AuthenticatedRequest, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [DASHBOARD] Erreur lors de la récupération des stats:', error);
+    logger.error('❌ [DASHBOARD] Erreur lors de la récupération des stats:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des statistiques',
@@ -295,7 +296,7 @@ router.get('/activities', authMiddleware, async (req: AuthenticatedRequest, res)
     });
 
   } catch (error) {
-    console.error('❌ [DASHBOARD] Erreur lors de la récupération des activités:', error);
+    logger.error('❌ [DASHBOARD] Erreur lors de la récupération des activités:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des activités',
@@ -434,7 +435,7 @@ router.get('/top-leads', authMiddleware, async (req: AuthenticatedRequest, res) 
     });
 
   } catch (error) {
-    console.error('❌ [DASHBOARD] Erreur lors de la récupération des top leads:', error);
+    logger.error('❌ [DASHBOARD] Erreur lors de la récupération des top leads:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des meilleurs leads',
@@ -513,7 +514,7 @@ router.get('/tasks', authMiddleware, async (req: AuthenticatedRequest, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [DASHBOARD] Erreur lors de la récupération des tâches:', error);
+    logger.error('❌ [DASHBOARD] Erreur lors de la récupération des tâches:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des tâches',
@@ -606,7 +607,7 @@ router.get('/analytics', authMiddleware, async (req: AuthenticatedRequest, res) 
     }
 
     // === STATS SPÉCIFIQUES AU RÔLE ===
-    let roleStats: any = {};
+    let roleStats: unknown = {};
 
     if (isAdmin || userRole === 'comptable') {
       // Admin / Comptable : vue globale
@@ -745,7 +746,7 @@ router.get('/analytics', authMiddleware, async (req: AuthenticatedRequest, res) 
     }
 
     // === LISTE DES COLLABORATEURS (pour le sélecteur admin) ===
-    let collaborators: any[] = [];
+    let collaborators: unknown[] = [];
     if (isAdmin) {
       const users = await prisma.user.findMany({
         where: { ...orgWhere, status: 'active' },
@@ -782,8 +783,8 @@ router.get('/analytics', authMiddleware, async (req: AuthenticatedRequest, res) 
         viewerRole: userRole,
       },
     });
-  } catch (error: any) {
-    console.error('❌ [DASHBOARD] Erreur analytics:', error);
+  } catch (error: unknown) {
+    logger.error('❌ [DASHBOARD] Erreur analytics:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des analytics',

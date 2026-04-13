@@ -33,7 +33,7 @@ interface GenerateFieldRequest {
   fieldId: string;
   fieldType: string;
   fieldLabel: string;
-  currentValue?: any;
+  currentValue?: unknown;
   aiContext: {
     sectionType: string;
     businessType?: string;
@@ -64,7 +64,7 @@ interface OptimizeImageRequest {
 
 interface SuggestStylesRequest {
   sectionType: string;
-  currentStyle?: any;
+  currentStyle?: unknown;
   brand?: {
     primaryColor?: string;
     secondaryColor?: string;
@@ -145,7 +145,7 @@ async function generateField(req: Request, res: Response) {
       }
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ [AI] Erreur génération champ:', error);
     return res.status(500).json({
       error: 'Erreur lors de la génération',
@@ -233,7 +233,7 @@ async function generateSection(req: Request, res: Response) {
       }
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ [AI] Erreur génération section:', error);
     return res.status(500).json({
       error: 'Erreur lors de la génération de section',
@@ -311,7 +311,7 @@ async function optimizeImage(req: Request, res: Response) {
       }
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ [AI] Erreur optimisation image:', error);
     return res.status(500).json({
       error: 'Erreur lors de l\'optimisation',
@@ -402,7 +402,7 @@ Génère 3 variations de styles (moderne, élégant, audacieux) au format JSON :
       }
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ [AI] Erreur suggestions styles:', error);
     return res.status(500).json({
       error: 'Erreur lors de la génération de suggestions',
@@ -421,8 +421,8 @@ Génère 3 variations de styles (moderne, élégant, audacieux) au format JSON :
 function buildFieldPrompt(
   fieldType: string,
   fieldLabel: string,
-  aiContext: any,
-  currentValue?: any
+  aiContext: unknown,
+  currentValue?: unknown
 ): string {
   const { sectionType, businessType, tone, targetAudience, keywords } = aiContext;
 

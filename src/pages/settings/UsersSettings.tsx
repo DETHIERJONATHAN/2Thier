@@ -94,13 +94,13 @@ const UsersSettings: React.FC = () => {
     if (!orgId) return;
     setLoading(true);
     try {
-      const [usersRes, rolesRes]: any[] = await Promise.all([
+      const [usersRes, rolesRes]: unknown[] = await Promise.all([
         api.get(`/api/users?organizationId=${orgId}`),
         api.get(`/api/roles?organizationId=${orgId}`),
       ]);
       const userList = Array.isArray(usersRes) ? usersRes : usersRes?.data || usersRes?.users || [];
-      setUsers(userList.map((u: any) => {
-        const uo = u.UserOrganization?.find?.((uo: any) => uo.organizationId === orgId) || u.userOrganization;
+      setUsers(userList.map((u: Record<string, unknown>) => {
+        const uo = u.UserOrganization?.find?.((uo: unknown) => uo.organizationId === orgId) || u.userOrganization;
         return {
           id: u.id, email: u.email, firstName: u.firstName, lastName: u.lastName,
           avatarUrl: u.avatarUrl, status: u.status,
@@ -143,7 +143,7 @@ const UsersSettings: React.FC = () => {
       setInviteModal(false);
       setInviteEmail(''); setInviteFirstName(''); setInviteLastName(''); setInviteRoleId('');
       fetchUsers();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || "Erreur lors de l'envoi de l'invitation.");
     } finally { setInviting(false); }
   };

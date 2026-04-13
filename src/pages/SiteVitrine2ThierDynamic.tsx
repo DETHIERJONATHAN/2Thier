@@ -75,7 +75,7 @@ const SiteVitrine2ThierDynamic: React.FC = () => {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Content>
-        {sections.map((section: any) => (
+        {sections.map((section: Record<string, unknown>) => (
           <SectionRenderer
             key={section.id}
             section={section}

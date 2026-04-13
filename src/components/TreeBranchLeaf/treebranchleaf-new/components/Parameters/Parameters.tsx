@@ -483,7 +483,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       
       // Fetch indépendant des metadata - ESSAYER /full d'abord
       api.get(`/api/treebranchleaf/nodes/${selectedNode.id}/full`)
-        .then((response: any) => {
+        .then((response: unknown) => {
           console.log('📦 [TriggerField] Réponse /full complète:', response);
           // L'endpoint /full retourne {nodes: [nodeData]} - extraire le premier
           const nodeData = response?.nodes?.[0];
@@ -644,11 +644,11 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       const isBranchOrSection = type === 'branch' || type === 'section';
       if (!isLeaf && !isBranchOrSection) continue;
       if (isBranchOrSection) {
-        const hasOwnSubTabs = Array.isArray((node.metadata as any)?.subTabs) && (node.metadata as any).subTabs.length > 0;
+        const hasOwnSubTabs = Array.isArray((node.metadata as unknown)?.subTabs) && (node.metadata as unknown).subTabs.length > 0;
         if (hasOwnSubTabs) continue;
       }
       // 🔧 FIX: Vérifier si le nœud a DÉJÀ un subTab défini (ne pas écraser)
-      const existingSubTab = (node.metadata as any)?.subTab;
+      const existingSubTab = (node.metadata as unknown)?.subTab;
       if (existingSubTab !== undefined && existingSubTab !== null && existingSubTab !== '') {
         // Le nœud a déjà son propre subTab, ne pas écraser
         continue;
@@ -763,7 +763,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
         console.warn('⚠️ [duplicateTemplatesPhysically] Auto expand/select non disponible:', e);
       }
     } catch (error) {
-      const axiosErr = error as any;
+      const axiosErr = error as unknown;
       console.error('❌ [duplicateTemplatesPhysically] Erreur:', axiosErr?.response?.data || axiosErr);
       // 🧹 En cas d'échec, retirer les templates tentés de l'in-flight (ils pourront être retentés)
       try {
@@ -800,7 +800,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       const apiData = { ...payload };
       
       if (payload.appearanceConfig) {
-        const appearanceConfig = payload.appearanceConfig as any;
+        const appearanceConfig = payload.appearanceConfig as unknown;
         
         // Extraire la config repeater si présente
         if (appearanceConfig.repeater) {
@@ -826,7 +826,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           ...payloadMeta
         };
         console.log('🎯 [Parameters] Metadata complet après fusion:', apiData.metadata);
-        console.log('🔍 [Parameters] triggerNodeIds dans metadata:', (apiData.metadata as any)?.triggerNodeIds);
+        console.log('🔍 [Parameters] triggerNodeIds dans metadata:', (apiData.metadata as unknown)?.triggerNodeIds);
       }
       
       // 🔍 LOG FINAL DU PAYLOAD AVANT ENVOI API
@@ -843,7 +843,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       console.log('📥 [Parameters] RÉPONSE DE L\'API:', {
         id: _updated?.id,
         metadata: _updated?.metadata,
-        triggerNodeIds: (_updated?.metadata as any)?.triggerNodeIds
+        triggerNodeIds: (_updated?.metadata as unknown)?.triggerNodeIds
       });
 
       // Emit generic event for other listeners; include returned updated node for local merges
@@ -867,7 +867,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       try {
         const md = (apiData.metadata as Record<string, unknown> | undefined);
         const hasSubTabStructureChange = !!(md && Array.isArray(md.subTabs));
-        const hasCascadeUpdate = Boolean((payload as any)?.cascadeSubTab);
+        const hasCascadeUpdate = Boolean((payload as unknown)?.cascadeSubTab);
         if (hasSubTabStructureChange || hasCascadeUpdate) {
           if (typeof refreshTree === 'function') {
             console.log('🔁 [Parameters] Déclencher refreshTree suite à modification de la structure des subTabs');
@@ -942,13 +942,13 @@ const Parameters: React.FC<ParametersProps> = (props) => {
   const branchSubTabs = useMemo(() => {
     if (!selectedNode) return [] as string[];
     // If the selected branch defines its own subTabs, use them
-    if (Array.isArray((selectedNode.metadata as any)?.subTabs)) return (selectedNode.metadata as any).subTabs as string[];
+    if (Array.isArray((selectedNode.metadata as unknown)?.subTabs)) return (selectedNode.metadata as unknown).subTabs as string[];
     // Otherwise, find nearest ancestor branch that defines subTabs
     let currentId = selectedNode.parentId as string | undefined | null;
     while (currentId) {
       const parent = nodesMap.get(currentId);
       if (!parent) break;
-      if (Array.isArray((parent.metadata as any)?.subTabs)) return (parent.metadata as any).subTabs as string[];
+      if (Array.isArray((parent.metadata as unknown)?.subTabs)) return (parent.metadata as unknown).subTabs as string[];
       currentId = parent.parentId as string | undefined | null;
     }
     return [] as string[];
@@ -1076,7 +1076,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           repeater: merged
         }
       : (() => {
-          const { repeater, ...rest } = (selectedNode.metadata || {}) as any;
+          const { repeater, ...rest } = (selectedNode.metadata || {}) as unknown;
           return rest;
         })();
 
@@ -1161,7 +1161,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             return;
           }
           
-          const meta = (n.metadata || {}) as any;
+          const meta = (n.metadata || {}) as unknown;
           // Vérifier que c'est bien un enfant DIRECT et qu'il a un sourceTemplateId
           if (n.parentId === repeaterId && meta?.sourceTemplateId) {
             existingSourceTemplateIds.add(meta.sourceTemplateId);
@@ -1197,7 +1197,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             return;
           }
           
-          const meta = (n.metadata || {}) as any;
+          const meta = (n.metadata || {}) as unknown;
           const sourceTemplateId = meta?.sourceTemplateId;
           
           // Log détaillé pour chaque enfant
@@ -1221,7 +1221,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           'Détails': nodesToDelete.map(n => ({
             id: n.id.substring(0, 8) + '...',
             label: n.label,
-            sourceTemplate: ((n.metadata as any)?.sourceTemplateId || 'N/A').substring(0, 8) + '...'
+            sourceTemplate: ((n.metadata as unknown)?.sourceTemplateId || 'N/A').substring(0, 8) + '...'
           }))
         });
         
@@ -1230,7 +1230,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           'Détails': nodesToDelete.map(n => ({
             id: n.id.substring(0, 8) + '...',
             label: n.label,
-            sourceTemplate: ((n.metadata as any)?.sourceTemplateId || 'N/A').substring(0, 8) + '...'
+            sourceTemplate: ((n.metadata as unknown)?.sourceTemplateId || 'N/A').substring(0, 8) + '...'
           }))
         });
 
@@ -1242,7 +1242,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           'toDelete (retirés)': nodesToDelete.map(n => ({ 
             id: n.id.substring(0, 8) + '...', 
             label: n.label, 
-            sourceTemplate: ((n.metadata as any)?.sourceTemplateId || '').substring(0, 8) + '...'
+            sourceTemplate: ((n.metadata as unknown)?.sourceTemplateId || '').substring(0, 8) + '...'
           }))
         });
 
@@ -1332,7 +1332,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     // Chercher les sourceTemplateIds des enfants ACTUELS
     const actualSourceTemplateIds = new Set<string>();
     childrenOfRepeater.forEach(n => {
-      const meta = (n.metadata || {}) as any;
+      const meta = (n.metadata || {}) as unknown;
       if (meta?.sourceTemplateId) actualSourceTemplateIds.add(meta.sourceTemplateId);
     });
     
@@ -1425,7 +1425,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
     // 📋 Hydrater les options SELECT depuis select_options
     const rawOpts = (selectedNode as any).select_options;
     if (Array.isArray(rawOpts) && rawOpts.length > 0) {
-      setSelectOptions(rawOpts.map((o: any) => ({ label: o.label || o.value || '', value: o.value || o.label || '', ...(o.group ? { group: o.group } : {}) })));
+      setSelectOptions(rawOpts.map((o: Record<string, unknown>) => ({ label: o.label || o.value || '', value: o.value || o.label || '', ...(o.group ? { group: o.group } : {}) })));
     } else {
       setSelectOptions([]);
     }
@@ -1534,10 +1534,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
       };
 
       const parseTemplateIdsFromColumn = (): string[] | undefined => {
-        const raw = (selectedNode as any)?.repeater_templateNodeIds;
+        const raw = (selectedNode as unknown)?.repeater_templateNodeIds;
         if (!raw) return undefined;
         try {
-          let parsed: any;
+          let parsed: unknown;
           if (Array.isArray(raw)) parsed = raw;
           else if (typeof raw === 'string') {
             parsed = JSON.parse(raw);
@@ -1593,7 +1593,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
           : REPEATER_DEFAULT_LABEL
       );
       // 🆕 Hydratation du champ source pour le nombre de copies
-      setRepeaterCountSourceNodeId((selectedNode as any)?.repeater_countSourceNodeId ?? null);
+      setRepeaterCountSourceNodeId((selectedNode as unknown)?.repeater_countSourceNodeId ?? null);
     } else {
       setRepeaterTemplateIds([]);
       setRepeaterMinItems(undefined);
@@ -2059,7 +2059,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                 selectOptions.forEach((opt, idx) => {
                   const g = opt.group || '';
                   if (!groupMap.has(g)) {
-                    const entry = { group: g, options: [] as any[] };
+                    const entry = { group: g, options: [] as unknown[] };
                     groups.push(entry);
                     groupMap.set(g, entry);
                   }
@@ -2328,10 +2328,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                             // 🔥 FIX: Sauvegarder immédiatement (pas de debounce)
                             if (selectedNodeId) {
                               onNodeUpdateRef.current({ metadata: nextMeta, id: selectedNodeId })
-                                .then((resp: any) => {
+                                .then((resp: unknown) => {
                                   console.log('✅ [TriggerField] triggerNodeIds supprimé et sauvegardé:', resp?.metadata?.triggerNodeIds);
                                 })
-                                .catch((err: any) => {
+                                .catch((err: unknown) => {
                                   console.error('❌ [TriggerField] Erreur sauvegarde après suppression:', err);
                                 });
                             }
@@ -2458,7 +2458,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                   }
                   if (descendants.length === 0) return <div style={{ fontSize: 12, color: '#999' }}>Aucun champ dans cette branche.</div>;
                   return descendants.map((d) => {
-                    const meta = (d.metadata || {}) as any;
+                    const meta = (d.metadata || {}) as unknown;
                     const assigned = meta?.subTab || 'Général';
                     return (
                       <div key={d.id} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 6, border: '1px solid #eee', borderRadius: 6 }}>
@@ -2489,7 +2489,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ fontSize: 12, color: '#666' }}>Toujours visible dans les sous-onglets</div>
                 <Checkbox
-                checked={!!(selectedNode?.metadata as any)?.displayAlways}
+                checked={!!(selectedNode?.metadata as unknown)?.displayAlways}
                 onChange={(e) => {
                   const next: Record<string, unknown> = { ...(selectedNode?.metadata || {}) };
                   if (e.target.checked) next.displayAlways = true; else delete next.displayAlways;
@@ -2517,7 +2517,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                       // 🔥 DIRECT CALLBACK first (most reliable)
                       if (onNodeMetadataUpdated) {
                         console.error('📞 [Parameters] Calling onNodeMetadataUpdated callback directly for:', updatedNode.id);
-                        onNodeMetadataUpdated(updatedNode as any);
+                        onNodeMetadataUpdated(updatedNode as unknown);
                         console.error('✅ [Parameters] onNodeMetadataUpdated callback completed');
                       } else {
                         console.error('❌ [Parameters] onNodeMetadataUpdated callback NOT PROVIDED!');
@@ -2894,7 +2894,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                           id: c.id,
                           label: c.label,
                           parentId: c.parentId,
-                          sourceTemplateId: (c.metadata as any)?.sourceTemplateId
+                          sourceTemplateId: (c.metadata as unknown)?.sourceTemplateId
                         }))
                       });
                       // Log ALL children en détail (stringifié pour éviter la collapse de l'inspecteur)
@@ -2904,7 +2904,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                           label: c.label,
                           type: c.type,
                           parentId: c.parentId,
-                          sourceTemplateId: (c.metadata as any)?.sourceTemplateId,
+                          sourceTemplateId: (c.metadata as unknown)?.sourceTemplateId,
                           metadataKeys: Object.keys(c.metadata || {})
                         }));
                         console.log('🔎 [Parameters] ALL CHILDREN DETAILED JSON:', JSON.stringify(detailed, null, 2));
@@ -2925,7 +2925,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                         })(nodes, tplId);
                         // 1) Filtrage standard: enfants directs du répéteur
                         let copies = childrenOfRepeater.filter(n => {
-                          const meta = (n.metadata || {}) as any;
+                          const meta = (n.metadata || {}) as unknown;
                           const matches = meta?.sourceTemplateId === tplId;
                           console.log('🔎 [Parameters] Copy filter DEBUG', {
                             nodeId: n.id,
@@ -2953,7 +2953,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                           };
                           const allNodesFlat = flattenAll(nodes);
                           const fallback = allNodesFlat.filter(n => {
-                            const meta = (n.metadata || {}) as any;
+                            const meta = (n.metadata || {}) as unknown;
                             return meta?.duplicatedFromRepeater === selectedNodeFromTree.id && meta?.sourceTemplateId === tplId;
                           });
                           if (fallback.length > 0) {
@@ -2973,7 +2973,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                             ) : (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 {copies.map(copy => {
-                                  const meta = (copy.metadata || {}) as any;
+                                  const meta = (copy.metadata || {}) as unknown;
                                   // Essayer d'afficher un libellé cohérent: "<Label gabarit>-<N>"
                                   // 1) Priorité au copySuffix injecté côté serveur
                                   let suffix: string | number | undefined = meta?.copySuffix;
@@ -3369,10 +3369,10 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                 // patchNode est debounced et peut être annulé par un autre appel dans les 400ms
                 if (selectedNodeId) {
                   onNodeUpdateRef.current({ metadata: nextMeta, id: selectedNodeId })
-                    .then((resp: any) => {
+                    .then((resp: unknown) => {
                       console.log('✅ [TriggerNodeSelector] triggerNodeIds sauvegardé en DB:', resp?.metadata?.triggerNodeIds);
                     })
-                    .catch((err: any) => {
+                    .catch((err: unknown) => {
                       console.error('❌ [TriggerNodeSelector] Erreur sauvegarde triggerNodeIds:', err);
                     });
                 }

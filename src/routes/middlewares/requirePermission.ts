@@ -1,5 +1,6 @@
 import type { Response, NextFunction } from 'express';
 import type { AuthenticatedRequest } from './auth';
+import { logger } from '../lib/logger';
 
 export function requirePermission(action: string, resource = 'global') {
   const requiredPermission = resource ? `${action}:${resource}` : action;
@@ -22,7 +23,7 @@ export function requirePermission(action: string, resource = 'global') {
       return;
     }
 
-    console.warn('[PERMISSIONS] Accès refusé', {
+    logger.warn('[PERMISSIONS] Accès refusé', {
       userId: user.userId,
       role: user.role,
       roles: user.roles,

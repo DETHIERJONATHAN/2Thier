@@ -10,9 +10,10 @@ import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { getOrgSocialSettings } from '../lib/feed-visibility';
+import { logger } from '../lib/logger';
 
 const router = Router();
-router.use(authenticateToken as any);
+router.use(authenticateToken as unknown);
 
 // Helper: extract user from request
 function getUser(req: Request) {
@@ -185,7 +186,7 @@ router.get('/export', async (req: Request, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.json(exportData);
   } catch (error) {
-    console.error('[RGPD] Export error:', error);
+    logger.error('[RGPD] Export error:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de l\'export' });
   }
 });
@@ -259,10 +260,10 @@ router.post('/delete-account', async (req: Request, res: Response) => {
       },
     });
 
-    console.log(`[RGPD] Account deleted/anonymized: ${userId}`);
+    logger.info(`[RGPD] Account deleted/anonymized: ${userId}`);
     res.json({ success: true, message: 'Compte supprimé et données anonymisées conformément au RGPD' });
   } catch (error) {
-    console.error('[RGPD] Delete account error:', error);
+    logger.error('[RGPD] Delete account error:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la suppression' });
   }
 });
@@ -317,7 +318,7 @@ router.post('/retention-cleanup', async (req: Request, res: Response) => {
 
       const orgTotal = deletedPosts.count + deletedStories.count + deletedNotifs.count;
       if (orgTotal > 0) {
-        console.log(`[RGPD] Retention cleanup for org ${org.organizationId}: ${orgTotal} items purged (${org.gdprRetentionDays}d retention)`);
+        logger.info(`[RGPD] Retention cleanup for org ${org.organizationId}: ${orgTotal} items purged (${org.gdprRetentionDays}d retention)`);
       }
       totalPurged += orgTotal;
     }
@@ -328,7 +329,7 @@ router.post('/retention-cleanup', async (req: Request, res: Response) => {
       totalPurged,
     });
   } catch (error) {
-    console.error('[RGPD] Retention cleanup error:', error);
+    logger.error('[RGPD] Retention cleanup error:', error);
     res.status(500).json({ success: false, message: 'Erreur lors du nettoyage' });
   }
 });

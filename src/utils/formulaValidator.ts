@@ -6,7 +6,7 @@ import { Formula, FormulaItem, FormulaValidationResult } from '../types/formula'
  * @param source Le nom du composant qui effectue la vérification (pour les logs)
  * @returns Un objet contenant le résultat de la validation et un message éventuel
  */
-export const validateFormula = (formula: any, source: string = 'Validator'): FormulaValidationResult => {
+export const validateFormula = (formula: unknown, source: string = 'Validator'): FormulaValidationResult => {
     if (!formula) {
         console.error(`[${source}] ❌ Formule invalide: non définie`);
         return { 

@@ -3,6 +3,7 @@ import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { getOrgSocialSettings } from '../lib/feed-visibility';
 import { z } from 'zod';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -48,7 +49,7 @@ router.get('/org/:orgId', authenticateToken, async (req: Request, res: Response)
 
     res.json(moments);
   } catch (error) {
-    console.error('[HIVE-LIVE] Error fetching org moments:', error);
+    logger.error('[HIVE-LIVE] Error fetching org moments:', error);
     res.status(500).json({ error: 'Erreur lors du chargement de la lifeline Colony' });
   }
 });
@@ -108,7 +109,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Données invalides', details: error.errors });
     }
-    console.error('[HIVE-LIVE] Error creating moment:', error);
+    logger.error('[HIVE-LIVE] Error creating moment:', error);
     res.status(500).json({ error: 'Erreur lors de la création du moment' });
   }
 });
@@ -159,7 +160,7 @@ router.post('/from-post/:postId', authenticateToken, async (req: Request, res: R
 
     res.status(201).json(moment);
   } catch (error) {
-    console.error('[HIVE-LIVE] Error creating moment from post:', error);
+    logger.error('[HIVE-LIVE] Error creating moment from post:', error);
     res.status(500).json({ error: 'Erreur lors de l\'ajout au Hive Live' });
   }
 });
@@ -218,7 +219,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Données invalides', details: error.errors });
     }
-    console.error('[HIVE-LIVE] Error updating moment:', error);
+    logger.error('[HIVE-LIVE] Error updating moment:', error);
     res.status(500).json({ error: 'Erreur lors de la mise à jour' });
   }
 });
@@ -238,7 +239,7 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
     await db.hiveLiveMoment.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
-    console.error('[HIVE-LIVE] Error deleting moment:', error);
+    logger.error('[HIVE-LIVE] Error deleting moment:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression' });
   }
 });
@@ -289,7 +290,7 @@ router.get('/:userId', authenticateToken, async (req: Request, res: Response) =>
 
     res.json(moments);
   } catch (error) {
-    console.error('[HIVE-LIVE] Error fetching moments:', error);
+    logger.error('[HIVE-LIVE] Error fetching moments:', error);
     res.status(500).json({ error: 'Erreur lors du chargement de la lifeline' });
   }
 });

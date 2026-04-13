@@ -4,6 +4,7 @@ import { requireRole } from '../middlewares/requireRole';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { prisma } from '../lib/prisma';
 import { v4 as uuidv4 } from 'uuid';
+import { logger } from '../lib/logger';
 
 const router = Router({ mergeParams: true });
 
@@ -37,7 +38,7 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: Request, res:
     });
     res.json(processedDependencies);
   } catch (error: unknown) {
-  console.error(`[API] Erreur GET /api/fields/${fieldId}/dependencies:`, error);
+  logger.error(`[API] Erreur GET /api/fields/${fieldId}/dependencies:`, error);
     res.status(500).json({ error: 'Erreur lors de la récupération des dépendances', details: (error as Error).message });
   }
 });
@@ -66,7 +67,7 @@ router.get('/read', async (req: Request, res: Response) => {
     });
     res.json({ success: true, data: processed });
   } catch (error: unknown) {
-    console.error(`[API] Erreur GET /api/fields/${fieldId}/dependencies/read:`, error);
+    logger.error(`[API] Erreur GET /api/fields/${fieldId}/dependencies/read:`, error);
     res.status(500).json({ success: false, error: 'Erreur lors de la récupération des dépendances', details: (error as Error).message });
   }
 });
@@ -125,7 +126,7 @@ router.post('/', requireRole(['admin', 'super_admin']), async (req: Request, res
     }));
     res.json(processed);
   } catch (error: unknown) {
-    console.error(`[API] Erreur POST /api/fields/${fieldId}/dependencies:`, error);
+    logger.error(`[API] Erreur POST /api/fields/${fieldId}/dependencies:`, error);
     res.status(500).json({ error: 'Erreur lors de la création de la dépendance', details: (error as Error).message });
   }
 });
@@ -151,7 +152,7 @@ router.post('/reorder', requireRole(['admin', 'super_admin']), async (req: Reque
     );
     res.status(200).json({ success: true });
   } catch (error: unknown) {
-    console.error(`[API] Erreur POST /api/fields/${fieldId}/dependencies/reorder:`, error);
+    logger.error(`[API] Erreur POST /api/fields/${fieldId}/dependencies/reorder:`, error);
     res.status(500).json({ error: 'Erreur lors du réordonnancement', details: (error as Error).message });
   }
 });
@@ -187,7 +188,7 @@ router.put('/:dependencyId', requireRole(['admin', 'super_admin']), async (req: 
     }));
     res.json(processed);
   } catch (error: unknown) {
-    console.error(`[API] Erreur PUT /api/fields/${req.params.fieldId}/dependencies/${dependencyId}:`, error);
+    logger.error(`[API] Erreur PUT /api/fields/${req.params.fieldId}/dependencies/${dependencyId}:`, error);
     res.status(500).json({ error: 'Erreur lors de la mise à jour de la dépendance', details: (error as Error).message });
   }
 });
@@ -199,7 +200,7 @@ router.delete('/:dependencyId', requireRole(['admin', 'super_admin']), async (re
     await prisma.fieldDependency.delete({ where: { id: dependencyId } });
     res.status(200).json({ id: dependencyId, success: true });
   } catch (error: unknown) {
-    console.error(`[API] Erreur DELETE /api/fields/${req.params.fieldId}/dependencies/${dependencyId}:`, error);
+    logger.error(`[API] Erreur DELETE /api/fields/${req.params.fieldId}/dependencies/${dependencyId}:`, error);
     const errObj = error as unknown as { code?: string };
     if (errObj.code === 'P2025') {
       res.status(404).json({ error: 'Dépendance non trouvée.' });

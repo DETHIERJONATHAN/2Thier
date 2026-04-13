@@ -180,7 +180,7 @@ export interface IndividualCardConfig {
   id?: string;
   order?: number;
   isActive?: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface IndividualCardEditorProps {
@@ -224,10 +224,10 @@ export const IndividualCardEditor: React.FC<IndividualCardEditorProps> = ({
   /**
    * Met à jour la config locale et notifie le parent
    */
-  const updateConfig = (path: string, value: any) => {
+  const updateConfig = (path: string, value: unknown) => {
     const newConfig = { ...localConfig };
     const keys = path.split('.');
-    let current: any = newConfig;
+    let current: unknown = newConfig;
     
     // Navigate to parent
     for (let i = 0; i < keys.length - 1; i++) {
@@ -255,7 +255,7 @@ export const IndividualCardEditor: React.FC<IndividualCardEditorProps> = ({
   /**
    * Applique une suggestion IA
    */
-  const applyAISuggestion = (path: string, value: any) => {
+  const applyAISuggestion = (path: string, value: unknown) => {
     updateConfig(path, value);
     setShowAI(false);
   };

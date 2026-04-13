@@ -176,7 +176,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ groupNode, values, onChange, de
       }).map((leaf) => (
         <SectionCard
           key={leaf.id}
-          title={<div className="flex items-center">{pickIcon(leaf.leafType, (leaf as any)?.metadata?.appearance?.displayIcon)} {leaf.title}</div>}
+          title={<div className="flex items-center">{pickIcon(leaf.leafType, (leaf as unknown)?.metadata?.appearance?.displayIcon)} {leaf.title}</div>}
           subtitle={leaf.subtitle || undefined}
           badges={debugMode ? [leaf.leafType || ''] : undefined}
           debugMode={debugMode}

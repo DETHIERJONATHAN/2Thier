@@ -217,7 +217,7 @@ export function useDeviceOrientation(enabled: boolean = true) {
     }
 
     // Sur iOS 13+, il faut demander la permission explicitement
-    const DeviceOrientationEventTyped = DeviceOrientationEvent as any;
+    const DeviceOrientationEventTyped = DeviceOrientationEvent as unknown;
     if (typeof DeviceOrientationEventTyped.requestPermission === 'function') {
       try {
         const permission = await DeviceOrientationEventTyped.requestPermission();

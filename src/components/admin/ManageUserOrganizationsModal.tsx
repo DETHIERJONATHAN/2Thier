@@ -29,7 +29,7 @@ const ManageUserOrganizationsModal: React.FC<Props> = ({ open, user, onCancel })
           // Récupérer les organisations de l'utilisateur
           const userOrgsRes = await api.get(`/api/users/${user.id}/organizations`);
           if (userOrgsRes.success && Array.isArray(userOrgsRes.data)) {
-            setUserOrganizations(userOrgsRes.data.map((org: any) => org.organizationId));
+            setUserOrganizations(userOrgsRes.data.map((org: Record<string, unknown>) => org.organizationId));
           }
         } catch (error) {
           message.error("Erreur lors de la récupération des organisations.");

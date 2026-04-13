@@ -17,7 +17,7 @@ import { SF } from '../components/zhiive/ZhiiveTheme';
 export interface TblPdfField {
   nodeId: string;
   label: string;
-  value: any;
+  value: unknown;
   type: string;
   fieldType?: string;
   fieldSubType?: string;
@@ -85,7 +85,7 @@ function sanitizeText(input: unknown): string {
     .trim();
 }
 
-function formatValue(value: any): string {
+function formatValue(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
   if (Array.isArray(value)) return value.map(v => sanitizeText(v)).join(', ');

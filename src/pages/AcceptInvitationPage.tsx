@@ -33,7 +33,7 @@ export default function AcceptInvitationPage() {
         throw new Error(data.message || 'Jeton invalide ou expiré.');
       }
       setInvitation(data.data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(err.message);
       NotificationManager.error(err.message);
     } finally {
@@ -45,7 +45,7 @@ export default function AcceptInvitationPage() {
     verifyToken();
   }, [verifyToken]);
 
-  const handleAccept = async (values: any = {}) => {
+  const handleAccept = async (values: unknown = {}) => {
     setIsSubmitting(true);
     try {
       const response = await fetch('/api/invitations/accept', {
@@ -78,7 +78,7 @@ export default function AcceptInvitationPage() {
       // Sinon, vers la page de connexion pour qu'il puisse se connecter.
       setTimeout(() => navigate(authenticatedUser ? '/dashboard' : '/login'), 2000);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(err.message);
       NotificationManager.error(err.message);
     } finally {

@@ -37,10 +37,10 @@ interface GridPagePreviewProps {
    * Données pour l'interpolation des variables et l'évaluation des conditions
    */
   documentData?: {
-    lead?: Record<string, any>;
-    quote?: Record<string, any>;
-    org?: Record<string, any>;
-    tbl?: Record<string, any>;
+    lead?: Record<string, unknown>;
+    quote?: Record<string, unknown>;
+    org?: Record<string, unknown>;
+    tbl?: Record<string, unknown>;
   };
   onModuleSelect?: (id: string) => void;
   onModuleHover?: (id: string | null) => void;
@@ -521,7 +521,7 @@ const GridPagePreview = ({
         backgroundImage: undefined,  // IMPORTANT: Pas de background ici!
         backgroundSize: undefined,
       }}
-      onClick={() => onModuleSelect?.(null as any)}
+      onClick={() => onModuleSelect?.(null as unknown)}
     >
       {/* Élément de background qui s'affiche DERRIÈRE les modules */}
       {(pageStyle.backgroundImage || pageStyle.backgroundColor) && (

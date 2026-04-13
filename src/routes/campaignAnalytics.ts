@@ -4,6 +4,7 @@ import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.j
 import { requireRole } from '../middlewares/requireRole.js';
 import { db } from '../lib/database';
 import rateLimit from 'express-rate-limit';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -159,7 +160,7 @@ router.get('/dashboard', requireRole(['admin', 'super_admin']), async (req: Auth
     });
 
   } catch (error) {
-    console.error('❌ [CAMPAIGN-ANALYTICS] Erreur dashboard:', error);
+    logger.error('❌ [CAMPAIGN-ANALYTICS] Erreur dashboard:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la récupération du dashboard analytics' 
@@ -363,7 +364,7 @@ router.get('/campaign/:id', requireRole(['admin', 'super_admin']), async (req: A
     });
 
   } catch (error) {
-    console.error('❌ [CAMPAIGN-ANALYTICS] Erreur campagne:', error);
+    logger.error('❌ [CAMPAIGN-ANALYTICS] Erreur campagne:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la récupération des analytics de campagne' 
@@ -483,7 +484,7 @@ router.get('/ai-insights', requireRole(['admin', 'super_admin']), async (req: Au
     });
 
   } catch (error) {
-    console.error('❌ [CAMPAIGN-ANALYTICS] Erreur AI insights:', error);
+    logger.error('❌ [CAMPAIGN-ANALYTICS] Erreur AI insights:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la récupération des insights IA' 
@@ -579,7 +580,7 @@ router.get('/export', requireRole(['admin', 'super_admin']), async (req: Authent
     }
 
   } catch (error) {
-    console.error('❌ [CAMPAIGN-ANALYTICS] Erreur export:', error);
+    logger.error('❌ [CAMPAIGN-ANALYTICS] Erreur export:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de l\'export des données' 

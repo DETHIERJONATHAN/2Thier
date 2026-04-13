@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { Request, Response } from 'express';
 import { authMiddleware } from '../middlewares/auth';
+import { logger } from '../lib/logger';
 
 interface AuthRequest extends Request {
   user?: {
@@ -43,7 +44,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     });
     
   } catch (error) {
-    console.error('[Impersonate Route] Erreur:', error);
+    logger.error('[Impersonate Route] Erreur:', error);
     return res.status(500).json({
       success: false,
       message: 'Erreur lors de la configuration de l\'usurpation'
@@ -70,7 +71,7 @@ router.delete('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     });
     
   } catch (error) {
-    console.error('[Impersonate Route] Erreur lors de l\'arrêt:', error);
+    logger.error('[Impersonate Route] Erreur lors de l\'arrêt:', error);
     return res.status(500).json({
       success: false,
       message: 'Erreur lors de l\'arrêt de l\'usurpation'

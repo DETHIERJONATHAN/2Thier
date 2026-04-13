@@ -81,7 +81,7 @@ const UserRightsSummaryPage = () => {
         } else {
           throw new Error(orgsResponse.message || 'Erreur lors du chargement des organisations.');
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         const errorMessage = err.message || 'Une erreur est survenue lors du chargement des données.';
         console.error("[UserRightsSummaryPage] Error fetching initial data:", err);
         setError(errorMessage);
@@ -130,7 +130,7 @@ const UserRightsSummaryPage = () => {
             console.warn('Could not load organization modules:', modulesResponse.message);
             NotificationManager.warning(modulesResponse.message || "Les modules de l'organisation n'ont pas pu être chargés.");
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           const errorMessage = err.message || "Une erreur est survenue lors de la récupération des données.";
           console.error("[UserRightsSummaryPage] Error fetching summary data:", err);
           setError(errorMessage);

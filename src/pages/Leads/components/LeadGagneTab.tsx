@@ -20,7 +20,7 @@ interface GeneratedDoc {
   createdAt: string;
   submissionId?: string;
   templateId?: string;
-  dataSnapshot?: any;
+  dataSnapshot?: unknown;
   // API renvoie "template" (mappé) ou "DocumentTemplate" (non mappé)
   DocumentTemplate?: { id: string; name: string };
   template?: { id: string; name: string };
@@ -73,7 +73,7 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
   const loadGeneratedDocs = useCallback(async () => {
     try {
       setLoadingDocs(true);
-      const response = await api.get(`/api/documents/generated?leadId=${leadId}`) as any;
+      const response = await api.get(`/api/documents/generated?leadId=${leadId}`) as unknown;
       const docs = Array.isArray(response) ? response : (response?.data || response?.documents || []);
       setGeneratedDocs(docs);
     } catch (err) {
@@ -88,15 +88,15 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
   const loadProductOptions = useCallback(async () => {
     try {
       setLoadingProducts(true);
-      const trees = await api.get('/api/treebranchleaf/trees') as any[];
+      const trees = await api.get('/api/treebranchleaf/trees') as unknown[];
       
       const allOptions: ProductOption[] = [];
       const seenValues = new Set<string>();
 
       for (const tree of (trees || [])) {
         try {
-          const nodes = await api.get(`/api/treebranchleaf/trees/${tree.id}/nodes`) as any[];
-          const sourceNodes = (nodes || []).filter((n: any) =>
+          const nodes = await api.get(`/api/treebranchleaf/trees/${tree.id}/nodes`) as unknown[];
+          const sourceNodes = (nodes || []).filter((n: Record<string, unknown>) =>
             n.hasProduct &&
             n.product_sourceNodeId === n.id &&
             n.product_options &&
@@ -169,7 +169,7 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
         }
       }
 
-      const response = await api.post('/api/chantiers/from-lead-document', formData) as any;
+      const response = await api.post('/api/chantiers/from-lead-document', formData) as unknown;
 
       if (response?.success) {
         message.success(`🏗️ Chantier "${product.label}" créé${selDocId ? ' et lié au devis' : ''} !`);
@@ -219,7 +219,7 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
         }
       }
 
-      const response = await api.post('/api/chantiers/from-lead-document', formData) as any;
+      const response = await api.post('/api/chantiers/from-lead-document', formData) as unknown;
       if (response?.success) {
         message.success(`🏗️ Chantier créé${selDocId ? ' et lié au devis' : ''} !`);
         setSelectedDocPerProduct(prev => ({ ...prev, '__generic__': null }));
@@ -243,7 +243,7 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
   const handleDeleteChantier = useCallback(async (chantierId: string) => {
     setDeletingId(chantierId);
     try {
-      const response = await api.delete(`/api/chantiers/${chantierId}`) as any;
+      const response = await api.delete(`/api/chantiers/${chantierId}`) as unknown;
       if (response?.success) {
         message.success('Chantier supprimé');
         refetchChantiers();
@@ -409,7 +409,7 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
           </Text>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {chantiers.map(c => {
-              const ch = c as any;
+              const ch = c as unknown;
               // Priorité : le GeneratedDocument inclus dans la réponse (contient pdfUrl), sinon fallback sur generatedDocs
               const linkedDoc = ch.GeneratedDocument 
                 || (ch.generatedDocumentId ? generatedDocs.find(d => d.id === ch.generatedDocumentId) : null);
@@ -566,7 +566,7 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
                         💰 Montant : {existingChantier.amount.toLocaleString('fr-BE')} €
                       </Text>
                     )}
-                    {(existingChantier as any)?.generatedDocumentId && (
+                    {(existingChantier as unknown)?.generatedDocumentId && (
                       <Tag color="purple" style={{ fontSize: 11 }}>
                         <LinkOutlined style={{ marginRight: 2 }} />
                         Lié au devis TBL

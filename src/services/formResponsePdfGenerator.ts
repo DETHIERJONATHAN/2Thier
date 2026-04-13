@@ -32,7 +32,7 @@ interface FormResponsePdfData {
     phone?: string;
     civility?: string;
   };
-  answers: Record<string, any>;
+  answers: Record<string, unknown>;
   questions: FormQuestion[];
   leadNumber?: string;
 }

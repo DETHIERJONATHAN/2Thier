@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { db } from '../lib/database';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
+router.use(authenticateToken);
 const prisma = db;
 
 // Route temporaire pour sync les documents
@@ -81,8 +84,8 @@ router.post('/sync-documents', async (req, res) => {
         sections: sections.length
       }
     });
-  } catch (error: any) {
-    console.error('Sync error:', error);
+  } catch (error: unknown) {
+    logger.error('Sync error:', error);
     res.status(500).json({ error: error.message });
   }
 });

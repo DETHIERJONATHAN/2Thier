@@ -188,7 +188,7 @@ const SmartCaptureFlow: React.FC<SmartCaptureFlowProps> = ({
             input.type = 'file';
             input.accept = 'image/*';
             input.multiple = true;
-            input.onchange = (e: any) => {
+            input.onchange = (e: unknown) => {
               const files = Array.from(e.target.files || []) as File[];
               if (files.length > 0) {
                 // Convertir les fichiers en CapturedPhoto[]

@@ -69,7 +69,7 @@ export class TBLIntelligence {
   private formulaRegistry: Map<string, TBLFormula> = new Map();
   private conditionRegistry: Map<string, TBLCondition> = new Map();
   private tableRegistry: Map<string, TBLTable> = new Map();
-  private dataCache: Map<string, any> = new Map();
+  private dataCache: Map<string, unknown> = new Map();
 
   constructor() {
     this.prisma = db;
@@ -79,7 +79,7 @@ export class TBLIntelligence {
    * 📖 LECTURE ET DÉCODAGE DES DONNÉES ENCODÉES
    * Lit les données stockées dans la base et les décode pour évaluation
    */
-  async readAndDecodeElementData(elementId: string, elementType: string): Promise<any> {
+  async readAndDecodeElementData(elementId: string, elementType: string): Promise<unknown> {
     const cacheKey = `${elementType}_${elementId}`;
     
     // Vérifier le cache d'abord
@@ -90,7 +90,7 @@ export class TBLIntelligence {
 
     console.log(`📖 [TBL Intelligence] Lecture données encodées pour ${elementType} ${elementId}`);
     
-    let decodedData: any = {};
+    let decodedData: unknown = {};
 
     try {
       switch (elementType) {
@@ -125,7 +125,7 @@ export class TBLIntelligence {
   /**
    * 🧮 LECTURE DES DONNÉES DE FORMULE
    */
-  private async readFormulaData(formulaId: string): Promise<any> {
+  private async readFormulaData(formulaId: string): Promise<unknown> {
     const formula = await this.prisma.treeBranchLeafNodeFormula.findFirst({
       where: { nodeId: formulaId }
     });
@@ -141,7 +141,7 @@ export class TBLIntelligence {
     }
 
     // Récupérer les variables et valeurs depuis les tokens
-    const variables: Record<string, any> = {};
+    const variables: Record<string, unknown> = {};
     const sequence = [];
     
     for (const token of tokens) {
@@ -164,7 +164,7 @@ export class TBLIntelligence {
   /**
    * 🔧 PARSEUR DE VALEURS
    */
-  private parseValue(value: any): any {
+  private parseValue(value: unknown): any {
     if (value === null || value === undefined) return null;
     
     // Si c'est déjà un type primitif
@@ -203,7 +203,7 @@ export class TBLIntelligence {
   /**
    * ⚖️ LECTURE DES DONNÉES DE CONDITION
    */
-  private async readConditionData(conditionId: string): Promise<any> {
+  private async readConditionData(conditionId: string): Promise<unknown> {
     const condition = await this.prisma.treeBranchLeafNodeCondition.findFirst({
       where: { nodeId: conditionId }
     });
@@ -232,7 +232,7 @@ export class TBLIntelligence {
   /**
    * 📊 LECTURE DES DONNÉES DE TABLEAU
    */
-  private async readTableData(tableId: string): Promise<any> {
+  private async readTableData(tableId: string): Promise<unknown> {
     const table = await this.prisma.treeBranchLeafNodeTable.findFirst({
       where: { nodeId: tableId }
     });
@@ -255,7 +255,7 @@ export class TBLIntelligence {
       data: tableData,
       metadata: {
         rows: Array.isArray(tableData) ? tableData.length : 0,
-        has_formulas: Array.isArray(columns) ? columns.some((col: any) => col.formula) : false
+        has_formulas: Array.isArray(columns) ? columns.some((col: Record<string, unknown>) => col.formula) : false
       }
     };
   }
@@ -263,7 +263,7 @@ export class TBLIntelligence {
   /**
    * 🏷️ LECTURE DES DONNÉES DE CHAMP
    */
-  private async readFieldData(fieldId: string): Promise<any> {
+  private async readFieldData(fieldId: string): Promise<unknown> {
     const field = await this.prisma.treeBranchLeafNode.findUnique({
       where: { id: fieldId },
       include: {
@@ -1207,7 +1207,7 @@ export class TBLIntelligence {
    * 🧮 ANALYSE DES FORMULES
    * Extrait les codes TBL référencés dans les formules
    */
-  private async analyzeFormulas(formulas: any[]): Promise<TBLFormula[]> {
+  private async analyzeFormulas(formulas: unknown[]): Promise<TBLFormula[]> {
     const tblFormulas: TBLFormula[] = [];
 
     for (const formula of formulas) {
@@ -1255,7 +1255,7 @@ export class TBLIntelligence {
    * ⚖️ ANALYSE DES CONDITIONS
    * Identifie les relations options + champs conditionnels
    */
-  private async analyzeConditions(conditions: any[]): Promise<TBLCondition[]> {
+  private async analyzeConditions(conditions: unknown[]): Promise<TBLCondition[]> {
     const tblConditions: TBLCondition[] = [];
 
     for (const condition of conditions) {
@@ -1335,7 +1335,7 @@ export class TBLIntelligence {
    * 📊 ANALYSE DES TABLEAUX
    * Identifie les sources de données et relations
    */
-  private async analyzeTables(tables: any[]): Promise<TBLTable[]> {
+  private async analyzeTables(tables: unknown[]): Promise<TBLTable[]> {
     const tblTables: TBLTable[] = [];
 
     for (const table of tables) {
@@ -1444,9 +1444,9 @@ export class TBLIntelligence {
    */
   async resolveValue(
     elementCode: string, 
-    context: Record<string, any> = {}
+    context: Record<string, unknown> = {}
   ): Promise<{
-    value: any;
+    value: unknown;
     dependencies_resolved: string[];
     conditions_evaluated: string[];
     formulas_calculated: string[];
@@ -1478,40 +1478,40 @@ export class TBLIntelligence {
     }
   }
 
-  private async resolveFormula(analysis: any, context: Record<string, any>) {
+  private async resolveFormula(analysis: unknown, context: Record<string, unknown>) {
     // Implementation de résolution de formule avec codes TBL
     console.log(`🧮 Résolution formule avec ${analysis.formulas.length} formules`);
     return {
       value: 0, // Calculé selon la formule
-      dependencies_resolved: analysis.formulas.flatMap((f: any) => f.referenced_fields),
+      dependencies_resolved: analysis.formulas.flatMap((f: unknown) => f.referenced_fields),
       conditions_evaluated: [],
-      formulas_calculated: analysis.formulas.map((f: any) => f.id)
+      formulas_calculated: analysis.formulas.map((f: Record<string, unknown>) => f.id)
     };
   }
 
-  private async resolveCondition(analysis: any, context: Record<string, any>) {
+  private async resolveCondition(analysis: unknown, context: Record<string, unknown>) {
     // Implementation de résolution de condition avec options + champs
     console.log(`⚖️ Résolution condition avec ${analysis.conditions.length} conditions`);
     return {
       value: true, // Évalué selon les conditions
       dependencies_resolved: [],
-      conditions_evaluated: analysis.conditions.map((c: any) => c.id),
+      conditions_evaluated: analysis.conditions.map((c: Record<string, unknown>) => c.id),
       formulas_calculated: []
     };
   }
 
-  private async resolveTable(analysis: any, context: Record<string, any>) {
+  private async resolveTable(analysis: unknown, context: Record<string, unknown>) {
     // Implementation de résolution de tableau avec sources de données
     console.log(`📊 Résolution tableau avec ${analysis.tables.length} tableaux`);
     return {
       value: [], // Données du tableau
-      dependencies_resolved: analysis.tables.flatMap((t: any) => t.data_sources),
+      dependencies_resolved: analysis.tables.flatMap((t: unknown) => t.data_sources),
       conditions_evaluated: [],
       formulas_calculated: []
     };
   }
 
-  private async resolveSimpleValue(analysis: any, context: Record<string, any>) {
+  private async resolveSimpleValue(analysis: unknown, context: Record<string, unknown>) {
     // Résolution d'une valeur simple
     const value = context[analysis.element.tbl_code] || null;
     console.log(`📝 Résolution valeur simple: ${analysis.element.label} = ${value}`);

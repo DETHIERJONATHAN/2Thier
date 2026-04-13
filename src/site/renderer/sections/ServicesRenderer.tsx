@@ -10,7 +10,7 @@ import { getResponsivePadding } from '../utils/responsive';
 
 const { Title, Paragraph, Text } = Typography;
 
-const normalizeSingleValue = (input: any): string | undefined => {
+const normalizeSingleValue = (input: unknown): string | undefined => {
   if (Array.isArray(input)) {
     return input.length > 0 ? String(input[0]).trim() || undefined : undefined;
   }
@@ -27,7 +27,7 @@ const normalizeSingleValue = (input: any): string | undefined => {
  */
 
 interface ServicesRendererProps {
-  content: any;
+  content: unknown;
   mode: 'preview' | 'edit';
 }
 
@@ -92,7 +92,7 @@ export const ServicesRenderer: React.FC<ServicesRendererProps> = ({ content }) =
 
         {/* SERVICES GRID */}
         <Row gutter={[parseInt(gap), parseInt(gap)]}>
-          {items.map((service: any, index: number) => {
+          {items.map((service: unknown, index: number) => {
             const legacyImage = service.image;
 
             const normalizedImage = (() => {
@@ -101,7 +101,7 @@ export const ServicesRenderer: React.FC<ServicesRendererProps> = ({ content }) =
               return legacyImage.url || legacyImage.src || legacyImage.path || '';
             })();
 
-            let iconSource = service.icon as any;
+            let iconSource = service.icon as unknown;
 
             if ((!iconSource || resolveIconValue(iconSource).type === 'none') && normalizedImage) {
               iconSource = { mode: 'image', image: normalizedImage };

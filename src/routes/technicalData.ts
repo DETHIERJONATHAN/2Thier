@@ -4,6 +4,7 @@ import { impersonationMiddleware } from "../middlewares/impersonation";
 import { db } from '../lib/database';
 import { requireRole } from '../middlewares/requireRole';
 import { isSuperAdmin } from "../utils/roles";
+import { logger } from '../lib/logger';
 
 const prisma = db;
 const router = Router();
@@ -16,7 +17,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
     const user = req.user;
     const { organizationId } = req.query;
     if (!user) {
-      console.error('[TechnicalData] Unauthorized access: no user.');
+      logger.error('[TechnicalData] Unauthorized access: no user.');
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -37,7 +38,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
       res.json(technicalData);
     } else {
       if (!user.organizationId) {
-          console.error('[TechnicalData] User is not associated with an organization.');
+          logger.error('[TechnicalData] User is not associated with an organization.');
           return res.status(400).json({ error: 'User is not associated with an organization' });
       }
       
@@ -53,8 +54,8 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
       });
       res.json(technicalData);
     }
-  } catch (error: any) {
-    console.error('[TechnicalData] Error in GET /:', error);
+  } catch (error: unknown) {
+    logger.error('[TechnicalData] Error in GET /:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -88,7 +89,7 @@ router.post('/', [authMiddleware, requireRole(['admin', 'super_admin'])], async 
       },
     });
     res.status(201).json(newTechnicalData);
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(500).json({ error: error.message });
   }
 });
@@ -123,7 +124,7 @@ router.put('/:id', [authMiddleware, requireRole(['admin', 'super_admin'])], asyn
       data: { type, label, value, data, organizationId: orgId },
     });
     res.json(updatedTechnicalData);
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(500).json({ error: error.message });
   }
 });
@@ -149,7 +150,7 @@ router.delete('/:id', [authMiddleware, requireRole(['admin', 'super_admin'])], a
 
     await prisma.technicalData.delete({ where: { id } });
     res.status(204).send();
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(500).json({ error: error.message });
   }
 });
@@ -190,7 +191,7 @@ router.get('/by-lead/:leadId', authMiddleware, async (req: AuthenticatedRequest,
 
     res.json(technicalData);
   } catch (error) {
-    console.error("Failed to get technical data for lead:", error);
+    logger.error("Failed to get technical data for lead:", error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

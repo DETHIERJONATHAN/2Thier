@@ -83,7 +83,7 @@ const PendingInvitationsTable: React.FC<PendingInvitationsTableProps> = ({ shoul
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, record: Invitation) => (
+      render: (_: unknown, record: Invitation) => (
         <Space>
           <Tooltip title="Renvoyer l'invitation">
             <Button icon={<RedoOutlined />} onClick={() => handleResend(record.id)} />

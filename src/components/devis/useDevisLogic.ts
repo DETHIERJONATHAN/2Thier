@@ -48,8 +48,8 @@ interface AdvancedConfig {
   technicalTag?: boolean;
   dbField?: string;
   tableau?: {
-    columns: any[];
-    templates: any[];
+    columns: unknown[];
+    templates: unknown[];
   };
 }
 
@@ -84,7 +84,7 @@ interface Block {
 }
 
 interface FormData {
-  [fieldId: string]: any;
+  [fieldId: string]: unknown;
 }
 
 interface DevisData {
@@ -121,7 +121,7 @@ interface DevisLogicProps {
 class DynamicFormulaEngine {
   private formData: FormData = {};
   private fieldsMap: Map<string, Field> = new Map();
-  private calculationCache: Map<string, any> = new Map();
+  private calculationCache: Map<string, unknown> = new Map();
 
   constructor(fields: Field[], formData: FormData) {
     this.formData = formData;
@@ -189,7 +189,7 @@ class DynamicFormulaEngine {
   }
 
   // Validation des règles métier
-  validateBusinessRules(fieldId: string, value: any): string | null {
+  validateBusinessRules(fieldId: string, value: unknown): string | null {
     const field = this.fieldsMap.get(fieldId);
     const rules = field?.advancedConfig?.validation?.businessRules;
     
@@ -203,7 +203,7 @@ class DynamicFormulaEngine {
     return null;
   }
 
-  private applyBusinessRule(rule: string, value: any, field: Field): string | null {
+  private applyBusinessRule(rule: string, value: unknown, field: Field): string | null {
     switch (rule) {
       case 'consumption_realistic':
         if (value < 500 || value > 100000) {
@@ -237,7 +237,7 @@ export const useDevisLogic = ({ devisId, leadId, mode = 'create' }: DevisLogicPr
   const [leadData, setLeadData] = useState<LeadData | null>(null);
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [warnings, setWarnings] = useState<Record<string, string | null>>({});
-  const [fieldStates, setFieldStates] = useState<Record<string, any>>({});
+  const [fieldStates, setFieldStates] = useState<Record<string, unknown>>({});
   
   // États de l'interface
   const [activeTabKey, setActiveTabKey] = useState<string>('0');
@@ -344,7 +344,7 @@ export const useDevisLogic = ({ devisId, leadId, mode = 'create' }: DevisLogicPr
   }, [initializeFormulaEngine]);
 
   // Gestion des changements de champs
-  const handleFieldChange = useCallback((fieldId: string, value: any) => {
+  const handleFieldChange = useCallback((fieldId: string, value: unknown) => {
     setFormData(prev => {
       const newData = { ...prev, [fieldId]: value };
       
@@ -406,7 +406,7 @@ export const useDevisLogic = ({ devisId, leadId, mode = 'create' }: DevisLogicPr
   }, [sections]);
 
   // Validation des champs
-  const validateField = useCallback((fieldId: string, value: any) => {
+  const validateField = useCallback((fieldId: string, value: unknown) => {
     let error: string | null = null;
     let warning: string | null = null;
 

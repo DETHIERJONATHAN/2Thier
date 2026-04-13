@@ -30,7 +30,7 @@ const GeneralMeasuresTab: React.FC<GeneralMeasuresTabProps> = ({ answers, update
                     ].map((opt) => (
                         <button
                             key={opt.key}
-                            onClick={() => update({ typeClient: opt.key as any })}
+                            onClick={() => update({ typeClient: opt.key as unknown })}
                             className={`w-full rounded-xl border px-4 py-3 text-sm ${answers.typeClient === opt.key
                                 ? "border-slate-900 bg-slate-900 text-white"
                                 : "border-slate-200 bg-white hover:bg-slate-50"

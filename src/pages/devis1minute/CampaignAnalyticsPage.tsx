@@ -171,10 +171,10 @@ export default function CampaignAnalyticsPage() {
       });
 
       const response = await api.get(`/api/campaign-analytics/export?${params}`, {
-        responseType: 'blob' as any
+        responseType: 'blob' as unknown
       });
       
-      const url = window.URL.createObjectURL(new Blob([response as any]));
+      const url = window.URL.createObjectURL(new Blob([response as unknown]));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `analytics-${dayjs().format('YYYY-MM-DD')}.xlsx`);

@@ -49,10 +49,10 @@ interface MigrationStatistics {
 interface BackupData {
   timestamp: string;
   totalRecords: number;
-  elements: any[];
-  formulas: any[];
-  conditions: any[];
-  tables: any[];
+  elements: unknown[];
+  formulas: unknown[];
+  conditions: unknown[];
+  tables: unknown[];
 }
 
 export class TBLMigration {
@@ -204,7 +204,7 @@ export class TBLMigration {
       id: el.id,
       nodeId: el.nodeId,
       label: el.label,
-      type: el.type as any,
+      type: el.type as unknown,
       parentId: el.parentId || undefined,
       
       // Indicateurs de capacités (à adapter selon vraie structure BDD)

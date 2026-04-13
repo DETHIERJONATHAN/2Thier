@@ -177,7 +177,7 @@ export const TestimonialsManager: React.FC<TestimonialsManagerProps> = ({ websit
     }
   };
 
-  const handleDragEnd = async (event: any) => {
+  const handleDragEnd = async (event: unknown) => {
     const { active, over } = event;
 
     if (active.id !== over.id) {
@@ -240,7 +240,7 @@ export const TestimonialsManager: React.FC<TestimonialsManagerProps> = ({ websit
     }
   };
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: unknown) => {
     try {
       const payload = {
         ...values,
@@ -265,7 +265,7 @@ export const TestimonialsManager: React.FC<TestimonialsManagerProps> = ({ websit
     }
   };
 
-  const handleAIGenerated = (content: any) => {
+  const handleAIGenerated = (content: unknown) => {
     form.setFieldsValue({
       key: content.key,
       customerName: content.customerName,

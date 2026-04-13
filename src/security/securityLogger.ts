@@ -69,7 +69,7 @@ const securityLogger = winston.createLogger({
 });
 
 // 🛡️ Fonction de sanitisation des données sensibles
-function sanitizeLogData(data: any): any {
+function sanitizeLogData(data: unknown): any {
   if (!data || typeof data !== 'object') return data;
   
   const sensitiveFields = [
@@ -94,7 +94,7 @@ function sanitizeLogData(data: any): any {
 // 🚨 Fonction pour logger les événements de sécurité
 export function logSecurityEvent(
   eventType: string, 
-  details: Record<string, any>, 
+  details: Record<string, unknown>, 
   level: 'info' | 'warn' | 'error' = 'info'
 ) {
   const securityEvent = {

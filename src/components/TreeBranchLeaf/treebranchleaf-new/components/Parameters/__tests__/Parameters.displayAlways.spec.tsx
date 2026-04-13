@@ -4,10 +4,10 @@ import Parameters from '../Parameters';
 
 describe('Parameters - displayAlways checkbox', () => {
   it('should reflect updated metadata.displayAlways after onNodeUpdate and nodes refresh', async () => {
-    const node = { id: 's1', type: 'section', label: 'Aperçu', metadata: {} } as any;
-    const updatedNode = { ...node, metadata: { displayAlways: true } } as any;
+    const node = { id: 's1', type: 'section', label: 'Aperçu', metadata: {} } as unknown;
+    const updatedNode = { ...node, metadata: { displayAlways: true } } as unknown;
 
-    const onNodeUpdate = async (payload: any) => {
+    const onNodeUpdate = async (payload: unknown) => {
       // Simulate server update by returning updated node
       return updatedNode;
     };
@@ -16,7 +16,7 @@ describe('Parameters - displayAlways checkbox', () => {
     const onNodesUpdate = jest.fn();
     const refreshTree = jest.fn(() => Promise.resolve());
 
-    const tree: any = { id: 't1', name: 'Test', tabs: [] };
+    const tree: unknown = { id: 't1', name: 'Test', tabs: [] };
 
     // Set a TBL_FORCE_REFRESH stub to validate fallback refresh was invoked
     (window as any).TBL_FORCE_REFRESH = jest.fn();
@@ -30,7 +30,7 @@ describe('Parameters - displayAlways checkbox', () => {
         onNodeUpdate={onNodeUpdate}
         refreshTree={refreshTree}
         onCapabilityConfig={onNodeUpdate}
-        registry={{ getAllCapabilities: () => [] } as any}
+        registry={{ getAllCapabilities: () => [] } as unknown}
         onSelectNodeId={onSelectNodeId}
       />
     );
@@ -55,7 +55,7 @@ describe('Parameters - displayAlways checkbox', () => {
         panelState={{ activePanel: 'properties', openCapabilities: new Set(), previewMode: false }}
         onNodeUpdate={onNodeUpdate}
         onCapabilityConfig={onNodeUpdate}
-        registry={{ getAllCapabilities: () => [] } as any}
+        registry={{ getAllCapabilities: () => [] } as unknown}
         onSelectNodeId={onSelectNodeId}
       />
     );

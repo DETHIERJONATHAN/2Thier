@@ -169,7 +169,7 @@ export const useGoogleAgenda = () => {
       const eventsData = response.data || [];
       
       // Transformer les données pour l'interface
-      const transformedEvents = eventsData.map((event: any) => ({
+      const transformedEvents = eventsData.map((event: Record<string, unknown>) => ({
         id: event.id,
         title: event.title,
         description: event.description,
@@ -190,7 +190,7 @@ export const useGoogleAgenda = () => {
           email: event.owner?.email || '',
           name: `${event.owner?.firstName || ''} ${event.owner?.lastName || ''}`.trim()
         },
-        attendees: event.participants?.map((p: any) => ({
+        attendees: event.participants?.map((p: Record<string, unknown>) => ({
           email: p.user?.email || '',
           name: `${p.user?.firstName || ''} ${p.user?.lastName || ''}`.trim(),
           status: 'accepted'
@@ -231,7 +231,7 @@ export const useGoogleAgenda = () => {
   }, [stableApi, loadEvents]);
 
   // 📝 CRÉATION D'ÉVÉNEMENT
-  const createEvent = useCallback(async (eventData: any) => {
+  const createEvent = useCallback(async (eventData: unknown) => {
     if (!stableApi) return;
 
     try {
@@ -260,7 +260,7 @@ export const useGoogleAgenda = () => {
   }, [stableApi, loadEvents]);
 
   // ✏️ MODIFICATION D'ÉVÉNEMENT
-  const updateEvent = useCallback(async (eventId: string, eventData: any) => {
+  const updateEvent = useCallback(async (eventId: string, eventData: unknown) => {
     if (!stableApi) return;
 
     try {

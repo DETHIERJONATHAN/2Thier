@@ -4,6 +4,7 @@ import { authMiddleware } from '../middlewares/auth.js';
 import type { AuthenticatedRequest } from '../middlewares/auth.js';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -150,7 +151,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     return;
     
   } catch (error: unknown) {
-    console.error('[ROLES] Erreur lors de la récupération des rôles:', error);
+    logger.error('[ROLES] Erreur lors de la récupération des rôles:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur interne lors de la récupération des rôles' 
@@ -225,7 +226,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     });
 
   } catch (error) {
-    console.error('[ROLES] Error fetching role:', error);
+    logger.error('[ROLES] Error fetching role:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur interne du serveur' 
@@ -329,7 +330,7 @@ router.post('/', rolesCreateRateLimit, async (req: AuthenticatedRequest, res: Re
     });
 
   } catch (error) {
-    console.error('[ROLES] Error creating role:', error);
+    logger.error('[ROLES] Error creating role:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -483,7 +484,7 @@ const handleUpdateRole = async (req: AuthenticatedRequest, res: Response): Promi
     });
 
   } catch (error) {
-    console.error('[ROLES] Erreur lors de la modification du rôle:', error);
+    logger.error('[ROLES] Erreur lors de la modification du rôle:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur interne lors de la modification du rôle' 
@@ -575,7 +576,7 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<
     });
 
   } catch (error) {
-    console.error('[ROLES] Erreur lors de la suppression du rôle:', error);
+    logger.error('[ROLES] Erreur lors de la suppression du rôle:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });

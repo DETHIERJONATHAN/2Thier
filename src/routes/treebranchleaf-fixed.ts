@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticateToken as authMiddleware } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -34,7 +35,7 @@ router.get('/trees', async (req, res) => {
 
     res.json(trees);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error fetching trees:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error fetching trees:', error);
     res.status(500).json({ error: 'Erreur lors de la r�cup�ration des arbres' });
   }
 });
@@ -68,7 +69,7 @@ router.get('/trees/:id', async (req, res) => {
 
     res.json(tree);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error fetching tree:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error fetching tree:', error);
     res.status(500).json({ error: 'Erreur lors de la r�cup�ration de l\'arbre' });
   }
 });
@@ -105,7 +106,7 @@ router.post('/trees', async (req, res) => {
 
     res.status(201).json(tree);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error creating tree:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error creating tree:', error);
     res.status(500).json({ error: 'Erreur lors de la cr�ation de l\'arbre' });
   }
 });
@@ -148,7 +149,7 @@ router.put('/trees/:id', async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Arbre non trouv�' });
     }
-    console.error('[TREEBRANCHLEAF_API] Error updating tree:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error updating tree:', error);
     res.status(500).json({ error: 'Erreur lors de la mise � jour de l\'arbre' });
   }
 });
@@ -170,7 +171,7 @@ router.delete('/trees/:id', async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Arbre non trouv�' });
     }
-    console.error('[TREEBRANCHLEAF_API] Error deleting tree:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error deleting tree:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression de l\'arbre' });
   }
 });
@@ -198,7 +199,7 @@ router.get('/nodes', async (req, res) => {
 
     res.json(nodes);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error fetching Nodes:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error fetching Nodes:', error);
     res.status(500).json({ error: 'Erreur lors de la r�cup�ration des n�uds' });
   }
 });
@@ -226,7 +227,7 @@ router.get('/nodes/:id', async (req, res) => {
 
     res.json(node);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error fetching node:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error fetching node:', error);
     res.status(500).json({ error: 'Erreur lors de la r�cup�ration du n�ud' });
   }
 });
@@ -258,7 +259,7 @@ router.post('/nodes', async (req, res) => {
 
     res.status(201).json(node);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error creating node:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error creating node:', error);
     res.status(500).json({ error: 'Erreur lors de la cr�ation du n�ud' });
   }
 });
@@ -295,7 +296,7 @@ router.put('/nodes/:id', async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'N�ud non trouv�' });
     }
-    console.error('[TREEBRANCHLEAF_API] Error updating node:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error updating node:', error);
     res.status(500).json({ error: 'Erreur lors de la mise � jour du n�ud' });
   }
 });
@@ -317,7 +318,7 @@ router.delete('/nodes/:id', async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'N�ud non trouv�' });
     }
-    console.error('[TREEBRANCHLEAF_API] Error deleting node:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error deleting node:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du n�ud' });
   }
 });
@@ -343,7 +344,7 @@ router.get('/markers', async (req, res) => {
 
     res.json(markers);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error fetching MarkerLinks:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error fetching MarkerLinks:', error);
     res.status(500).json({ error: 'Erreur lors de la r�cup�ration des marqueurs' });
   }
 });
@@ -369,7 +370,7 @@ router.get('/markers/:id', async (req, res) => {
 
     res.json(marker);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error fetching marker:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error fetching marker:', error);
     res.status(500).json({ error: 'Erreur lors de la r�cup�ration du marqueur' });
   }
 });
@@ -399,7 +400,7 @@ router.post('/markers', async (req, res) => {
 
     res.status(201).json(marker);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error creating marker:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error creating marker:', error);
     res.status(500).json({ error: 'Erreur lors de la cr�ation du marqueur' });
   }
 });
@@ -434,7 +435,7 @@ router.put('/markers/:id', async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Marqueur non trouv�' });
     }
-    console.error('[TREEBRANCHLEAF_API] Error updating marker:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error updating marker:', error);
     res.status(500).json({ error: 'Erreur lors de la mise � jour du marqueur' });
   }
 });
@@ -456,7 +457,7 @@ router.delete('/markers/:id', async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Marqueur non trouv�' });
     }
-    console.error('[TREEBRANCHLEAF_API] Error deleting marker:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error deleting marker:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du marqueur' });
   }
 });
@@ -482,7 +483,7 @@ router.get('/options', async (req, res) => {
 
     res.json(options);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error fetching Options:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error fetching Options:', error);
     res.status(500).json({ error: 'Erreur lors de la r�cup�ration des options' });
   }
 });
@@ -508,7 +509,7 @@ router.get('/options/:id', async (req, res) => {
 
     res.json(option);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error fetching option:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error fetching option:', error);
     res.status(500).json({ error: 'Erreur lors de la r�cup�ration de l\'option' });
   }
 });
@@ -537,7 +538,7 @@ router.post('/options', async (req, res) => {
 
     res.status(201).json(option);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error creating option:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error creating option:', error);
     res.status(500).json({ error: 'Erreur lors de la cr�ation de l\'option' });
   }
 });
@@ -571,7 +572,7 @@ router.put('/options/:id', async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Option non trouv�e' });
     }
-    console.error('[TREEBRANCHLEAF_API] Error updating option:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error updating option:', error);
     res.status(500).json({ error: 'Erreur lors de la mise � jour de l\'option' });
   }
 });
@@ -593,7 +594,7 @@ router.delete('/options/:id', async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Option non trouv�e' });
     }
-    console.error('[TREEBRANCHLEAF_API] Error deleting option:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error deleting option:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression de l\'option' });
   }
 });
@@ -634,7 +635,7 @@ router.get('/submissions', async (req, res) => {
 
     res.json(submissions);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error fetching Submissions:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error fetching Submissions:', error);
     res.status(500).json({ error: 'Erreur lors de la r�cup�ration des soumissions' });
   }
 });
@@ -661,7 +662,7 @@ router.get('/submissions/:id', async (req, res) => {
 
     res.json(submission);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error fetching submission:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error fetching submission:', error);
     res.status(500).json({ error: 'Erreur lors de la r�cup�ration de la soumission' });
   }
 });
@@ -716,7 +717,7 @@ router.post('/submissions', async (req, res) => {
       res.status(201).json(submission);
     }
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error creating submission:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error creating submission:', error);
     res.status(500).json({ error: 'Erreur lors de la cr�ation de la soumission' });
   }
 });
@@ -767,7 +768,7 @@ router.put('/submissions/:id', async (req, res) => {
 
     res.json(updatedSubmission);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error updating submission:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error updating submission:', error);
     res.status(500).json({ error: 'Erreur lors de la mise � jour de la soumission' });
   }
 });
@@ -789,7 +790,7 @@ router.delete('/submissions/:id', async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Soumission non trouv�e' });
     }
-    console.error('[TREEBRANCHLEAF_API] Error deleting submission:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error deleting submission:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression de la soumission' });
   }
 });
@@ -818,7 +819,7 @@ router.get('/submission-data', async (req, res) => {
 
     res.json(data);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error fetching submission Data:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error fetching submission Data:', error);
     res.status(500).json({ error: 'Erreur lors de la r�cup�ration des donn�es de soumission' });
   }
 });
@@ -845,7 +846,7 @@ router.get('/submission-data/:id', async (req, res) => {
 
     res.json(data);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error fetching submission Data:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error fetching submission Data:', error);
     res.status(500).json({ error: 'Erreur lors de la r�cup�ration de la donn�e' });
   }
 });
@@ -875,7 +876,7 @@ router.post('/submission-data', async (req, res) => {
 
     res.status(201).json(data);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API] Error creating submission Data:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error creating submission Data:', error);
     res.status(500).json({ error: 'Erreur lors de la cr�ation de la donn�e' });
   }
 });
@@ -909,7 +910,7 @@ router.put('/submission-data/:id', async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Donn�e non trouv�e' });
     }
-    console.error('[TREEBRANCHLEAF_API] Error updating submission Data:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error updating submission Data:', error);
     res.status(500).json({ error: 'Erreur lors de la mise � jour de la donn�e' });
   }
 });
@@ -931,7 +932,7 @@ router.delete('/submission-data/:id', async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Donn�e non trouv�e' });
     }
-    console.error('[TREEBRANCHLEAF_API] Error deleting submission Data:', error);
+    logger.error('[TREEBRANCHLEAF_API] Error deleting submission Data:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression de la donn�e' });
   }
 });

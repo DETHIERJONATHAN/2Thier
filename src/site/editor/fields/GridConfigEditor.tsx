@@ -72,7 +72,7 @@ const GridConfigEditor: React.FC<GridConfigEditorProps> = ({
     return defaultValue;
   })();
   
-  const updateValue = (key: keyof GridConfig, newValue: any) => {
+  const updateValue = (key: keyof GridConfig, newValue: unknown) => {
     onChange?.({ ...currentValue, [key]: newValue });
   };
   

@@ -34,7 +34,7 @@ interface Section {
   key: string;
   type: string;
   name: string;
-  content: any;
+  content: unknown;
   backgroundColor?: string;
   textColor?: string;
   isActive: boolean;
@@ -72,20 +72,20 @@ const getIcon = (iconName: string, size = '48px', color?: string): React.ReactNo
 // HELPERS
 // ============================================================
 
-const getText = (field: any, defaultText = ''): string => {
+const getText = (field: unknown, defaultText = ''): string => {
   if (!field) return defaultText;
   if (typeof field === 'string') return field;
   if (typeof field === 'object' && field.text) return field.text;
   return defaultText;
 };
 
-const getColor = (field: any, defaultColor = '#000000'): string => {
+const getColor = (field: unknown, defaultColor = '#000000'): string => {
   if (typeof field === 'string') return defaultColor;
   if (typeof field === 'object' && field.color) return field.color;
   return defaultColor;
 };
 
-const getFontSize = (field: any, defaultSize = '16px'): string => {
+const getFontSize = (field: unknown, defaultSize = '16px'): string => {
   if (typeof field === 'string') return defaultSize;
   if (typeof field === 'object' && field.fontSize) return field.fontSize;
   return defaultSize;
@@ -159,7 +159,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
   };
 
   // Handler formulaire de contact
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: unknown) => {
     setSubmitting(true);
     try {
       await api.post('/api/contact-form', {
@@ -222,7 +222,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
         </Title>
         
         <Space size="large" style={{ display: window.innerWidth > 768 ? 'flex' : 'none' }}>
-          {navigation.map((item: any, idx: number) => (
+          {navigation.map((item: unknown, idx: number) => (
             <a key={idx} href={item.href} style={{ color: '#64748b', fontWeight: 500 }}>
               {item.label}
             </a>
@@ -298,7 +298,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
             </Paragraph>
 
             <Space size="middle" wrap>
-              {buttons.map((btn: any, idx: number) => (
+              {buttons.map((btn: unknown, idx: number) => (
                 <Button
                   key={idx}
                   type={idx === 0 ? 'primary' : 'default'}
@@ -363,7 +363,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
       <div style={{ background: content.backgroundColor || '#f9fafb', padding: style.padding || content.padding || '32px 24px' }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
           <Row gutter={gutter} justify={layout.alignment || 'center'}>
-            {stats.map((stat: any, idx: number) => (
+            {stats.map((stat: unknown, idx: number) => (
               <Col xs={24} sm={12} md={spanMap[columns] || 6} key={idx} style={{ display: 'flex', justifyContent: 'center' }}>
                 <Card
                   hoverable={style.hoverable !== false && cardStyle.hoverable !== false}
@@ -473,7 +473,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
           </div>
 
           <Row gutter={gutter} justify="center">
-            {services.map((service: any) => (
+            {services.map((service: Record<string, unknown>) => (
               <Col {...columns} key={service.key} style={{ display: 'flex', justifyContent: 'center' }}>
                 <Card
                   hoverable={cardStyle.hoverable !== false}
@@ -580,7 +580,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
           </div>
 
           <Row gutter={gutter} justify="center">
-            {values.map((value: any, idx: number) => (
+            {values.map((value: unknown, idx: number) => (
               <Col {...layout} key={idx} style={{ display: 'flex', justifyContent: 'center' }}>
                 <Card 
                   variant={cardStyle.bordered === false ? 'borderless' : 'outlined'}
@@ -706,7 +706,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
           )}
 
           <Row gutter={gutter} justify="center">
-            {projects.map((project: any) => (
+            {projects.map((project: Record<string, unknown>) => (
               <Col xs={24} sm={12} md={spanMap[columns] || 8} key={project.id} style={{ display: 'flex', justifyContent: 'center' }}>
                 <Card
                   hoverable={cardStyle.hoverable !== false}
@@ -866,7 +866,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
           </div>
 
           <Carousel autoplay={carouselSettings.autoplay} dots={carouselSettings.dots}>
-            {testimonials.map((testimonial: any) => (
+            {testimonials.map((testimonial: Record<string, unknown>) => (
               <div key={testimonial.id}>
                 <Card
                   style={{
@@ -939,7 +939,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
         <Steps
           current={stepStyle.current ?? -1}
           responsive={stepStyle.responsive}
-          items={steps.map((step: any) => ({
+          items={steps.map((step: Record<string, unknown>) => ({
             title: step.title,
             description: step.description,
             icon: step.icon ? getIcon(step.icon, '24px', stepStyle.color) : null,
@@ -980,7 +980,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
           </Paragraph>
 
           <Space size="large" wrap>
-            {buttons.map((btn: any, idx: number) => (
+            {buttons.map((btn: unknown, idx: number) => (
               <Button
                 key={idx}
                 type="primary"
@@ -1029,7 +1029,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
                 Demande de devis gratuit
               </Title>
               <Form form={form} layout="vertical" onFinish={handleSubmit}>
-                {(contactForm.fields || []).map((field: any) => (
+                {(contactForm.fields || []).map((field: Record<string, unknown>) => (
                   <Form.Item
                     key={field.name}
                     name={field.name}
@@ -1086,7 +1086,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
       <div style={{ background: content.backgroundColor || '#1f2937', color: content.color || 'white', padding: content.padding || '32px 24px 16px' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <Row gutter={[32, 24]}>
-            {columns.map((col: any, idx: number) => (
+            {columns.map((col: unknown, idx: number) => (
               <Col xs={24} sm={12} md={6} key={idx}>
                 <Title level={col.type === 'text' ? 4 : 5} style={{ color: col.titleColor || 'white' }}>
                   {col.title}
@@ -1100,7 +1100,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
                 
                 {col.type === 'links' && (
                   <Space direction="vertical">
-                    {(col.links || []).map((link: any, linkIdx: number) => (
+                    {(col.links || []).map((link: unknown, linkIdx: number) => (
                       <a key={linkIdx} href={link.href} style={{ color: col.linkColor || '#9ca3af' }}>
                         {link.label}
                       </a>

@@ -75,7 +75,7 @@ const LeadSelectorModal: React.FC<LeadSelectorModalProps> = ({
       
       if (response.success && Array.isArray(response.data)) {
         // Transformer les leads CRM en TBLLead
-        const tblLeads: TBLLead[] = response.data.map((lead: any) => ({
+        const tblLeads: TBLLead[] = response.data.map((lead: Record<string, unknown>) => ({
           id: lead.id,
           name: lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Lead sans nom',
           firstName: lead.firstName || '',
@@ -92,7 +92,7 @@ const LeadSelectorModal: React.FC<LeadSelectorModalProps> = ({
       } else {
         throw new Error(response.error || 'Erreur lors du chargement des leads');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMessage = err.message || 'Erreur lors du chargement des leads';
       setError(errorMessage);
       message.error(errorMessage);

@@ -22,7 +22,7 @@ interface AIContentGeneratorProps {
   /** Type de section à générer */
   sectionType: string;
   /** Callback quand le contenu est généré */
-  onGenerated: (content: any) => void;
+  onGenerated: (content: unknown) => void;
   /** Visibilité du modal */
   visible: boolean;
   /** Callback pour fermer */
@@ -46,7 +46,7 @@ const AIContentGenerator: React.FC<AIContentGeneratorProps> = ({
   /**
    * 🚀 GÉNÉRATION COMPLÈTE DE LA SECTION
    */
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: unknown) => {
     setLoading(true);
     setProgress(0);
     let progressInterval: ReturnType<typeof setInterval> | undefined;
@@ -94,7 +94,7 @@ const AIContentGenerator: React.FC<AIContentGeneratorProps> = ({
       form.resetFields();
       setProgress(0);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ [AI] Erreur génération section:', error);
       
       setProgress(0);

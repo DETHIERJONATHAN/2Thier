@@ -229,7 +229,7 @@ const TreeBranchLeafListPage: React.FC = () => {
       title: 'Nœuds',
       key: 'nodes',
       width: 80,
-      render: (_: any, record: TreeBranchLeafTree) => (
+      render: (_: unknown, record: TreeBranchLeafTree) => (
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '16px', fontWeight: 500 }}>
             {record._count?.Nodes || 0}
@@ -244,7 +244,7 @@ const TreeBranchLeafListPage: React.FC = () => {
       title: 'Soumissions',
       key: 'submissions',
       width: 100,
-      render: (_: any, record: TreeBranchLeafTree) => (
+      render: (_: unknown, record: TreeBranchLeafTree) => (
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '16px', fontWeight: 500 }}>
             {record._count?.Submissions || 0}
@@ -266,7 +266,7 @@ const TreeBranchLeafListPage: React.FC = () => {
       title: 'Actions',
       key: 'actions',
       width: 200,
-      render: (_: any, record: TreeBranchLeafTree) => (
+      render: (_: unknown, record: TreeBranchLeafTree) => (
         <Space size="small">
           <Tooltip title="Ouvrir l'éditeur (Drag & Drop)">
             <Button

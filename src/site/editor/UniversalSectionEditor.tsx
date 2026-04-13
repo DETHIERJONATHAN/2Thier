@@ -67,10 +67,10 @@ interface UniversalSectionEditorProps {
   sectionType: string;
   
   /** Contenu actuel de la section */
-  content: any;
+  content: unknown;
   
   /** Callback onChange */
-  onChange: (content: any) => void;
+  onChange: (content: unknown) => void;
   
   /** Visible (pour le Drawer) */
   visible?: boolean;
@@ -82,7 +82,7 @@ interface UniversalSectionEditorProps {
   mode?: 'drawer' | 'inline';
   
   /** Contexte AI additionnel */
-  aiContext?: any;
+  aiContext?: unknown;
 }
 
 /**
@@ -182,7 +182,7 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
       const values = await form.validateFields();
       
       // 🔥 FIX: Fonction de fusion récursive pour éviter d'écraser les propriétés imbriquées
-      const deepMerge = (target: any, source: any): any => {
+      const deepMerge = (target: unknown, source: unknown): any => {
         // Si source n'est pas un objet, le retourner directement
         if (!source || typeof source !== 'object' || Array.isArray(source)) {
           return source;
@@ -217,7 +217,7 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
       let mergedContent = deepMerge(content, values);
 
       // 🗑️ CLEANUP: Fonction récursive pour supprimer tous les champs avec actionType === 'none'
-      const cleanupNoneActions = (obj: any): any => {
+      const cleanupNoneActions = (obj: unknown): any => {
         if (!obj || typeof obj !== 'object') return obj;
 
         // Si c'est un array, nettoyer chaque élément
@@ -236,7 +236,7 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
         }
 
         // Nettoyer récursivement tous les sous-objets
-        const cleaned: any = {};
+        const cleaned: unknown = {};
         for (const key in obj) {
           const value = cleanupNoneActions(obj[key]);
           // Ne pas ajouter les valeurs null (= supprimées)

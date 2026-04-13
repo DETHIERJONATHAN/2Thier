@@ -308,7 +308,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
   /**
    * 📈 ANALYSER LES TENDANCES EMAIL
    */
-  private analyzeEmailTrends(emails: any[]): any {
+  private analyzeEmailTrends(emails: unknown[]): any {
     const trends = {
       totalEmails: emails.length,
       hourlyDistribution: {},
@@ -334,7 +334,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
   /**
    * 📊 ANALYSER L'EFFICACITÉ DES NOTIFICATIONS
    */
-  private analyzeNotificationEffectiveness(notifications: any[]): any {
+  private analyzeNotificationEffectiveness(notifications: unknown[]): any {
     const effectiveness = {
       totalSent: notifications.length,
       byType: {},
@@ -353,7 +353,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
   /**
    * 🎯 GÉNÉRER RECOMMANDATIONS IA
    */
-  private generateAIRecommendations(emails: any[], notifications: any[]): string[] {
+  private generateAIRecommendations(emails: unknown[], notifications: unknown[]): string[] {
     const recommendations = [];
 
     if (emails.length > 20) {
@@ -427,7 +427,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
       // Nettoyer les notifications expirées (Notification model has no expiresAt field)
       await prisma.notification.deleteMany({
         where: {
-          status: 'READ' as any,
+          status: 'READ' as unknown,
           createdAt: {
             lt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) // 90 jours
           }
@@ -446,7 +446,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
   /**
    * 📊 COLLECTER DONNÉES PERFORMANCE
    */
-  private async collectPerformanceData(): Promise<any> {
+  private async collectPerformanceData(): Promise<unknown> {
     // Simulé pour l'instant
     return {
       falsePositives: Math.random() * 0.15,
@@ -459,7 +459,7 @@ export class NotificationMasterOrchestrator extends EventEmitter {
   /**
    * 📈 CALCULER TENDANCES QUOTIDIENNES
    */
-  private async calculateDailyTrends(): Promise<any> {
+  private async calculateDailyTrends(): Promise<unknown> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -528,14 +528,14 @@ export class NotificationMasterOrchestrator extends EventEmitter {
   /**
    * 🔍 TRAITER WEBHOOK GMAIL
    */
-  async handleGmailWebhook(data: any): Promise<void> {
+  async handleGmailWebhook(data: unknown): Promise<void> {
     await this.services.gmail.handleGmailWebhook(data);
   }
 
   /**
    * 🔍 TRAITER WEBHOOK CALENDAR
    */
-  async handleCalendarWebhook(_data: any): Promise<void> {
+  async handleCalendarWebhook(_data: unknown): Promise<void> {
     // handleCalendarWebhook not yet implemented on GoogleCalendarNotificationService
     console.warn('[MasterOrchestrator] Calendar webhook handler not yet implemented');
   }

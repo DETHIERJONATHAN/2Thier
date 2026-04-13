@@ -511,14 +511,14 @@ export async function runRepeatExecution(
   // en batch avant la boucle pour eliminer ~12 findUnique par variable
   const allTemplateVarIds = [...new Set(plan.variables.map(v => v.templateVariableId))];
   const templateVarsMap = new Map<string, { displayName: string | null }>();
-  const fullVarsMap = new Map<string, any>();
-  const ownerNodesMap = new Map<string, any>();
-  const displayNodesMap = new Map<string, any>();
+  const fullVarsMap = new Map<string, unknown>();
+  const ownerNodesMap = new Map<string, unknown>();
+  const displayNodesMap = new Map<string, unknown>();
   const formulasByNodeId = new Map<string, any[]>();
   let allExistingNodeIds = new Set<string>();
   let allExistingVarIds = new Set<string>();
   let allExistingVarKeys = new Set<string>();
-  let allVarsByNodeId = new Map<string, any>();
+  let allVarsByNodeId = new Map<string, unknown>();
 
   if (allTemplateVarIds.length > 0) {
     // 1. Load ALL full variable records in 1 query
@@ -646,7 +646,7 @@ export async function runRepeatExecution(
   });
 
   // 🔧 Helper: aggregate result maps into global maps
-  const aggregateResult = (result: any) => {
+  const aggregateResult = (result: unknown) => {
     if (!result || !result.success) return;
     if (result.formulaIdMap) {
       for (const [oldId, newId] of result.formulaIdMap.entries()) {
@@ -699,7 +699,7 @@ export async function runRepeatExecution(
       } catch (varErr) {
         console.error(`[repeat-executor] Erreur copie variable ${task.templateVariableId}:`, varErr instanceof Error ? varErr.stack || varErr.message : String(varErr));
         failedVarTasks.push(task);
-        return { task, result: null as any };
+        return { task, result: null as unknown };
       }
     }));
     // Aggregate chunk results into global maps
@@ -1285,14 +1285,14 @@ async function syncMissingDisplayNodeChildren(
               hasAPI: origChild.hasAPI ?? false,
               hasLink: origChild.hasLink ?? false,
               hasMarkers: origChild.hasMarkers ?? false,
-              metadata: childMeta as any,
+              metadata: childMeta as unknown,
               calculatedValue: null,
               fieldType: origChild.fieldType,
-              fieldSubType: origChild.fieldSubType as any,
-              field_label: childLabel as any,
-              subtab: origChild.subtab as any,
-              subtabs: origChild.subtabs as any,
-              formula_tokens: origChild.formula_tokens as any,
+              fieldSubType: origChild.fieldSubType as unknown,
+              field_label: childLabel as unknown,
+              subtab: origChild.subtab as unknown,
+              subtabs: origChild.subtabs as unknown,
+              formula_tokens: origChild.formula_tokens as unknown,
               data_displayFormat: origChild.data_displayFormat,
               data_exposedKey: origChild.data_exposedKey,
               data_precision: origChild.data_precision,
@@ -1307,7 +1307,7 @@ async function syncMissingDisplayNodeChildren(
               linkedVariableIds: [],
               linkedTableIds: [],
               updatedAt: now,
-            } as any
+            } as unknown
           });
 
           createdIds.push(expectedChildId);
@@ -1343,7 +1343,7 @@ async function syncMissingDisplayNodeChildren(
                 isReadonly: origChildVar.isReadonly,
                 defaultValue: origChildVar.defaultValue,
                 fixedValue: origChildVar.fixedValue,
-                metadata: origChildVar.metadata as any,
+                metadata: origChildVar.metadata as unknown,
                 updatedAt: now,
               }
             });

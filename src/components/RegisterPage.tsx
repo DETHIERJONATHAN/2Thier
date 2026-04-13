@@ -1,6 +1,6 @@
-import { SF } from '../components/zhiive/ZhiiveTheme';
+import { SF, COLORS, FB } from './zhiive/ZhiiveTheme';
 import { useState, useMemo } from 'react';
-import { SF } from './zhiive/ZhiiveTheme';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Typography, Divider, message } from 'antd';
 import {
@@ -12,6 +12,7 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 const { Title, Text } = Typography;
 
 export default function RegisterPage() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
@@ -60,15 +61,15 @@ export default function RegisterPage() {
   const typeCards = [
     {
       value: 'freelance' as const,
-      icon: <UserOutlined style={{ fontSize: 28, color: '#2563eb' }} />,
-      title: 'Join the Hive',
-      desc: 'Rejoignez la Ruche gratuitement',
+      icon: <UserOutlined style={{ fontSize: 28, color: COLORS.authLink }} />,
+      title: t('auth.joinTheHive'),
+      desc: t('auth.joinFree'),
     },
     {
       value: 'createOrg' as const,
       icon: <BankOutlined style={{ fontSize: 28, color: SF.emeraldDark }} />,
-      title: 'Found a Colony',
-      desc: 'Devis, factures, projets — devenez Keeper',
+      title: t('auth.foundColony'),
+      desc: t('auth.foundColonyDesc'),
     },
   ];
 
@@ -100,9 +101,9 @@ export default function RegisterPage() {
         <div className="zhiive-reg-brand" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #2563eb 100%)' }}>
           <div style={{ position: 'absolute', top: 0, right: 0, width: 380, height: 380, borderRadius: '50%', opacity: 0.08, background: 'radial-gradient(circle, #60a5fa 0%, transparent 70%)', transform: 'translate(30%, -30%)' }} />
           <div style={{ position: 'absolute', bottom: 0, left: 0, width: 280, height: 280, borderRadius: '50%', opacity: 0.08, background: `radial-gradient(circle, ${SF.blue} 0%, transparent 70%)`, transform: 'translate(-20%, 20%)' }} />
-          <div className="zhiive-reg-dot" style={{ top: '25%', right: '25%', width: 6, height: 6, background: '#60a5fa' }} />
-          <div className="zhiive-reg-dot" style={{ top: '60%', right: '35%', width: 8, height: 8, background: '#93c5fd', animationDelay: '1s', animationDuration: '4s' }} />
-          <div className="zhiive-reg-dot" style={{ top: '45%', left: '20%', width: 5, height: 5, background: '#38bdf8', animationDelay: '0.5s', animationDuration: '3.5s' }} />
+          <div className="zhiive-reg-dot" style={{ top: '25%', right: '25%', width: 6, height: 6, background: COLORS.authAccentStrong }} />
+          <div className="zhiive-reg-dot" style={{ top: '60%', right: '35%', width: 8, height: 8, background: COLORS.authAccent, animationDelay: '1s', animationDuration: '4s' }} />
+          <div className="zhiive-reg-dot" style={{ top: '45%', left: '20%', width: 5, height: 5, background: COLORS.authAccentAlt, animationDelay: '0.5s', animationDuration: '3.5s' }} />
 
           {/* Logo + Nom */}
           <div style={{ position: 'relative', zIndex: 10, textAlign: 'center' }}>
@@ -110,16 +111,16 @@ export default function RegisterPage() {
               <img src="/zhiive-logo.png" alt="Zhiive" style={{ width: 56, height: 56, borderRadius: 14, objectFit: 'contain' }} />
               <img src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 44, objectFit: 'contain' }} />
             </div>
-            <p style={{ color: '#93c5fd', fontSize: 16, margin: 0, textAlign: 'center' }}>Votre ruche vivante.</p>
+            <p style={{ color: COLORS.authAccent, fontSize: 16, margin: 0, textAlign: 'center' }}>Votre ruche vivante.</p>
           </div>
 
           {/* Features */}
           <div style={{ position: 'relative', zIndex: 10, textAlign: 'left' }}>
-            <Title level={3} style={{ color: '#fff', lineHeight: 1.4, marginBottom: 28, textAlign: 'left' }}>
+            <Title level={3} style={{ color: COLORS.white, lineHeight: 1.4, marginBottom: 28, textAlign: 'left' }}>
               Des milliers de Colonies font déjà vivre leur Hive.
             </Title>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {['Transformez votre Nectar en Gold', 'Devis & facturation en 1 clic', 'Votre Crew, connectée en temps réel'].map((feature, i) => (
+              {[t('auth.featureTransform'), t('auth.featureInvoice'), t('auth.featureCrewRealtime')].map((feature, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <CheckCircleOutlined style={{ fontSize: 20, color: '#34d399' }} />
                   <span style={{ color: '#bfdbfe', fontSize: 15 }}>{feature}</span>
@@ -142,12 +143,12 @@ export default function RegisterPage() {
                 <img src="/zhiive-logo.png" alt="Zhiive" style={{ width: 56, height: 56, borderRadius: 16, objectFit: 'contain', boxShadow: '0 4px 14px rgba(37,99,235,0.3)' }} />
                 <img src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 40, objectFit: 'contain' }} />
               </div>
-              <p style={{ color: '#93c5fd', fontSize: 15, margin: 0 }}>Votre ruche vivante.</p>
+              <p style={{ color: COLORS.authAccent, fontSize: 15, margin: 0 }}>Votre ruche vivante.</p>
             </div>
 
             {registrationComplete ? (
               /* === ÉCRAN DE CONFIRMATION POST-INSCRIPTION === */
-              <div style={{ background: '#fff', borderRadius: 20, padding: '48px 28px', boxShadow: '0 4px 24px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9', textAlign: 'center' }}>
+              <div style={{ background: COLORS.white, borderRadius: 20, padding: '48px 28px', boxShadow: '0 4px 24px rgba(0,0,0,0.05)', border: `1px solid ${COLORS.authBorder}`, textAlign: 'center' }}>
                 <div style={{
                   width: 80, height: 80, borderRadius: '50%',
                   background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
@@ -157,14 +158,14 @@ export default function RegisterPage() {
                   <MailOutlined style={{ fontSize: 36, color: SF.emeraldDark }} />
                 </div>
 
-                <Title level={3} style={{ color: '#111827', margin: '0 0 12px' }}>
-                  Vérifiez votre boîte mail !
+                <Title level={3} style={{ color: COLORS.authTitle, margin: '0 0 12px' }}>
+                  {t('auth.checkEmail')}
                 </Title>
 
                 <Text style={{ color: '#6b7280', fontSize: 15, lineHeight: 1.6, display: 'block', marginBottom: 8 }}>
                   Un email d'activation a été envoyé à :
                 </Text>
-                <Text strong style={{ color: '#2563eb', fontSize: 16, display: 'block', marginBottom: 24 }}>
+                <Text strong style={{ color: COLORS.authLink, fontSize: 16, display: 'block', marginBottom: 24 }}>
                   {registeredEmail}
                 </Text>
 
@@ -175,7 +176,7 @@ export default function RegisterPage() {
                   <Text strong style={{ color: '#92400e', fontSize: 14, display: 'block', marginBottom: 8 }}>
                     ⚠️ Étape obligatoire avant de vous connecter
                   </Text>
-                  <Text style={{ color: '#78350f', fontSize: 13, lineHeight: 1.6 }}>
+                  <Text style={{ color: COLORS.authWarning, fontSize: 13, lineHeight: 1.6 }}>
                     Ouvrez votre boîte mail et cliquez sur le lien d'activation.
                     Sans cette étape, vous ne pourrez pas vous connecter.
                   </Text>
@@ -208,10 +209,10 @@ export default function RegisterPage() {
                 </Button>
               </div>
             ) : (
-            <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', boxShadow: '0 4px 24px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' }}>
+            <div style={{ background: COLORS.white, borderRadius: 20, padding: '32px 28px', boxShadow: '0 4px 24px rgba(0,0,0,0.05)', border: `1px solid ${COLORS.authBorder}` }}>
               <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                <Title level={2} style={{ margin: '0 0 8px 0', fontSize: 26, color: '#111827' }}>Rejoignez le Hive</Title>
-                <Text style={{ color: '#9ca3af', fontSize: 14 }}>Entrez dans la Ruche en 2 minutes</Text>
+                <Title level={2} style={{ margin: '0 0 8px 0', fontSize: 26, color: COLORS.authTitle }}>{t('auth.joinHiveTitle')}</Title>
+                <Text style={{ color: COLORS.authMuted, fontSize: 14 }}>{t('auth.enterHive')}</Text>
               </div>
 
               {/* Sélection du type — cartes visuelles */}
@@ -235,7 +236,7 @@ export default function RegisterPage() {
                     <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, color: registrationType === card.value ? '#1d4ed8' : '#374151' }}>
                       {card.title}
                     </p>
-                    <p style={{ fontSize: 10, color: '#9ca3af', lineHeight: 1.3, margin: 0 }}>{card.desc}</p>
+                    <p style={{ fontSize: 10, color: COLORS.authMuted, lineHeight: 1.3, margin: 0 }}>{card.desc}</p>
                   </div>
                 ))}
               </div>
@@ -245,21 +246,21 @@ export default function RegisterPage() {
                 <div className="zhiive-reg-name-row">
                   <Form.Item
                     name="firstName"
-                    rules={[{ required: true, message: 'Requis' }]}
+                    rules={[{ required: true, message: t('auth.required') }]}
                   >
                     <Input
-                      prefix={<UserOutlined style={{ color: '#9ca3af' }} />}
-                      placeholder="Prénom"
+                      prefix={<UserOutlined style={{ color: COLORS.authMuted }} />}
+                      placeholder={t('auth.firstName')}
                       style={{ borderRadius: 12 }}
                     />
                   </Form.Item>
                   <Form.Item
                     name="lastName"
-                    rules={[{ required: true, message: 'Requis' }]}
+                    rules={[{ required: true, message: t('auth.required') }]}
                   >
                     <Input
-                      prefix={<UserOutlined style={{ color: '#9ca3af' }} />}
-                      placeholder="Nom"
+                      prefix={<UserOutlined style={{ color: COLORS.authMuted }} />}
+                      placeholder={t('auth.lastName')}
                       style={{ borderRadius: 12 }}
                     />
                   </Form.Item>
@@ -268,13 +269,13 @@ export default function RegisterPage() {
                 <Form.Item
                   name="email"
                   rules={[
-                    { required: true, message: "L'email est requis" },
-                    { type: 'email', message: "Format d'email invalide" }
+                    { required: true, message: t('auth.emailRequired') },
+                    { type: 'email', message: t('auth.invalidEmail') }
                   ]}
                 >
                   <Input
-                    prefix={<MailOutlined style={{ color: '#9ca3af' }} />}
-                    placeholder="votre@email.com"
+                    prefix={<MailOutlined style={{ color: COLORS.authMuted }} />}
+                    placeholder={t('auth.emailPlaceholder')}
                     style={{ borderRadius: 12 }}
                   />
                 </Form.Item>
@@ -282,17 +283,17 @@ export default function RegisterPage() {
                 <Form.Item
                   name="password"
                   rules={[
-                    { required: true, message: 'Le mot de passe est requis' },
-                    { min: 8, message: 'Minimum 8 caractères' },
+                    { required: true, message: t('auth.requiredPassword') },
+                    { min: 8, message: t('auth.minChars') },
                     {
                       pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/,
-                      message: '1 majuscule, 1 minuscule et 1 chiffre requis'
+                      message: t('auth.passwordRequirements')
                     }
                   ]}
                 >
                   <Input.Password
-                    prefix={<LockOutlined style={{ color: '#9ca3af' }} />}
-                    placeholder="Mot de passe"
+                    prefix={<LockOutlined style={{ color: COLORS.authMuted }} />}
+                    placeholder={t('auth.password')}
                     style={{ borderRadius: 12 }}
                   />
                 </Form.Item>
@@ -301,18 +302,18 @@ export default function RegisterPage() {
                   name="confirmPassword"
                   dependencies={['password']}
                   rules={[
-                    { required: true, message: 'Confirmez votre mot de passe' },
+                    { required: true, message: t('auth.confirmPassword') },
                     ({ getFieldValue }) => ({
                       validator(_, value) {
                         if (!value || getFieldValue('password') === value) return Promise.resolve();
-                        return Promise.reject(new Error('Les mots de passe ne correspondent pas'));
+                        return Promise.reject(new Error(t('auth.passwordMismatch')));
                       },
                     }),
                   ]}
                 >
                   <Input.Password
-                    prefix={<LockOutlined style={{ color: '#9ca3af' }} />}
-                    placeholder="Confirmez le mot de passe"
+                    prefix={<LockOutlined style={{ color: COLORS.authMuted }} />}
+                    placeholder={t('auth.confirmPassword')}
                     style={{ borderRadius: 12 }}
                   />
                 </Form.Item>
@@ -321,17 +322,17 @@ export default function RegisterPage() {
                 {registrationType === 'createOrg' && (
                   <div style={{ marginBottom: 16, padding: 16, background: '#f0fdf4', borderRadius: 12, border: '1px solid #bbf7d0' }}>
                     <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#166534' }}>
-                      <BankOutlined /> Votre Colony
+                      <BankOutlined /> {t('auth.yourColony')}
                     </p>
                     <Form.Item
                       name="organizationName"
-                      rules={[{ required: true, message: 'Nom requis' }]}
+                      rules={[{ required: true, message: t('auth.required') }]}
                       style={{ marginBottom: 12 }}
                     >
-                      <Input placeholder="Mon Entreprise SPRL" style={{ borderRadius: 12 }} />
+                      <Input placeholder={t('auth.orgNamePlaceholder')} style={{ borderRadius: 12 }} />
                     </Form.Item>
                     <Form.Item name="domain" style={{ marginBottom: 0 }}>
-                      <Input placeholder="mon-entreprise.be (optionnel)" style={{ borderRadius: 12 }} />
+                      <Input placeholder={t('auth.domainPlaceholder')} style={{ borderRadius: 12 }} />
                     </Form.Item>
                   </div>
                 )}
@@ -353,14 +354,14 @@ export default function RegisterPage() {
                     }}
                   >
                     {registrationType === 'createOrg'
-                      ? 'Fonder ma Colony'
-                      : 'Join the Hive'}
+                      ? t('auth.foundMyColony')
+                      : t('auth.joinTheHive')}
                   </Button>
                 </Form.Item>
               </Form>
 
               <Divider plain style={{ margin: '16px 0' }}>
-                <Text style={{ color: '#d1d5db', fontSize: 12 }}>Déjà un compte ?</Text>
+                <Text style={{ color: COLORS.authDivider, fontSize: 12 }}>{t('auth.alreadyAccount')}</Text>
               </Divider>
 
               <Button
@@ -372,7 +373,7 @@ export default function RegisterPage() {
                   borderRadius: 12,
                   height: 48,
                   border: '2px solid #dbeafe',
-                  color: '#2563eb',
+                  color: COLORS.authLink,
                   fontWeight: 600,
                 }}
               >

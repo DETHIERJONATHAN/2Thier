@@ -8,6 +8,7 @@ import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { randomBytes } from 'crypto';
 import { emailService } from '../services/EmailService';
+import { logger } from '../lib/logger';
 
 // Type pour les requêtes authentifiées
 interface AuthenticatedRequest extends Request {
@@ -103,7 +104,7 @@ router.get('/free', requireRole(['admin', 'super_admin']), async (req: Request, 
     
     res.json({ success: true, data: freeUsers });
   } catch (error) {
-    console.error('[USERS] Erreur récupération utilisateurs libres:', error);
+    logger.error('[USERS] Erreur récupération utilisateurs libres:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur serveur lors de la récupération des utilisateurs libres' 
@@ -174,7 +175,7 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
     res.json({ success: true, data: usersInOrg });
 
   } catch (error) {
-    console.error('[USERS] Erreur récupération utilisateurs:', error);
+    logger.error('[USERS] Erreur récupération utilisateurs:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur interne du serveur' 
@@ -208,7 +209,7 @@ router.get('/:userId/organizations', requireRole(['admin', 'super_admin']), asyn
     
     res.json({ success: true, data: userOrganizations });
   } catch (error) {
-    console.error(`[USERS] Erreur organisations utilisateur ${userId}:`, error);
+    logger.error(`[USERS] Erreur organisations utilisateur ${userId}:`, error);
     res.status(500).json({ 
       success: false, 
       message: "Erreur interne du serveur" 
@@ -261,7 +262,7 @@ router.post('/user-organizations', usersModifyRateLimit, requireRole(['admin', '
 
     res.status(201).json({ success: true, data: newUserOrganization });
   } catch (error) {
-    console.error('[USERS] Erreur assignation utilisateur:', error);
+    logger.error('[USERS] Erreur assignation utilisateur:', error);
     res.status(500).json({ 
       success: false, 
       message: "Erreur interne du serveur" 
@@ -321,7 +322,7 @@ router.patch('/user-organizations/:userOrganizationId', usersModifyRateLimit, re
         message: "Relation utilisateur-organisation introuvable"
       });
     }
-    console.error('[USERS] Erreur mise à jour utilisateur:', error);
+    logger.error('[USERS] Erreur mise à jour utilisateur:', error);
     res.status(500).json({ 
       success: false, 
       message: "Erreur interne du serveur" 
@@ -375,7 +376,7 @@ router.delete('/user-organizations/:userOrganizationId', usersModifyRateLimit, r
 
     res.json({ success: true, message: "Utilisateur retiré de l'organisation avec succès" });
   } catch (error) {
-    console.error('[USERS] Erreur suppression relation:', error);
+    logger.error('[USERS] Erreur suppression relation:', error);
     res.status(500).json({ 
       success: false, 
       message: "Erreur interne du serveur" 
@@ -403,7 +404,7 @@ router.patch('/:userId', usersModifyRateLimit, requireRole(['admin', 'super_admi
     // Validation des données
     const validationResult = userInfoSchema.safeParse(req.body);
     if (!validationResult.success) {
-      console.error('[USERS] Validation error:', validationResult.error.errors);
+      logger.error('[USERS] Validation error:', validationResult.error.errors);
       return res.status(400).json({
         success: false,
         message: 'Données invalides',
@@ -469,7 +470,7 @@ router.patch('/:userId', usersModifyRateLimit, requireRole(['admin', 'super_admi
     });
 
   } catch (error) {
-    console.error('[USERS] Erreur modification utilisateur:', error);
+    logger.error('[USERS] Erreur modification utilisateur:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur lors de la modification'
@@ -590,8 +591,8 @@ router.delete('/:userId', usersModifyRateLimit, requireRole(['admin', 'super_adm
       message: `Utilisateur ${userToDelete.email} supprimé avec succès` 
     });
 
-  } catch (error: any) {
-    console.error('[USERS] Erreur suppression utilisateur:', error);
+  } catch (error: unknown) {
+    logger.error('[USERS] Erreur suppression utilisateur:', error);
     // Message spécifique si FK constraint
     if (error?.code === 'P2003') {
       return res.status(400).json({ 
@@ -748,7 +749,7 @@ router.get('/:userId/rights-summary', requireRole(['admin', 'super_admin']), asy
     });
 
   } catch (error) {
-    console.error('[USERS] Erreur récupération résumé des droits:', error);
+    logger.error('[USERS] Erreur récupération résumé des droits:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur lors de la récupération du résumé des droits'
@@ -828,7 +829,7 @@ router.post('/me/current-organization', async (req: Request, res: Response) => {
     }
 
   } catch (error) {
-    console.error('[USERS] Erreur changement organisation:', error);
+    logger.error('[USERS] Erreur changement organisation:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors du changement d\'organisation'
@@ -897,7 +898,7 @@ router.post('/:userId/resend-verification', requireRole(['admin', 'super_admin']
     res.json({ success: true, message: `Email de confirmation renvoyé à ${user.email}` });
 
   } catch (error) {
-    console.error('[USERS] Erreur renvoi email vérification:', error);
+    logger.error('[USERS] Erreur renvoi email vérification:', error);
     res.status(500).json({ success: false, message: "Erreur lors de l'envoi de l'email de vérification" });
   }
 });
@@ -933,7 +934,7 @@ router.patch('/:userId/global-status', requireRole(['admin', 'super_admin']), as
     res.json({ success: true, message: `Statut Zhiive mis à jour: ${parsed.data.status}` });
 
   } catch (error) {
-    console.error('[USERS] Erreur changement statut global:', error);
+    logger.error('[USERS] Erreur changement statut global:', error);
     res.status(500).json({ success: false, message: 'Erreur lors du changement de statut global' });
   }
 });

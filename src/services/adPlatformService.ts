@@ -49,11 +49,11 @@ export const AD_PLATFORMS: Record<string, AdPlatform> = {
     icon: 'GoogleOutlined',
     // URL de callback dynamique (évite le hardcode localhost dans le bundle)
     authUrl: ((): string => {
-      const env = (globalThis as any)?.process?.env || {};
+      const env = (globalThis as unknown)?.process?.env || {};
       const explicit = env.GOOGLE_ADS_REDIRECT || env.GOOGLE_REDIRECT_URI;
       if (explicit) return explicit;
       // Frontend build time variables (Vite)
-      const viteEnv: any = (import.meta as any)?.env || {};
+      const viteEnv: unknown = (import.meta as unknown)?.env || {};
       const frontendBase = viteEnv.VITE_API_BASE_URL || viteEnv.API_URL || '';
       if (frontendBase) return `${frontendBase.replace(/\/$/, '')}/api/google-auth/callback`;
       if (typeof window !== 'undefined') return `${window.location.origin}/api/google-auth/callback`;

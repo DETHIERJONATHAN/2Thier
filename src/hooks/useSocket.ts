@@ -16,13 +16,13 @@ interface UseSocketOptions {
 
 interface SocketEvents {
   // Incoming events
-  'new-message': (data: any) => void;
+  'new-message': (data: unknown) => void;
   'messages-status-update': (data: { conversationId: string; messageIds?: string[]; status: string; readBy?: string; timestamp: string }) => void;
   'user-typing': (data: { userId: string; conversationId: string; isTyping: boolean }) => void;
   'reaction-added': (data: { messageId: string; userId: string; emoji: string; userName: string }) => void;
   'reaction-removed': (data: { messageId: string; userId: string; emoji: string }) => void;
   'message-pinned': (data: { messageId: string; isPinned: boolean; pinnedBy: any }) => void;
-  'task-created': (data: { task: any; messageId: string }) => void;
+  'task-created': (data: { task: unknown; messageId: string }) => void;
   'task-updated': (data: { task: any }) => void;
   'members-added': (data: { conversationId: string; addedUserIds: string[]; addedBy: string }) => void;
   'member-removed': (data: { conversationId: string; removedUserId: string; removedBy: string }) => void;
@@ -92,7 +92,7 @@ export function useSocket({ token, enabled = true }: UseSocketOptions) {
     // Re-emit all registered listeners
     for (const [event, handlers] of listenersRef.current.entries()) {
       for (const handler of handlers) {
-        socket.on(event, handler as any);
+        socket.on(event, handler as unknown);
       }
     }
 
@@ -144,19 +144,19 @@ export function useSocket({ token, enabled = true }: UseSocketOptions) {
     listenersRef.current.get(event)!.add(handler);
 
     // Attach to current socket
-    socketRef.current?.on(event, handler as any);
+    socketRef.current?.on(event, handler as unknown);
 
     // Return cleanup function
     return () => {
       listenersRef.current.get(event)?.delete(handler);
-      socketRef.current?.off(event, handler as any);
+      socketRef.current?.off(event, handler as unknown);
     };
   }, []);
 
   // Remove listener
   const off = useCallback(<K extends keyof SocketEvents>(event: K, handler: SocketEvents[K]) => {
     listenersRef.current.get(event)?.delete(handler);
-    socketRef.current?.off(event, handler as any);
+    socketRef.current?.off(event, handler as unknown);
   }, []);
 
   return {

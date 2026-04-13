@@ -4,6 +4,7 @@ import { requireRole } from '../middlewares/requireRole';
 import { db } from '../lib/database';
 import { JoinRequestStatus, UserOrganizationStatus } from '@prisma/client';
 import { notify } from '../services/NotificationHelper';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -91,7 +92,7 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
     });
 
   } catch (error) {
-    console.error('[JoinRequest] Erreur création:', error);
+    logger.error('[JoinRequest] Erreur création:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
@@ -119,7 +120,7 @@ router.get('/my-requests', authMiddleware, async (req: AuthenticatedRequest, res
     res.json({ success: true, data: requests });
 
   } catch (error) {
-    console.error('[JoinRequest] Erreur récupération:', error);
+    logger.error('[JoinRequest] Erreur récupération:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
@@ -154,7 +155,7 @@ router.get('/pending', authMiddleware, requireRole(['admin', 'super_admin']), as
     res.json({ success: true, data: requests });
 
   } catch (error) {
-    console.error('[JoinRequest] Erreur liste pending:', error);
+    logger.error('[JoinRequest] Erreur liste pending:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
@@ -254,7 +255,7 @@ router.post('/:id/approve', authMiddleware, requireRole(['admin', 'super_admin']
     });
 
   } catch (error) {
-    console.error('[JoinRequest] Erreur approbation:', error);
+    logger.error('[JoinRequest] Erreur approbation:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
@@ -317,7 +318,7 @@ router.post('/:id/reject', authMiddleware, requireRole(['admin', 'super_admin'])
     });
 
   } catch (error) {
-    console.error('[JoinRequest] Erreur rejet:', error);
+    logger.error('[JoinRequest] Erreur rejet:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
@@ -357,7 +358,7 @@ router.delete('/:id', authMiddleware, async (req: AuthenticatedRequest, res: Res
     res.json({ success: true, message: 'Demande annulée' });
 
   } catch (error) {
-    console.error('[JoinRequest] Erreur suppression:', error);
+    logger.error('[JoinRequest] Erreur suppression:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });

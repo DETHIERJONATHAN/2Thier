@@ -79,12 +79,12 @@ function collectReferencedNodeIdsForTriggers(data: unknown, out: Set<string>) {
       if (id && isAcceptedNodeId(id)) out.add(id);
     }
 
-    const leftRef = (obj as any)?.left?.ref;
+    const leftRef = (obj as unknown)?.left?.ref;
     if (typeof leftRef === 'string') {
       const id = normalizeRefForTriggers(leftRef);
       if (id && isAcceptedNodeId(id)) out.add(id);
     }
-    const rightRef = (obj as any)?.right?.ref;
+    const rightRef = (obj as unknown)?.right?.ref;
     if (typeof rightRef === 'string') {
       const id = normalizeRefForTriggers(rightRef);
       if (id && isAcceptedNodeId(id)) out.add(id);
@@ -98,7 +98,7 @@ function collectReferencedNodeIdsForTriggers(data: unknown, out: Set<string>) {
       }
     }
 
-    const lookup = (obj as any).lookup as any;
+    const lookup = (obj as any).lookup as unknown;
     if (lookup?.selectors?.rowFieldId) {
       const id = String(lookup.selectors.rowFieldId);
       if (id && isAcceptedNodeId(id)) out.add(id);
@@ -132,7 +132,7 @@ function collectReferencedNodeIdsForTriggers(data: unknown, out: Set<string>) {
 }
 
 function deriveTriggerNodeIdsFromCapacity(capacity: unknown, ownerNodeId: string): string[] {
-  const c = capacity as any;
+  const c = capacity as unknown;
   const out = new Set<string>();
   // Formule: tokens; Table: meta; Condition: conditionSet
   collectReferencedNodeIdsForTriggers(c?.tokens, out);
@@ -166,7 +166,7 @@ async function deriveTriggerNodeIdsFromNodeId(nodeId: string): Promise<string[]>
   for (const c of conditions) collectReferencedNodeIdsForTriggers((c as any).conditionSet, out);
   for (const t of tables) collectReferencedNodeIdsForTriggers((t as any).meta, out);
   if (variable) collectReferencedNodeIdsForTriggers((variable as any).metadata, out);
-  if (selectConfig) collectReferencedNodeIdsForTriggers(selectConfig as any, out);
+  if (selectConfig) collectReferencedNodeIdsForTriggers(selectConfig as unknown, out);
 
   out.delete(nodeId);
   for (const id of Array.from(out)) {
@@ -2144,7 +2144,7 @@ const displayDeps = new Map<string, Set<string>>(); // nodeId → Set<dependsOn>
   }
 
   // 2. Indexer les variables pour preloadedVariable (évite de ré-fetcher la variable dans evaluateVariableOperation)
-  const preloadedVariablesMap = new Map<string, any>();
+  const preloadedVariablesMap = new Map<string, unknown>();
   for (const v of variablesRaw) {
     preloadedVariablesMap.set(v.nodeId, v);
   }
@@ -3634,7 +3634,7 @@ router.post('/submissions/preview-evaluate', async (req, res) => {
               : [];
             
             // Trouver l'option sélectionnée
-            const selectedOption = options.find((opt: any) => opt.value === value);
+            const selectedOption = options.find((opt: Record<string, unknown>) => opt.value === value);
             if (selectedOption?.sharedReferenceIds?.length) {
               // Identifier le type d'option (plan ou inclinaison)
               let optionType: string | null = null;
@@ -4109,7 +4109,7 @@ router.get('/tables/:tableId', async (req, res) => {
     
     
     // Extraire la configuration de lookup depuis meta
-    const meta = table.meta as any;
+    const meta = table.meta as unknown;
     const lookupConfig = meta?.lookup || {};
     
     // Extraire les données de la table (colonnes, lignes, data matrix)

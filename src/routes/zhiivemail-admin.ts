@@ -22,11 +22,12 @@ import { SF } from '../components/zhiive/ZhiiveTheme';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import { execSync } from 'child_process';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
 // ─── Middleware Super Admin ─────────────────────────────────
-function requireSuperAdmin(req: AuthenticatedRequest, res: any, next: any) {
+function requireSuperAdmin(req: AuthenticatedRequest, res: unknown, next: unknown) {
   if (!req.user?.isSuperAdmin) {
     return res.status(403).json({ error: 'Accès réservé aux Super Admins' });
   }
@@ -89,7 +90,7 @@ router.get('/status', authMiddleware, requireSuperAdmin, async (req: Authenticat
       mode: postalConfigured ? 'postal-api' : smtpConfigured ? 'smtp' : 'non-configuré',
     });
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] Erreur status:', error);
+    logger.error('❌ [ZHIIVEMAIL] Erreur status:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération du statut' });
   }
 });
@@ -152,7 +153,7 @@ router.post('/test-smtp', authMiddleware, requireSuperAdmin, async (req: Authent
       recipient,
     });
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] Test SMTP échoué:', error);
+    logger.error('❌ [ZHIIVEMAIL] Test SMTP échoué:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Erreur SMTP inconnue',
@@ -176,9 +177,9 @@ router.get('/accounts', authMiddleware, requireSuperAdmin, async (req: Authentic
     });
 
     // Map User → user for frontend compatibility
-    res.json(accounts.map((a: any) => ({ ...a, user: a.User, User: undefined })));
+    res.json(accounts.map((a: Record<string, unknown>) => ({ ...a, user: a.User, User: undefined })));
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] Erreur liste comptes:', error);
+    logger.error('❌ [ZHIIVEMAIL] Erreur liste comptes:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des comptes' });
   }
 });
@@ -234,12 +235,12 @@ router.post('/provision', authMiddleware, requireSuperAdmin, async (req: Authent
       const postal = getPostalService();
       await postal.createMailbox(zhiiveEmail, `${user.firstName || ''} ${user.lastName || ''}`.trim());
     } catch (postalErr) {
-      console.error(`⚠️ [ZHIIVEMAIL] Erreur provisionnement Postal (non bloquant):`, postalErr);
+      logger.error(`⚠️ [ZHIIVEMAIL] Erreur provisionnement Postal (non bloquant):`, postalErr);
     }
 
     res.json({ success: true, account: { ...account, user: (account as any).User, User: undefined } });
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] Erreur provisionnement:', error);
+    logger.error('❌ [ZHIIVEMAIL] Erreur provisionnement:', error);
     res.status(500).json({ error: 'Erreur lors du provisionnement' });
   }
 });
@@ -282,7 +283,7 @@ router.post('/provision-all', authMiddleware, requireSuperAdmin, async (req: Aut
           const postal = getPostalService();
           await postal.createMailbox(zhiiveEmail, `${user.firstName || ''} ${user.lastName || ''}`.trim());
         } catch (postalErr) {
-          console.error(`⚠️ [ZHIIVEMAIL] Erreur provisionnement Postal pour ${zhiiveEmail}:`, postalErr);
+          logger.error(`⚠️ [ZHIIVEMAIL] Erreur provisionnement Postal pour ${zhiiveEmail}:`, postalErr);
         }
         results.push({ userId: user.id, email: zhiiveEmail, status: 'created' });
         created++;
@@ -299,7 +300,7 @@ router.post('/provision-all', authMiddleware, requireSuperAdmin, async (req: Aut
       results,
     });
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] Erreur provisionnement masse:', error);
+    logger.error('❌ [ZHIIVEMAIL] Erreur provisionnement masse:', error);
     res.status(500).json({ error: 'Erreur lors du provisionnement en masse' });
   }
 });
@@ -315,7 +316,7 @@ router.delete('/accounts/:id', authMiddleware, requireSuperAdmin, async (req: Au
     await db.emailAccount.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] Erreur suppression:', error);
+    logger.error('❌ [ZHIIVEMAIL] Erreur suppression:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression' });
   }
 });
@@ -343,7 +344,7 @@ router.patch('/accounts/:id', authMiddleware, requireSuperAdmin, async (req: Aut
 
     res.json({ success: true, account: { ...updated, user: (updated as any).User, User: undefined } });
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] Erreur mise à jour:', error);
+    logger.error('❌ [ZHIIVEMAIL] Erreur mise à jour:', error);
     res.status(500).json({ error: 'Erreur lors de la mise à jour' });
   }
 });
@@ -478,7 +479,7 @@ router.get('/server-overview', authMiddleware, requireSuperAdmin, async (_req: A
       suppressions: suppressions[0]?.total ? parseInt(suppressions[0].total) : 0,
     });
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] server-overview error:', error);
+    logger.error('❌ [ZHIIVEMAIL] server-overview error:', error);
     res.status(500).json({ error: 'Erreur récupération état serveur' });
   }
 });
@@ -525,7 +526,7 @@ router.get('/postal-stats', authMiddleware, requireSuperAdmin, async (_req: Auth
       hourly,
     });
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] postal-stats error:', error);
+    logger.error('❌ [ZHIIVEMAIL] postal-stats error:', error);
     res.status(500).json({ error: 'Erreur récupération stats' });
   }
 });
@@ -556,7 +557,7 @@ router.get('/postal-messages', authMiddleware, requireSuperAdmin, async (req: Au
 
     res.json(messages);
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] postal-messages error:', error);
+    logger.error('❌ [ZHIIVEMAIL] postal-messages error:', error);
     res.status(500).json({ error: 'Erreur récupération messages' });
   }
 });
@@ -582,7 +583,7 @@ router.get('/postal-domains', authMiddleware, requireSuperAdmin, async (_req: Au
 
     res.json(domains);
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] postal-domains error:', error);
+    logger.error('❌ [ZHIIVEMAIL] postal-domains error:', error);
     res.status(500).json({ error: 'Erreur récupération domaines' });
   }
 });
@@ -604,7 +605,7 @@ router.get('/postal-credentials', authMiddleware, requireSuperAdmin, async (_req
 
     res.json(credentials);
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] postal-credentials error:', error);
+    logger.error('❌ [ZHIIVEMAIL] postal-credentials error:', error);
     res.status(500).json({ error: 'Erreur récupération credentials' });
   }
 });
@@ -620,7 +621,7 @@ router.get('/postal-routes', authMiddleware, requireSuperAdmin, async (_req: Aut
 
     res.json(routes);
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] postal-routes error:', error);
+    logger.error('❌ [ZHIIVEMAIL] postal-routes error:', error);
     res.status(500).json({ error: 'Erreur récupération routes' });
   }
 });
@@ -638,7 +639,7 @@ router.post('/clear-suppressions', authMiddleware, requireSuperAdmin, async (_re
 
     res.json({ success: true, remaining });
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] clear-suppressions error:', error);
+    logger.error('❌ [ZHIIVEMAIL] clear-suppressions error:', error);
     res.status(500).json({ error: 'Erreur suppression' });
   }
 });
@@ -660,7 +661,7 @@ router.post('/postal-restart', authMiddleware, requireSuperAdmin, async (_req: A
 
     res.json({ success: true, containers });
   } catch (error) {
-    console.error('❌ [ZHIIVEMAIL] restart error:', error);
+    logger.error('❌ [ZHIIVEMAIL] restart error:', error);
     res.status(500).json({ error: 'Erreur redémarrage' });
   }
 });

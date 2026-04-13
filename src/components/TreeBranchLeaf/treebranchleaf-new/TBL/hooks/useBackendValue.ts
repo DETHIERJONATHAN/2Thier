@@ -133,7 +133,7 @@ export const useBackendValue = (
       // on reset la valeur ET le lastValidValue ref pour empêcher la restauration
       if (detail?.clearDisplayFields === true) {
         // 🔒 Ne pas vider les champs protégés
-        const protectedIds = (detail as any)?.protectedNodeIds;
+        const protectedIds = (detail as unknown)?.protectedNodeIds;
         if (Array.isArray(protectedIds) && protectedIds.includes(nodeId)) {
           console.log(`🔒 [useBackendValue] Skip clear pour nœud protégé: nodeId=${nodeId}`);
           return;

@@ -5,6 +5,7 @@ import { requireRole } from '../middlewares/requireRole.js';
 import { type Prisma } from '@prisma/client';
 import rateLimit from 'express-rate-limit';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -146,7 +147,7 @@ router.get('/public/:slug', publicLandingRateLimit, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [LANDING-PAGES] Erreur affichage public:', error);
+    logger.error('❌ [LANDING-PAGES] Erreur affichage public:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de l\'affichage de la landing page' 
@@ -207,7 +208,7 @@ router.post('/public/:slug/track', publicLandingRateLimit, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [LANDING-PAGES] Erreur tracking:', error);
+    logger.error('❌ [LANDING-PAGES] Erreur tracking:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors du tracking' 
@@ -274,7 +275,7 @@ router.get('/admin/list', requireRole(['admin', 'super_admin']), async (req: Aut
     res.json({ success: true, data });
 
   } catch (error) {
-    console.error('❌ [LANDING-ADMIN] Erreur liste:', error);
+    logger.error('❌ [LANDING-ADMIN] Erreur liste:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération des landing pages' });
   }
 });
@@ -321,7 +322,7 @@ router.get('/', authMiddleware, adminLandingRateLimit, requireRole(['admin','sup
     );
     res.json({ success: true, data });
   } catch (error) {
-    console.error('❌ [LANDING] Erreur / (list):', error);
+    logger.error('❌ [LANDING] Erreur / (list):', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération des landing pages' });
   }
 });
@@ -344,7 +345,7 @@ router.get('/stats', authMiddleware, adminLandingRateLimit, requireRole(['admin'
     const avgConversionRate = totalViews > 0 ? Math.round((totalConversions / totalViews) * 100) : 0;
     res.json({ success: true, data: { totalPages, publishedPages, draftPages, totalViews, totalConversions, avgConversionRate } });
   } catch (error) {
-    console.error('❌ [LANDING] Erreur /stats:', error);
+    logger.error('❌ [LANDING] Erreur /stats:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération des statistiques' });
   }
 });
@@ -379,7 +380,7 @@ router.get('/stats/timeseries', authMiddleware, adminLandingRateLimit, requireRo
     const series = Array.from(byDay.entries()).map(([date, v]) => ({ date, views: v.views, conversions: v.conversions }));
     res.json({ success: true, data: { start: start.toISOString(), days, series } });
   } catch (error) {
-    console.error('❌ [LANDING] Erreur timeseries:', error);
+    logger.error('❌ [LANDING] Erreur timeseries:', error);
     res.status(500).json({ success: false, message: 'Erreur séries temporelles landing' });
   }
 });
@@ -408,7 +409,7 @@ router.post('/', authMiddleware, adminLandingRateLimit, requireRole(['admin','su
     });
     res.json({ success: true, data: { id: created.id } });
   } catch (error) {
-    console.error('❌ [LANDING] Erreur création:', error);
+    logger.error('❌ [LANDING] Erreur création:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la création' });
   }
 });
@@ -436,7 +437,7 @@ router.put('/:id', authMiddleware, adminLandingRateLimit, requireRole(['admin','
     });
     res.json({ success: true, data: { id: updated.id } });
   } catch (error) {
-    console.error('❌ [LANDING] Erreur mise à jour:', error);
+    logger.error('❌ [LANDING] Erreur mise à jour:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la mise à jour' });
   }
 });
@@ -452,7 +453,7 @@ router.delete('/:id', authMiddleware, adminLandingRateLimit, requireRole(['admin
     if (deleted.count === 0) return res.status(404).json({ success: false, message: 'Landing page non trouvée' });
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ [LANDING] Erreur suppression:', error);
+    logger.error('❌ [LANDING] Erreur suppression:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la suppression' });
   }
 });
@@ -472,7 +473,7 @@ router.patch('/:id/publish', authMiddleware, adminLandingRateLimit, requireRole(
     const updated = await prisma.treeBranchLeafTree.update({ where: { id }, data: { status: publish ? 'published' : 'draft', isPublic: !!publish } });
     res.json({ success: true, data: { id: updated.id, status: updated.status } });
   } catch (error) {
-    console.error('❌ [LANDING] Erreur publish:', error);
+    logger.error('❌ [LANDING] Erreur publish:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la publication' });
   }
 });
@@ -517,7 +518,7 @@ router.get('/admin/:id', requireRole(['admin', 'super_admin']), async (req: Auth
       }
     });
   } catch (error) {
-    console.error('❌ [LANDING-ADMIN] Erreur détail:', error);
+    logger.error('❌ [LANDING-ADMIN] Erreur détail:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération du détail' });
   }
 });
@@ -547,7 +548,7 @@ router.post('/:id/duplicate', authMiddleware, adminLandingRateLimit, requireRole
     });
     res.json({ success: true, data: { id: copy.id } });
   } catch (error) {
-    console.error('❌ [LANDING] Erreur duplication:', error);
+    logger.error('❌ [LANDING] Erreur duplication:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la duplication' });
   }
 });
@@ -580,7 +581,7 @@ router.post('/:id/snapshot', authMiddleware, adminLandingRateLimit, requireRole(
     const updated = await prisma.treeBranchLeafTree.update({ where: { id }, data: { settings: updatedSettings } });
     res.json({ success: true, data: { id: updated.id, snapshotId } });
   } catch (error) {
-    console.error('❌ [LANDING] Erreur snapshot:', error);
+    logger.error('❌ [LANDING] Erreur snapshot:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la création du snapshot' });
   }
 });
@@ -605,7 +606,7 @@ router.get('/:id/versions', authMiddleware, adminLandingRateLimit, requireRole([
       }))
     });
   } catch (error) {
-    console.error('❌ [LANDING] Erreur versions:', error);
+    logger.error('❌ [LANDING] Erreur versions:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération des versions' });
   }
 });
@@ -635,7 +636,7 @@ router.post('/:id/restore', authMiddleware, adminLandingRateLimit, requireRole([
     });
     res.json({ success: true, data: { id: updated.id } });
   } catch (error) {
-    console.error('❌ [LANDING] Erreur restore:', error);
+    logger.error('❌ [LANDING] Erreur restore:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la restauration' });
   }
 });

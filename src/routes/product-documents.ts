@@ -25,8 +25,11 @@ import { db } from '../lib/database';
 import path from 'path';
 import fs from 'fs';
 import { uploadFile } from '../lib/storage';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
+router.use(authenticateToken);
 
 // ─── Helpers ────────────────────────────────────────────────
 
@@ -104,8 +107,8 @@ router.get('/fields', async (_req: Request, res: Response) => {
     })).sort((a, b) => a.label.localeCompare(b.label));
 
     res.json({ fields });
-  } catch (error: any) {
-    console.error('[ProductDocuments] ❌ Erreur liste champs:', error);
+  } catch (error: unknown) {
+    logger.error('[ProductDocuments] ❌ Erreur liste champs:', error);
     res.status(500).json({ error: 'Erreur liste des champs' });
   }
 });
@@ -162,7 +165,7 @@ router.get('/fields/:id/options', async (req: Request, res: Response) => {
       const firstColumnName = lookupTable.tableColumns[0]?.name || 'Nom';
 
       const options = dataRows.map(row => {
-        const cells = row.cells as any[];
+        const cells = row.cells as unknown[];
         return {
           id: row.id,
           label: cells[0]?.toString() || `Ligne ${row.rowIndex}`,
@@ -182,8 +185,8 @@ router.get('/fields/:id/options', async (req: Request, res: Response) => {
 
     // Aucune option trouvée
     res.json({ options: [], source: 'none', parentNodeId: id });
-  } catch (error: any) {
-    console.error('[ProductDocuments] ❌ Erreur options:', error);
+  } catch (error: unknown) {
+    logger.error('[ProductDocuments] ❌ Erreur options:', error);
     res.status(500).json({ error: 'Erreur chargement options' });
   }
 });
@@ -226,8 +229,8 @@ router.get('/provider', async (req: Request, res: Response) => {
       hasGoogleDrive: !!googleToken,
       mailProvider: emailAccount?.mailProvider || 'none'
     });
-  } catch (error: any) {
-    console.error('[ProductDocuments] ❌ Erreur détection provider:', error);
+  } catch (error: unknown) {
+    logger.error('[ProductDocuments] ❌ Erreur détection provider:', error);
     res.status(500).json({ error: 'Erreur détection du provider de stockage' });
   }
 });
@@ -253,8 +256,8 @@ router.get('/node/:nodeId', async (req: Request, res: Response) => {
     });
 
     res.json({ documents });
-  } catch (error: any) {
-    console.error('[ProductDocuments] ❌ Erreur récupération documents:', error);
+  } catch (error: unknown) {
+    logger.error('[ProductDocuments] ❌ Erreur récupération documents:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des documents' });
   }
 });
@@ -266,7 +269,7 @@ router.get('/search', async (req: Request, res: Response) => {
     const organizationId = getOrgId(req);
     const { q, category, page = '1', limit = '20' } = req.query;
 
-    const where: any = { organizationId };
+    const where: unknown = { organizationId };
 
     if (q) {
       where.OR = [
@@ -309,8 +312,8 @@ router.get('/search', async (req: Request, res: Response) => {
         totalPages: Math.ceil(total / take)
       }
     });
-  } catch (error: any) {
-    console.error('[ProductDocuments] ❌ Erreur recherche:', error);
+  } catch (error: unknown) {
+    logger.error('[ProductDocuments] ❌ Erreur recherche:', error);
     res.status(500).json({ error: 'Erreur lors de la recherche' });
   }
 });
@@ -339,8 +342,8 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
 
     res.json({ document });
-  } catch (error: any) {
-    console.error('[ProductDocuments] ❌ Erreur détail document:', error);
+  } catch (error: unknown) {
+    logger.error('[ProductDocuments] ❌ Erreur détail document:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération du document' });
   }
 });
@@ -448,8 +451,8 @@ router.post('/upload', async (req: Request, res: Response) => {
           driveUrl = shareResult.webViewLink || driveUrl;
         } catch {
         }
-      } catch (error: any) {
-        console.error('[ProductDocuments] ❌ Erreur upload Google Drive:', error);
+      } catch (error: unknown) {
+        logger.error('[ProductDocuments] ❌ Erreur upload Google Drive:', error);
         return res.status(500).json({
           error: 'Erreur lors de l\'upload vers Google Drive',
           details: error.message
@@ -512,7 +515,7 @@ router.post('/upload', async (req: Request, res: Response) => {
       });
 
       for (const row of rows) {
-        const cells = row.cells as any[];
+        const cells = row.cells as unknown[];
         const rowLabel = cells[0]?.toString() || `Ligne ${row.rowIndex}`;
         const document = await db.productDocument.create({
           data: {
@@ -537,8 +540,8 @@ router.post('/upload', async (req: Request, res: Response) => {
 
 
     res.status(201).json({ document: documents[0], documents, count: documents.length });
-  } catch (error: any) {
-    console.error('[ProductDocuments] ❌ Erreur upload:', error?.message);
+  } catch (error: unknown) {
+    logger.error('[ProductDocuments] ❌ Erreur upload:', error?.message);
     res.status(500).json({ error: 'Erreur lors de l\'upload du document' });
   }
 });
@@ -625,7 +628,7 @@ router.post('/upload-url', async (req: Request, res: Response) => {
         select: { id: true, cells: true, rowIndex: true }
       });
       for (const row of rows) {
-        const cells = row.cells as any[];
+        const cells = row.cells as unknown[];
         const rowLabel = cells[0]?.toString() || `Ligne ${row.rowIndex}`;
         const document = await db.productDocument.create({
           data: {
@@ -649,8 +652,8 @@ router.post('/upload-url', async (req: Request, res: Response) => {
     }
 
     res.status(201).json({ document: documents[0], documents, count: documents.length });
-  } catch (error: any) {
-    console.error('[ProductDocuments] ❌ Erreur upload URL:', error);
+  } catch (error: unknown) {
+    logger.error('[ProductDocuments] ❌ Erreur upload URL:', error);
     res.status(500).json({ error: 'Erreur lors de l\'ajout du document' });
   }
 });
@@ -690,8 +693,8 @@ router.get('/:id/download', async (req: Request, res: Response) => {
     }
 
     res.status(404).json({ error: 'Aucun fichier disponible pour le téléchargement' });
-  } catch (error: any) {
-    console.error('[ProductDocuments] ❌ Erreur téléchargement:', error);
+  } catch (error: unknown) {
+    logger.error('[ProductDocuments] ❌ Erreur téléchargement:', error);
     res.status(500).json({ error: 'Erreur lors du téléchargement' });
   }
 });
@@ -703,7 +706,7 @@ router.get('/nodes/with-documents', async (req: Request, res: Response) => {
     const organizationId = getOrgId(req);
     const { fieldId } = req.query;
 
-    const where: any = { organizationId };
+    const where: unknown = { organizationId };
     if (fieldId) {
       where.node = { fieldId: fieldId as string };
     }
@@ -727,8 +730,8 @@ router.get('/nodes/with-documents', async (req: Request, res: Response) => {
     }));
 
     res.json({ nodesWithDocuments: result });
-  } catch (error: any) {
-    console.error('[ProductDocuments] ❌ Erreur:', error);
+  } catch (error: unknown) {
+    logger.error('[ProductDocuments] ❌ Erreur:', error);
     res.status(500).json({ error: 'Erreur' });
   }
 });
@@ -756,7 +759,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
         const driveService = GoogleDriveService.getInstance();
         await driveService.deleteFile(organizationId, document.driveFileId, user.id);
       } catch (error) {
-        console.warn('[ProductDocuments] ⚠️ Impossible de supprimer le fichier Drive:', error);
+        logger.warn('[ProductDocuments] ⚠️ Impossible de supprimer le fichier Drive:', error);
       }
     } else if (document.localPath) {
       const fullPath = path.join(process.cwd(), 'public', document.localPath);
@@ -769,8 +772,8 @@ router.delete('/:id', async (req: Request, res: Response) => {
     await db.productDocument.delete({ where: { id } });
 
     res.json({ success: true });
-  } catch (error: any) {
-    console.error('[ProductDocuments] ❌ Erreur suppression:', error);
+  } catch (error: unknown) {
+    logger.error('[ProductDocuments] ❌ Erreur suppression:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression' });
   }
 });
@@ -812,8 +815,8 @@ router.post('/for-devis', async (req: Request, res: Response) => {
     }
 
     res.json({ documents, grouped });
-  } catch (error: any) {
-    console.error('[ProductDocuments] ❌ Erreur for-devis:', error);
+  } catch (error: unknown) {
+    logger.error('[ProductDocuments] ❌ Erreur for-devis:', error);
     res.status(500).json({ error: 'Erreur récupération documents devis' });
   }
 });

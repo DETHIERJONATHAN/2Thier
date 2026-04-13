@@ -158,7 +158,7 @@ const RolesSettings: React.FC = () => {
     if (!orgId) return;
     setLoading(true);
     try {
-      const res: any = await api.get(`/api/roles?organizationId=${orgId}`);
+      const res: unknown = await api.get(`/api/roles?organizationId=${orgId}`);
       setRoles(Array.isArray(res) ? res : res?.data || res?.roles || []);
     } catch { message.error('Erreur lors du chargement des rôles.'); }
     finally { setLoading(false); }
@@ -188,7 +188,7 @@ const RolesSettings: React.FC = () => {
       }
       setFormModal(false);
       fetchRoles();
-    } catch (err: any) { message.error(err?.message || 'Erreur lors de la sauvegarde.'); }
+    } catch (err: unknown) { message.error(err?.message || 'Erreur lors de la sauvegarde.'); }
     finally { setSaving(false); }
   };
 
@@ -206,7 +206,7 @@ const RolesSettings: React.FC = () => {
     setPermLoading(true);
     setExpandedModules(new Set());
     try {
-      const [modsRes, permsRes]: any[] = await Promise.all([
+      const [modsRes, permsRes]: unknown[] = await Promise.all([
         api.get(`/api/modules?organizationId=${orgId}`),
         api.get(`/api/permissions?roleId=${role.id}&organizationId=${orgId}`),
       ]);
@@ -222,12 +222,12 @@ const RolesSettings: React.FC = () => {
   };
 
   const isPermAllowed = (moduleId: string, action: string) =>
-    permissions.some((p: any) => p.moduleId === moduleId && p.action === action && p.allowed);
+    permissions.some((p: Record<string, unknown>) => p.moduleId === moduleId && p.action === action && p.allowed);
 
   const togglePerm = (moduleId: string, action: string) => {
     setPermissions(prev => {
-      const existing = prev.find((p: any) => p.moduleId === moduleId && p.action === action);
-      if (existing) return prev.map((p: any) => p.moduleId === moduleId && p.action === action ? { ...p, allowed: !p.allowed } : p);
+      const existing = prev.find((p: Record<string, unknown>) => p.moduleId === moduleId && p.action === action);
+      if (existing) return prev.map((p: Record<string, unknown>) => p.moduleId === moduleId && p.action === action ? { ...p, allowed: !p.allowed } : p);
       return [...prev, { moduleId, action, allowed: true }];
     });
   };
@@ -238,7 +238,7 @@ const RolesSettings: React.FC = () => {
     try {
       await api.post('/api/permissions/bulk', {
         roleId: permRole.id, organizationId: orgId,
-        permissions: permissions.map((p: any) => ({ moduleId: p.moduleId, action: p.action, allowed: p.allowed })),
+        permissions: permissions.map((p: Record<string, unknown>) => ({ moduleId: p.moduleId, action: p.action, allowed: p.allowed })),
       });
       message.success('Permissions sauvegardées');
       setPermRole(null);

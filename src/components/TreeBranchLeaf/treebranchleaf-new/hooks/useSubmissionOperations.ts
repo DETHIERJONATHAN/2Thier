@@ -38,7 +38,7 @@ export function useSubmissionOperations(submissionId?: string | null, refreshTri
         setError(null);
         const res = await api.get<OperationsResponse>(`/api/treebranchleaf/submissions/${submissionId}/operations`);
         if (!cancelled) setData(res.items);
-      } catch (e: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      } catch (e: unknown) { // eslint-disable-line @typescript-eslint/no-explicit-any
         if (!cancelled) setError(e?.message || 'Erreur lors du chargement des opérations');
       } finally {
         if (!cancelled) setLoading(false);

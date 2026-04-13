@@ -10,8 +10,8 @@ export interface ModuleCategory {
   active: boolean;
   organizationId?: string;
   superAdminOnly: boolean;
-  allowedRoles?: any;
-  requiredPermissions?: any;
+  allowedRoles?: unknown;
+  requiredPermissions?: unknown;
   createdAt: string;
   updatedAt: string;
 }
@@ -37,8 +37,8 @@ export interface ModuleWithStatus {
   categoryName?: string;
   // Relations Prisma
   Category?: ModuleCategory;
-  OrganizationModuleStatus?: any[];
-  Permission?: any[];
+  OrganizationModuleStatus?: unknown[];
+  Permission?: unknown[];
 }
 
 export interface SectionWithModules {

@@ -18,7 +18,7 @@ interface TextStyleObject {
   fontSize?: string;
   fontWeight?: string;
   textAlign?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface RenderTextProps {

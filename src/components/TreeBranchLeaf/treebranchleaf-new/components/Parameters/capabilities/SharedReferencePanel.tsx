@@ -287,7 +287,7 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
       // Recharger la liste
       await loadAvailableReferences();
       console.log('🔄 [SharedRef] Liste rechargée après suppression');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ [SharedRef] Erreur suppression:', error);
       if (error.response?.data?.message) {
         message.error(error.response.data.message);

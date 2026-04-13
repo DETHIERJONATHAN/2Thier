@@ -3,6 +3,7 @@ import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { db } from '../lib/database';
 import { requireRole } from '../middlewares/requireRole';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 const router = Router();
@@ -15,7 +16,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     const { category, search } = req.query;
     
 
-    let whereClause: any = {
+    let whereClause: unknown = {
       active: true // Seulement les icônes actives
     };
 
@@ -61,8 +62,8 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       }
     });
 
-  } catch (error: any) {
-    console.error('[ICONS-API] Erreur lors de la récupération des icônes:', error);
+  } catch (error: unknown) {
+    logger.error('[ICONS-API] Erreur lors de la récupération des icônes:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la récupération des icônes',
@@ -90,8 +91,8 @@ router.get('/categories', async (req: Request, res: Response): Promise<void> => 
       }))
     });
 
-  } catch (error: any) {
-    console.error('[ICONS-API] Erreur lors de la récupération des catégories:', error);
+  } catch (error: unknown) {
+    logger.error('[ICONS-API] Erreur lors de la récupération des catégories:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la récupération des catégories',
@@ -130,8 +131,8 @@ router.post('/', requireRole(['super_admin']) as unknown as RequestHandler, asyn
       message: `Icône "${name}" créée avec succès`
     });
 
-  } catch (error: any) {
-    console.error('[ICONS-API] Erreur lors de la création de l\'icône:', error);
+  } catch (error: unknown) {
+    logger.error('[ICONS-API] Erreur lors de la création de l\'icône:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la création de l\'icône',
@@ -163,8 +164,8 @@ router.put('/:id', requireRole(['super_admin']) as unknown as RequestHandler, as
       message: `Icône mise à jour avec succès`
     });
 
-  } catch (error: any) {
-    console.error('[ICONS-API] Erreur lors de la modification de l\'icône:', error);
+  } catch (error: unknown) {
+    logger.error('[ICONS-API] Erreur lors de la modification de l\'icône:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la modification de l\'icône',
@@ -191,8 +192,8 @@ router.delete('/:id', requireRole(['super_admin']) as unknown as RequestHandler,
       message: `Icône désactivée avec succès`
     });
 
-  } catch (error: any) {
-    console.error('[ICONS-API] Erreur lors de la désactivation de l\'icône:', error);
+  } catch (error: unknown) {
+    logger.error('[ICONS-API] Erreur lors de la désactivation de l\'icône:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la désactivation de l\'icône',

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../lib/database';
 import { authMiddleware, requireSuperAdmin } from '../middlewares/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -44,7 +45,7 @@ router.get('/trees', requireSuperAdmin, async (req, res) => {
 
     res.json(trees);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error fetching trees:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error fetching trees:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des arbres' });
   }
 });
@@ -81,7 +82,7 @@ router.post('/trees', requireSuperAdmin, async (req, res) => {
 
     res.status(201).json(tree);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error creating tree:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error creating tree:', error);
     res.status(500).json({ error: 'Erreur lors de la création de l\'arbre' });
   }
 });
@@ -144,7 +145,7 @@ router.get('/trees/:treeId', async (req, res) => {
 
     res.json(tree);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error fetching tree:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error fetching tree:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération de l\'arbre' });
   }
 });
@@ -177,7 +178,7 @@ router.put('/trees/:treeId', requireSuperAdmin, async (req, res) => {
 
     res.json({ message: 'Arbre mis à jour avec succès' });
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error updating tree:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error updating tree:', error);
     res.status(500).json({ error: 'Erreur lors de la mise à jour de l\'arbre' });
   }
 });
@@ -197,7 +198,7 @@ router.delete('/trees/:treeId', requireSuperAdmin, async (req, res) => {
 
     res.json({ message: 'Arbre supprimé avec succès' });
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error deleting tree:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error deleting tree:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression de l\'arbre' });
   }
 });
@@ -264,7 +265,7 @@ router.post('/trees/:treeId/nodes', requireSuperAdmin, async (req, res) => {
 
     res.status(201).json(node);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error creating node:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error creating node:', error);
     res.status(500).json({ error: 'Erreur lors de la création du nœud' });
   }
 });
@@ -307,7 +308,7 @@ router.put('/nodes/:nodeId', requireSuperAdmin, async (req, res) => {
 
     res.json(updatedNode);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error updating node:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error updating node:', error);
     res.status(500).json({ error: 'Erreur lors de la mise à jour du nœud' });
   }
 });
@@ -338,7 +339,7 @@ router.delete('/nodes/:nodeId', requireSuperAdmin, async (req, res) => {
 
     res.json({ message: 'Nœud supprimé avec succès' });
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error deleting node:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error deleting node:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du nœud' });
   }
 });
@@ -366,7 +367,7 @@ router.get('/markers', requireSuperAdmin, async (req, res) => {
 
     res.json(markers);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error fetching markers:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error fetching markers:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des marqueurs' });
   }
 });
@@ -392,7 +393,7 @@ router.post('/markers', requireSuperAdmin, async (req, res) => {
 
     res.status(201).json(marker);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error creating marker:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error creating marker:', error);
     res.status(500).json({ error: 'Erreur lors de la création du marqueur' });
   }
 });
@@ -419,7 +420,7 @@ router.get('/trees/:treeId/tables', requireSuperAdmin, async (req, res) => {
 
     res.json(tables);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error fetching table data:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error fetching table data:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des données de tableaux' });
   }
 });
@@ -454,7 +455,7 @@ router.post('/trees/:treeId/tables', requireSuperAdmin, async (req, res) => {
 
     res.status(201).json(tableData);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error creating table data:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error creating table data:', error);
     res.status(500).json({ error: 'Erreur lors de la création des données de tableau' });
   }
 });
@@ -481,7 +482,7 @@ router.get('/trees/:treeId/api-connections', requireSuperAdmin, async (req, res)
 
     res.json(connections);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error fetching API connections:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error fetching API connections:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des connexions API' });
   }
 });
@@ -529,7 +530,7 @@ router.post('/trees/:treeId/api-connections', requireSuperAdmin, async (req, res
 
     res.status(201).json(connection);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error creating API connection:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error creating API connection:', error);
     res.status(500).json({ error: 'Erreur lors de la création de la connexion API' });
   }
 });
@@ -587,7 +588,7 @@ router.get('/trees/:treeId/submissions', requireSuperAdmin, async (req, res) => 
 
     res.json(submissions);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error fetching submissions:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error fetching submissions:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des soumissions' });
   }
 });
@@ -637,7 +638,7 @@ router.post('/trees/:treeId/submissions', async (req, res) => {
 
     res.status(201).json(submission);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error creating submission:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error creating submission:', error);
     res.status(500).json({ error: 'Erreur lors de la création de la soumission' });
   }
 });
@@ -696,7 +697,7 @@ router.put('/submissions/:submissionId', async (req, res) => {
 
     res.json(updatedSubmission);
   } catch (error) {
-    console.error('[TREEBRANCHLEAF_API_V2] Error updating submission:', error);
+    logger.error('[TREEBRANCHLEAF_API_V2] Error updating submission:', error);
     res.status(500).json({ error: 'Erreur lors de la mise à jour de la soumission' });
   }
 });

@@ -28,7 +28,7 @@ export interface TelnyxEligibility {
 }
 
 interface UseTelnyxCallOptions {
-  _api?: any;
+  _api?: unknown;
   eligibility: TelnyxEligibility | null;
   onCallStarted?: (callId: string) => void;
   onCallEnded?: (duration: number) => void;
@@ -166,14 +166,14 @@ export function useTelnyxCall({
         setErrorMessage(null);
       });
 
-      client.on('telnyx.error', (error: any) => {
+      client.on('telnyx.error', (error: unknown) => {
         console.error('[TELNYX-RTC] ❌ Error:', JSON.stringify(error, null, 2));
         const msg = error?.message || error?.error?.message || (typeof error === 'string' ? error : 'Erreur de connexion Telnyx');
         setErrorMessage(msg);
         setIsRegistered(false);
       });
 
-      client.on('telnyx.socket.error', (error: any) => {
+      client.on('telnyx.socket.error', (error: unknown) => {
         console.error('[TELNYX-RTC] ❌ Socket error:', error);
         setErrorMessage('Connexion WebSocket perdue');
         setIsRegistered(false);
@@ -184,7 +184,7 @@ export function useTelnyxCall({
         setIsRegistered(false);
       });
 
-      client.on('telnyx.notification', (notification: any) => {
+      client.on('telnyx.notification', (notification: unknown) => {
         const call = notification.call;
         if (!call) return;
 
@@ -219,7 +219,7 @@ export function useTelnyxCall({
       });
 
       // Handle incoming calls
-      client.on('telnyx.notification', (notification: any) => {
+      client.on('telnyx.notification', (notification: unknown) => {
         if (notification.type === 'callUpdate' && notification.call?.direction === 'inbound') {
           const call = notification.call;
           if (call.state === 'ringing') {
@@ -237,7 +237,7 @@ export function useTelnyxCall({
 
       client.connect();
       clientRef.current = client;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[TELNYX-RTC] Failed to init:', err);
       setErrorMessage(err?.message || 'Erreur d\'initialisation Telnyx');
     }
@@ -286,7 +286,7 @@ export function useTelnyxCall({
 
       currentCallRef.current = call;
       onCallStarted?.(call.id || destination);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[TELNYX-RTC] Call error:', err);
       setErrorMessage(err?.message || 'Erreur lors de l\'appel');
       setCallState('error');
@@ -299,7 +299,7 @@ export function useTelnyxCall({
     stopRingtone();
     try {
       currentCallRef.current.answer();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[TELNYX-RTC] Answer error:', err);
       setErrorMessage(err?.message || 'Erreur en décrochant');
     }

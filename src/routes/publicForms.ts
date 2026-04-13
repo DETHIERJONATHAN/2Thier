@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
 import { prisma } from '../lib/prisma.js';
+import { logger } from '../lib/logger';
 
 // 🔍 DEBUG: Vérifier que prisma est bien importé
 
@@ -295,7 +296,7 @@ const listFormsHandler = async (req: AuthenticatedRequest, res: Response) => {
 
     res.json(forms.map(mapFormToResponse));
   } catch (error) {
-  console.error('[PUBLIC-FORMS] Liste impossible:', error);
+  logger.error('[PUBLIC-FORMS] Liste impossible:', error);
   res.status(500).json({ success: false, message: 'Erreur lors de la recuperation des formulaires' });
   }
 };
@@ -349,7 +350,7 @@ const statsHandler = async (req: AuthenticatedRequest, res: Response) => {
       topPerformingForm: topForm?.name ?? ''
     });
   } catch (error) {
-    console.error('[PUBLIC-FORMS] Statistiques impossibles:', error);
+    logger.error('[PUBLIC-FORMS] Statistiques impossibles:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la recuperation des statistiques' });
   }
 };
@@ -380,7 +381,7 @@ const submissionsHandler = async (req: AuthenticatedRequest, res: Response) => {
 
     res.json(submissions.map(mapSubmissionToResponse));
   } catch (error) {
-    console.error('[PUBLIC-FORMS] Soumissions impossibles:', error);
+    logger.error('[PUBLIC-FORMS] Soumissions impossibles:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la recuperation des soumissions' });
   }
 };
@@ -429,7 +430,7 @@ const createFormHandler = async (req: AuthenticatedRequest, res: Response) => {
 
     res.status(201).json(mapFormToResponse(created));
   } catch (error) {
-    console.error('[PUBLIC-FORMS] Creation impossible:', error);
+    logger.error('[PUBLIC-FORMS] Creation impossible:', error);
     
     // Erreur de contrainte unique (ne devrait plus arriver avec la nouvelle logique)
     if (error instanceof Error && 'code' in error && error.code === 'P2002') {
@@ -501,7 +502,7 @@ const updateFormHandler = async (req: AuthenticatedRequest, res: Response) => {
 
     res.json(mapFormToResponse(updated));
   } catch (error) {
-    console.error('[PUBLIC-FORMS] Mise à jour impossible:', error);
+    logger.error('[PUBLIC-FORMS] Mise à jour impossible:', error);
     
     // Erreur de contrainte unique lors de la modification du slug
     if (error instanceof Error && 'code' in error && error.code === 'P2002') {
@@ -547,7 +548,7 @@ const toggleFormHandler = async (req: AuthenticatedRequest, res: Response) => {
 
     res.json(mapFormToResponse(updated));
   } catch (error) {
-    console.error('[PUBLIC-FORMS] Toggle impossible:', error);
+    logger.error('[PUBLIC-FORMS] Toggle impossible:', error);
     res.status(500).json({ success: false, message: 'Erreur lors du changement de statut du formulaire' });
   }
 };
@@ -584,7 +585,7 @@ const deleteFormHandler = async (req: AuthenticatedRequest, res: Response) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('[PUBLIC-FORMS] Suppression impossible:', error);
+    logger.error('[PUBLIC-FORMS] Suppression impossible:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la suppression du formulaire' });
   }
 };
@@ -634,7 +635,7 @@ router.get(
 
       res.json(form);
     } catch (error) {
-      console.error('[PUBLIC-FORMS] Erreur récupération formulaire:', error);
+      logger.error('[PUBLIC-FORMS] Erreur récupération formulaire:', error);
       res.status(500).json({ success: false, message: 'Erreur lors de la récupération du formulaire' });
     }
   }
@@ -733,7 +734,7 @@ router.get('/my-commercial-links', authMiddleware, async (req: AuthenticatedRequ
       forms
     });
   } catch (error) {
-    console.error('[PUBLIC-FORMS] Erreur récupération liens commerciaux:', error);
+    logger.error('[PUBLIC-FORMS] Erreur récupération liens commerciaux:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération' });
   }
 });
@@ -774,7 +775,7 @@ router.get('/public/:identifier/config', async (req, res) => {
       }
     });
   } catch (error) {
-  console.error('[PUBLIC-FORMS] Config publique impossible:', error);
+  logger.error('[PUBLIC-FORMS] Config publique impossible:', error);
   res.status(500).json({ success: false, message: 'Erreur lors de la recuperation de la configuration du formulaire' });
   }
 });
@@ -908,11 +909,11 @@ router.post('/submit', submissionRateLimit, async (req, res) => {
             leadData.assignedUserId = referrer.id;
             leadData.notes = `Lead créé depuis le formulaire "${form.name}" via le lien de ${referrer.firstName} ${referrer.lastName}`;
           } else {
-            console.warn(`⚠️ [PUBLIC-FORMS] Utilisateur référent introuvable pour le slug: ${referredBy}`);
+            logger.warn(`⚠️ [PUBLIC-FORMS] Utilisateur référent introuvable pour le slug: ${referredBy}`);
           }
         }
 
-        const lead = await prisma.lead.create({ data: leadData as any });
+        const lead = await prisma.lead.create({ data: leadData as unknown });
 
         // Mettre à jour la soumission avec le leadId
         await prisma.publicFormSubmission.update({
@@ -921,7 +922,7 @@ router.post('/submit', submissionRateLimit, async (req, res) => {
         });
 
       } catch (leadError) {
-        console.error('[PUBLIC-FORMS] Erreur lors de la création du lead:', leadError);
+        logger.error('[PUBLIC-FORMS] Erreur lors de la création du lead:', leadError);
         // Ne pas bloquer la soumission si la création du lead échoue
       }
     }
@@ -935,7 +936,7 @@ router.post('/submit', submissionRateLimit, async (req, res) => {
       }
     });
   } catch (error) {
-  console.error('[PUBLIC-FORMS] Soumission impossible:', error);
+  logger.error('[PUBLIC-FORMS] Soumission impossible:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la soumission du formulaire' });
   }
 });

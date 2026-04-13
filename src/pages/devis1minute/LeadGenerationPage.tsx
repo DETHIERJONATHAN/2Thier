@@ -91,7 +91,7 @@ interface CampaignStats {
 interface CampaignFormProps {
   open: boolean;
   onCancel: () => void;
-  onSubmit: (values: any) => void;
+  onSubmit: (values: unknown) => void;
   loading: boolean;
   campaign?: Campaign;
   isEdit?: boolean;
@@ -376,7 +376,7 @@ export default function LeadGenerationPage() {
     loadData();
   }, [loadData]);
 
-  const handleCreateCampaign = async (values: any) => {
+  const handleCreateCampaign = async (values: unknown) => {
     setFormLoading(true);
     try {
       await api.post('/api/lead-generation/campaigns', values);
@@ -394,7 +394,7 @@ export default function LeadGenerationPage() {
     }
   };
 
-  const handleUpdateCampaign = async (values: any) => {
+  const handleUpdateCampaign = async (values: unknown) => {
     if (!selectedCampaign) return;
     
     setFormLoading(true);

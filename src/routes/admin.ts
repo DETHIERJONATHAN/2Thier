@@ -4,6 +4,7 @@ import { encrypt } from '../utils/crypto';
 import { requireRole } from '../middlewares/requireRole';
 import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 const router = express.Router();
@@ -32,7 +33,7 @@ router.get('/users/:id', requireRole(['super_admin']), async (req: Request, res:
     }
     res.json(user);
   } catch (error) {
-    console.error(`Erreur lors de la récupération de l'utilisateur ${id}:`, error);
+    logger.error(`Erreur lors de la récupération de l'utilisateur ${id}:`, error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -57,7 +58,7 @@ router.get('/users/mail-status', requireRole(['super_admin']), async (_req: Requ
 
     res.json(usersWithMailStatus);
   } catch (error) {
-    console.error('Erreur lors de la récupération des utilisateurs:', error);
+    logger.error('Erreur lors de la récupération des utilisateurs:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -107,7 +108,7 @@ router.post('/mail/settings', requireRole(['super_admin']), async (req: Request,
 
     res.status(200).json({ message: 'Configuration mail mise à jour avec succès.' });
   } catch (error) {
-    console.error('Erreur lors de la mise à jour de la configuration mail:', error);
+    logger.error('Erreur lors de la mise à jour de la configuration mail:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -138,7 +139,7 @@ router.get('/mail/settings', async (req: Request, res: Response): Promise<void> 
     
     res.status(200).json(settings);
   } catch (error) {
-    console.error('Erreur lors de la récupération des paramètres mail:', error);
+    logger.error('Erreur lors de la récupération des paramètres mail:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });

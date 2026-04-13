@@ -6,6 +6,7 @@ import { requireRole } from '../middlewares/requireRole';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { adaptBlockStructure } from '../helpers/adaptBlockStructure';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -19,7 +20,7 @@ async function ensureSectionTypeColumnExists() {
     );
   } catch (e) {
     // silencieux, on laissera l'erreur initiale si autre problème
-    console.warn('[API] ensureSectionTypeColumnExists (blocks.ts) - avertissement:', e);
+    logger.warn('[API] ensureSectionTypeColumnExists (blocks.ts) - avertissement:', e);
   }
 }
 
@@ -99,7 +100,7 @@ router.get('/',
 
     res.json({ success: true, data: blocksWithAdaptedStructure });
   } catch (error: unknown) {
-    console.error("[API] Erreur lors de la récupération des blocks:", error);
+    logger.error("[API] Erreur lors de la récupération des blocks:", error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de la récupération des formulaires" });
   }
 });
@@ -137,7 +138,7 @@ router.get('/read', async (req: Request, res: Response): Promise<void> => {
     const adapted = (blocks as BlockWithSections[]).map(adaptBlockStructure);
     res.json({ success: true, data: adapted });
   } catch (error) {
-    console.error('[API] Erreur GET /api/blocks/read:', error);
+    logger.error('[API] Erreur GET /api/blocks/read:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur lors de la récupération des formulaires (lecture)' });
   }
 });
@@ -177,7 +178,7 @@ router.get('/:id/read', async (req: Request, res: Response): Promise<void> => {
   const adapted = adaptBlockStructure(block as unknown as (Block & { Section: (Section & { Field: (Field & { FieldOption: FieldOption[] })[] })[] }));
     res.json({ success: true, data: adapted });
   } catch (error) {
-    console.error('[API] Erreur GET /api/blocks/:id/read:', error);
+    logger.error('[API] Erreur GET /api/blocks/:id/read:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur lors de la récupération du formulaire' });
   }
 });
@@ -214,7 +215,7 @@ router.delete('/:id', requireRole(['admin', 'super_admin']), async (req: Request
     await prisma.block.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
-    console.error(`[API] Erreur lors de la suppression du block ${id}:`, error);
+    logger.error(`[API] Erreur lors de la suppression du block ${id}:`, error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de la suppression du block." });
   }
 });
@@ -313,7 +314,7 @@ router.post('/:blockId/sections', requireRole(['admin', 'super_admin']) as unkno
 
     res.status(201).json(adaptedBlock);
   } catch (error) {
-    console.error("Erreur lors de l'ajout de la section:", error);
+    logger.error("Erreur lors de l'ajout de la section:", error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de l'ajout de la section." });
   }
 });
@@ -363,7 +364,7 @@ router.delete('/:blockId/sections/:sectionId', requireRole(['admin', 'super_admi
 
   res.json(adaptedBlock);
   } catch (error) {
-    console.error("Erreur lors de la suppression de la section:", error);
+    logger.error("Erreur lors de la suppression de la section:", error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de la suppression de la section." });
   }
 });
@@ -437,7 +438,7 @@ router.put('/:blockId/sections/reorder', requireRole(['admin', 'super_admin']) a
 
   res.json(adaptedBlock);
   } catch (error) {
-    console.error("Erreur lors du réordonnancement des sections:", error);
+    logger.error("Erreur lors du réordonnancement des sections:", error);
     res.status(500).json({ success: false, message: "Erreur serveur lors du réordonnancement des sections." });
   }
 });

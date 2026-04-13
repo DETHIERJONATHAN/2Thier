@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import { db } from '../../lib/database';
+import { logger } from '../lib/logger';
 
 const router = express.Router({ mergeParams: true });
 const prisma = db;
@@ -36,7 +37,7 @@ router.put('/:dependencyId', async (req: Request, res: Response) => {
     }));
     return res.json(processed);
   } catch (error: unknown) {
-    console.error(`[API] Erreur PUT /api/dependencies/${dependencyId}:`, error);
+    logger.error(`[API] Erreur PUT /api/dependencies/${dependencyId}:`, error);
     return res.status(500).json({ error: 'Erreur lors de la mise à jour de la dépendance', details: (error as Error).message });
   }
 });
@@ -60,7 +61,7 @@ router.delete('/:dependencyId', async (req: Request, res: Response) => {
     }));
     return res.status(200).json(processed);
   } catch (error: unknown) {
-    console.error(`[API] Erreur DELETE /api/dependencies/${req.params.dependencyId}:`, error);
+    logger.error(`[API] Erreur DELETE /api/dependencies/${req.params.dependencyId}:`, error);
     const errObj = error as { code?: string };
     if (errObj?.code === 'P2025') {
       return res.status(404).json({ error: 'Dépendance non trouvée' });

@@ -18,7 +18,7 @@ interface HistoryEntry {
   fromValue?: string | null;
   toValue?: string | null;
   userId?: string | null;
-  data?: any;
+  data?: unknown;
   createdAt: string;
   User?: { id: string; firstName: string; lastName: string; email: string } | null;
 }

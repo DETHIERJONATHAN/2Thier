@@ -2,6 +2,7 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = express.Router();
 
@@ -12,7 +13,7 @@ interface DirectLeadRequest {
   status: string;
   data: {
     name: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   organizationId: string;
 }
@@ -40,7 +41,7 @@ router.post('/add-lead-direct', async (req, res) => {
     });
     
     if (!organization) {
-      console.error(`[DIRECT] Organisation non trouvée: ${organizationId}`);
+      logger.error(`[DIRECT] Organisation non trouvée: ${organizationId}`);
       return res.status(404).json({ error: 'Organisation non trouvée' });
     }
     
@@ -72,8 +73,8 @@ router.post('/add-lead-direct', async (req, res) => {
     });
     
     res.status(201).json(lead);
-  } catch (error: any) {
-    console.error('[DIRECT] Erreur lors de la création directe du lead:', error);
+  } catch (error: unknown) {
+    logger.error('[DIRECT] Erreur lors de la création directe du lead:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création directe du lead',
       message: error.message,

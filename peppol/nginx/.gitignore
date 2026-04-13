@@ -1,0 +1,4 @@
+# Certificats TLS (ne JAMAIS committer les clés privées)
+certs/server.key
+certs/server.crt
+certs/*.pem

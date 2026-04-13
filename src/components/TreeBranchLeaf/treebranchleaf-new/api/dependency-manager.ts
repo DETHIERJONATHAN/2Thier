@@ -35,14 +35,14 @@ export function findAllReferencedNodeIds(data: unknown, out: Set<string>) {
       if (id) out.add(id);
     }
 
-    const left = (obj.left as any)?.ref; if (typeof left === 'string') out.add(normalizeRef(left));
-    const right = (obj.right as any)?.ref; if (typeof right === 'string') out.add(normalizeRef(right));
+    const left = (obj.left as unknown)?.ref; if (typeof left === 'string') out.add(normalizeRef(left));
+    const right = (obj.right as unknown)?.ref; if (typeof right === 'string') out.add(normalizeRef(right));
 
     if (Array.isArray(obj.nodeIds)) {
       for (const r of obj.nodeIds as string[]) out.add(normalizeRef(r));
     }
 
-    const lookup = obj.lookup as any;
+    const lookup = obj.lookup as unknown;
     if (lookup?.selectors?.rowFieldId) out.add(String(lookup.selectors.rowFieldId));
     if (lookup?.selectors?.columnFieldId) out.add(String(lookup.selectors.columnFieldId));
 
@@ -62,12 +62,12 @@ export function findAllReferencedNodeIds(data: unknown, out: Set<string>) {
 }
 
 async function getNodeLinkedField(client: Tx, nodeId: string, field: LinkedField): Promise<string[]> {
-  const node = await client.treeBranchLeafNode.findUnique({ where: { id: nodeId }, select: { [field]: true } as any }) as any;
+  const node = await client.treeBranchLeafNode.findUnique({ where: { id: nodeId }, select: { [field]: true } as unknown }) as unknown;
   return (node?.[field] ?? []) as string[];
 }
 
 async function setNodeLinkedField(client: Tx, nodeId: string, field: LinkedField, values: string[]) {
-  await client.treeBranchLeafNode.update({ where: { id: nodeId }, data: { [field]: { set: uniq(values) } } as any });
+  await client.treeBranchLeafNode.update({ where: { id: nodeId }, data: { [field]: { set: uniq(values) } } as unknown });
 }
 
 export async function updateLinkedDependenciesForNode(client: Tx, nodeId: string) {
@@ -82,11 +82,11 @@ export async function updateLinkedDependenciesForNode(client: Tx, nodeId: string
 
   // Collecter tous les nodeIds rÃƒÂ©fÃƒÂ©rencÃƒÂ©s depuis les capacitÃƒÂ©s/metadata
   const refNodeIds = new Set<string>();
-  for (const f of formulas) findAllReferencedNodeIds(f.tokens as any, refNodeIds);
-  for (const c of conditions) findAllReferencedNodeIds(c.conditionSet as any, refNodeIds);
-  for (const t of tables) findAllReferencedNodeIds(t.meta as any, refNodeIds);
-  if (variable) findAllReferencedNodeIds(variable.metadata as any, refNodeIds);
-  if (selectConfig) findAllReferencedNodeIds(selectConfig as any, refNodeIds);
+  for (const f of formulas) findAllReferencedNodeIds(f.tokens as unknown, refNodeIds);
+  for (const c of conditions) findAllReferencedNodeIds(c.conditionSet as unknown, refNodeIds);
+  for (const t of tables) findAllReferencedNodeIds(t.meta as unknown, refNodeIds);
+  if (variable) findAllReferencedNodeIds(variable.metadata as unknown, refNodeIds);
+  if (selectConfig) findAllReferencedNodeIds(selectConfig as unknown, refNodeIds);
 
   refNodeIds.delete(nodeId);
 
@@ -97,7 +97,7 @@ export async function updateLinkedDependenciesForNode(client: Tx, nodeId: string
     linkedTableIds: uniq(tables.map(t => t.id)),
     linkedVariableIds: uniq([
       variable?.id,
-      (node as any)?.data_activeId  // fallback: variable active mÃƒÂªme si linkedVariableIds est vide
+      (node as unknown)?.data_activeId  // fallback: variable active mÃƒÂªme si linkedVariableIds est vide
     ].filter(Boolean) as string[]),
   };
 
@@ -124,7 +124,7 @@ export async function updateLinkedDependenciesForNode(client: Tx, nodeId: string
   // MAJ inverse minimale: pour chaque nÃ…â€œud rÃƒÂ©fÃƒÂ©rencÃƒÂ©, s'assurer qu'il liste
   // - la formule/condition/table du nÃ…â€œud courant dans ses linked*Ids (trace des usages)
   // - la variable du nÃ…â€œud courant dans linkedVariableIds
-  const ownerVarId = variable?.id || (node as any)?.data_activeId;
+  const ownerVarId = variable?.id || (node as unknown)?.data_activeId;
   await Promise.all(Array.from(refNodeIds).map(async refId => {
     if (formulas.length) {
       const current = await getNodeLinkedField(client, refId, 'linkedFormulaIds');

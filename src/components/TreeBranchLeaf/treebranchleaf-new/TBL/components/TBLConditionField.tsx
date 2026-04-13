@@ -8,7 +8,7 @@ const { Text } = Typography;
 interface TBLConditionFieldProps {
   conditionId: string;
   formData: TBLFormData;
-  field: any;
+  field: unknown;
   placeholder?: string;
 }
 
@@ -53,7 +53,7 @@ export const TBLConditionField: React.FC<TBLConditionFieldProps> = ({
   }
 
   // Formater le résultat selon le type de champ
-  const formatResult = (value: any) => {
+  const formatResult = (value: unknown) => {
     if (value === null || value === undefined) {
       return '---';
     }

@@ -5,11 +5,11 @@ describe('buildResponseFromColumns', () => {
     const node = {
       id: 't1',
       metadata: { subTabs: ['Photos', 'Électricité'], subTab: 'Photos' }
-    } as any;
-    const res = buildResponseFromColumns(node as any);
+    } as unknown;
+    const res = buildResponseFromColumns(node as unknown);
     expect(res.metadata).toBeDefined();
-    expect((res.metadata as any).subTabs).toEqual(['Photos', 'Électricité']);
-    expect((res.metadata as any).subTab).toEqual('Photos');
+    expect((res.metadata as unknown).subTabs).toEqual(['Photos', 'Électricité']);
+    expect((res.metadata as unknown).subTab).toEqual('Photos');
   });
 
   it('should reconstruct metadata.subTabs and metadata.subTab when present in dedicated columns', () => {
@@ -17,10 +17,10 @@ describe('buildResponseFromColumns', () => {
       id: 't2',
       subtabs: JSON.stringify(['Documents', 'Images']),
       subtab: 'Images'
-    } as any;
-    const res = buildResponseFromColumns(node as any);
+    } as unknown;
+    const res = buildResponseFromColumns(node as unknown);
     expect(res.metadata).toBeDefined();
-    expect((res.metadata as any).subTabs).toEqual(['Documents', 'Images']);
-    expect((res.metadata as any).subTab).toEqual('Images');
+    expect((res.metadata as unknown).subTabs).toEqual(['Documents', 'Images']);
+    expect((res.metadata as unknown).subTab).toEqual('Images');
   });
 });

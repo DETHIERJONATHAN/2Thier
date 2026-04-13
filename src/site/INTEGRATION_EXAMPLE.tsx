@@ -73,7 +73,7 @@ const NoCodeBuilderWithUniversalEditor: React.FC = () => {
   /**
    * 💾 Handler : Sauvegarder les modifications
    */
-  const handleSaveSection = (newContent: any) => {
+  const handleSaveSection = (newContent: unknown) => {
     if (!selectedSection) return;
     
     setSections(prev => 

@@ -192,7 +192,7 @@ const groupDisplayFieldsBySuffix = (fields: TBLField[]): Array<{ suffix: string;
     const current = indexed[i];
     const next = indexed[i + 1];
     // Si le repeater a déjà marqué ce champ comme dernier de son bloc, on préserve
-    const alreadyMarked = (current.field as any).isLastInCopyGroup === true;
+    const alreadyMarked = (current.field as unknown).isLastInCopyGroup === true;
     const isLastInGroup = alreadyMarked || !next || current.suffixNum !== next.suffixNum;
     sortedFields.push({ ...current.field, isLastInCopyGroup: isLastInGroup });
   }
@@ -1025,7 +1025,7 @@ interface TBLSectionRendererProps {
   reviewComments?: Record<string, string>;
   onReviewCheck?: (fieldId: string, checked: boolean) => void;
   onReviewComment?: (fieldId: string, comment: string) => void;
-  originalFormData?: Record<string, any>; // 📸 Snapshot des valeurs originales (devis) pour traçabilité
+  originalFormData?: Record<string, unknown>; // 📸 Snapshot des valeurs originales (devis) pour traçabilité
   // 🔶 RECTIFICATION MODE: données des modifications technicien pour suivi 3 couches
   rectificationMode?: boolean;
   rectificationFieldMap?: Record<string, {
@@ -1078,8 +1078,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     if (!reviewMode) return new Set<string>();
     return new Set<string>(
       allNodes
-        .filter((n: any) => n.technicianVisible === true)
-        .map((n: any) => n.id)
+        .filter((n: Record<string, unknown>) => n.technicianVisible === true)
+        .map((n: Record<string, unknown>) => n.id)
     );
   }, [reviewMode, allNodes]);
   // Use passed review state from TBL if available, otherwise local fallback
@@ -1092,9 +1092,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       return String(treeId);
     }
     if (typeof window !== 'undefined') {
-      const fallback = (window as any)?.__TBL_LAST_TREE_ID
-        || (window as any)?.__TBL_TREE_ID
-        || (window as any)?.TBL_LAST_TREE_ID;
+      const fallback = (window as unknown)?.__TBL_LAST_TREE_ID
+        || (window as unknown)?.__TBL_TREE_ID
+        || (window as unknown)?.TBL_LAST_TREE_ID;
       if (fallback) {
         return String(fallback);
       }
@@ -1138,13 +1138,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   /*
   useEffect(() => {
     const copiesInSection = (section.fields || []).filter(field => {
-      const meta = (field.metadata || {}) as any;
+      const meta = (field.metadata || {}) as unknown;
       return !!meta?.sourceTemplateId;
     });
     
     if (copiesInSection.length > 0) {
       if (isTBLDebugEnabled()) tblLog(`🚨 [SECTION-COPIES] Section "${section.title}" a reçu ${copiesInSection.length} copies:`, 
-        copiesInSection.map(f => `${f.label} (source: ${(f.metadata as any)?.sourceTemplateId})`));
+        copiesInSection.map(f => `${f.label} (source: ${(f.metadata as unknown)?.sourceTemplateId})`));
     }
   }, [section.fields, section.title]);
   */
@@ -1169,7 +1169,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   */
   
   // 🔥 FONCTION RECURSIVE STABLE : Recherche récursive des sharedReferenceIds dans toute la hiérarchie PAR PARENTID
-  const findAllSharedReferencesRecursive = useCallback((nodeId: string, allNodes: any[], visited = new Set<string>()): string[] => {
+  const findAllSharedReferencesRecursive = useCallback((nodeId: string, allNodes: unknown[], visited = new Set<string>()): string[] => {
     if (visited.has(nodeId)) return [];
     visited.add(nodeId);
     
@@ -1519,7 +1519,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
   }, []);
   
   // ✅ CRITIQUE: Mémoiser le handleFieldChange pour éviter les re-rendus
-  const handleFieldChange = useCallback((fieldId: string, value: any, fieldLabel?: string) => {
+  const handleFieldChange = useCallback((fieldId: string, value: unknown, fieldLabel?: string) => {
     console.log(`🟦🟦🟦 [TBLSectionRenderer] handleFieldChange LOCAL appelé: fieldId=${fieldId}, value=${value}, label=${fieldLabel}`);
     onChange(fieldId, value);
     
@@ -1565,7 +1565,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         for (let depth = 0; depth < 20 && currentId; depth++) {
           if (visited.has(currentId)) break;
           visited.add(currentId);
-          const node = allNodes.find((n: any) => n.id === currentId);
+          const node = allNodes.find((n: Record<string, unknown>) => n.id === currentId);
           if (!node) break;
           if (node.type === 'branch_repeater' || node.type === 'leaf_repeater') {
             return node.id;
@@ -1582,9 +1582,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         if (!allNodes?.length) return descendants;
         
         // 1. Trouver le nœud repeater et lire ses templateNodeIds
-        const repeaterNode = allNodes.find((n: any) => n.id === rootRepeaterId);
+        const repeaterNode = allNodes.find((n: Record<string, unknown>) => n.id === rootRepeaterId);
         if (repeaterNode) {
-          const meta: any = repeaterNode.metadata || {};
+          const meta: unknown = repeaterNode.metadata || {};
           const templateIds: string[] = meta.repeater?.templateNodeIds || [];
           // Aussi vérifier la colonne repeater_templateNodeIds
           let colTemplateIds: string[] = [];
@@ -1618,7 +1618,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         // 3. BONUS: Chercher via metadata.duplicatedFromRepeater pour attraper les copies
         //    dont le baseId n'est pas dans les descendants
         for (const node of allNodes) {
-          const nodeMeta: any = node.metadata || {};
+          const nodeMeta: unknown = node.metadata || {};
           if (nodeMeta.duplicatedFromRepeater === rootRepeaterId) {
             // Le baseId de ce nœud copié est un template de ce repeater
             const baseId = node.id.replace(/-\d+$/, '');
@@ -1638,7 +1638,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         {
           const varToNodeBasesMap = new Map<string, Set<string>>();
           for (const an of allNodes) {
-            const anMeta: any = an.metadata || {};
+            const anMeta: unknown = an.metadata || {};
             // Skip display nodes – ils référencent la variable mais ne sont pas l'hôte
             if (anMeta.autoCreatedDisplayNode || anMeta.tbl_auto_generated) continue;
             const lvIds = (an as any).linkedVariableIds;
@@ -1654,7 +1654,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           }
           if (varToNodeBasesMap.size > 0) {
             for (const an of allNodes) {
-              const nodeMeta: any = an.metadata || {};
+              const nodeMeta: unknown = an.metadata || {};
               const fromVarId = nodeMeta.fromVariableId;
               if (!fromVarId) continue;
               const baseFromVarId = String(fromVarId).replace(/-\d+$/, '');
@@ -1689,9 +1689,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       
       // Fallback 2: Chercher le nœud RAW dans allNodes et vérifier metadata.duplicatedFromRepeater
       if (!repeaterId && allNodes) {
-        const rawNode = allNodes.find((n: any) => n.id === f.id);
+        const rawNode = allNodes.find((n: Record<string, unknown>) => n.id === f.id);
         if (rawNode) {
-          const rawMeta: any = rawNode.metadata || {};
+          const rawMeta: unknown = rawNode.metadata || {};
           repeaterId = rawMeta.duplicatedFromRepeater || rawMeta.repeaterParentId;
           console.log('🗑️ [DELETE COPY GROUP] Fallback 2 (raw node metadata):', repeaterId);
         }
@@ -1699,9 +1699,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       
       // Fallback 3: Chercher le nœud dans allNodes et vérifier si parentId est un repeater
       if (!repeaterId && allNodes) {
-        const node = allNodes.find((n: any) => n.id === f.id);
+        const node = allNodes.find((n: Record<string, unknown>) => n.id === f.id);
         if (node?.parentId) {
-          const parent = allNodes.find((n: any) => n.id === node.parentId);
+          const parent = allNodes.find((n: Record<string, unknown>) => n.id === node.parentId);
           if (parent?.type === 'branch_repeater' || parent?.type === 'leaf_repeater') {
             repeaterId = parent.id;
             console.log('🗑️ [DELETE COPY GROUP] Fallback 3 (parent is repeater):', repeaterId);
@@ -1714,7 +1714,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         const baseId = f.id.replace(/-\d+$/, '');
         for (const node of allNodes) {
           if (node.type !== 'branch_repeater' && node.type !== 'leaf_repeater') continue;
-          const nodeMeta: any = node.metadata || {};
+          const nodeMeta: unknown = node.metadata || {};
           // Vérifier dans metadata.repeater.templateNodeIds
           const templateIds: string[] = nodeMeta.repeater?.templateNodeIds || [];
           // Aussi vérifier le champ colonne repeater_templateNodeIds (JSON stringifié)
@@ -1772,8 +1772,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         if (repeaterTemplateIds.has(baseId)) return true;
         // Double check via metadata.duplicatedFromRepeater sur le noeud raw
         if (repeaterId && allNodes) {
-          const rawNode = allNodes.find((n: any) => n.id === fieldId);
-          const meta: any = rawNode?.metadata || {};
+          const rawNode = allNodes.find((n: Record<string, unknown>) => n.id === fieldId);
+          const meta: unknown = rawNode?.metadata || {};
           if (meta.duplicatedFromRepeater === repeaterId) return true;
         }
         return false;
@@ -1800,9 +1800,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       const suffixToMatch = String(effectiveIndex);
       
       // 🔒 NOUVEAU: Fonction pour détecter les champs "Total" - à NE JAMAIS supprimer
-      const isTotalFieldCheck = (field: any): boolean => {
+      const isTotalFieldCheck = (field: unknown): boolean => {
         const label = String(field?.label || '').toLowerCase();
-        const meta: any = field?.metadata || {};
+        const meta: unknown = field?.metadata || {};
         // Vérifier le label
         if (label.includes('total') || label.includes('- total')) return true;
         // Vérifier les métadonnées (champ Total du repeater)
@@ -1836,13 +1836,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         // 🔧 FIX V4: TOUJOURS exiger belongsToSameRepeater - plus de bypass via sourceTemplateId
         const sameRepeater = n.id ? belongsToSameRepeater(n.id) : false;
         if (!sameRepeater) return false;
-        const meta: any = n.metadata || {};
+        const meta: unknown = n.metadata || {};
         const metaIndex = meta.repeaterInstanceIndex;
         const suffix = getSuffixFromId(n.id);
         // ✅ Accepter si le suffixe correspond OU si l'index metadata correspond
         const sameIndex = suffix === suffixToMatch || String(metaIndex) === suffixToMatch;
         if (!sameIndex) return false;
-        const notInCurrentSection = !section.fields.some((sf: any) => sf.id === n.id);
+        const notInCurrentSection = !section.fields.some((sf: Record<string, unknown>) => sf.id === n.id);
         return notInCurrentSection;
       });
       
@@ -1875,11 +1875,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         const patternMatches = (allNodes || []).filter(n => {
           // 🔒 EXCLUSION CRITIQUE: Ne jamais supprimer les champs Total
           if (isTotalFieldCheck(n)) return false;
-          return n.id?.startsWith(prefix) && !section.fields.some((sf: any) => sf.id === n.id);
+          return n.id?.startsWith(prefix) && !section.fields.some((sf: Record<string, unknown>) => sf.id === n.id);
         });
         if (patternMatches.length > 0) {
           dlog('[DELETE COPY GROUP] Ajout des nœuds via prefix fallback:', patternMatches.map(p => p.id));
-          fieldsInNewSection.push(...patternMatches as any);
+          fieldsInNewSection.push(...patternMatches as unknown);
         }
       }
 
@@ -1921,7 +1921,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       const globalSuccessIds: string[] = [];
       const alreadyDeletedOnServer = new Set<string>();
 
-      const deleteWithRetry = async (node: any, retry = 0): Promise<{ status: 'success' | 'skipped' | 'failed', id: string, serverDeletedIds: string[] }> => {
+      const deleteWithRetry = async (node: unknown, retry = 0): Promise<{ status: 'success' | 'skipped' | 'failed', id: string, serverDeletedIds: string[] }> => {
         // Skip si déjà supprimé par une cascade précédente
         if (alreadyDeletedOnServer.has(node.id)) {
           return { status: 'skipped', id: node.id, serverDeletedIds: [] };
@@ -1935,7 +1935,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           // Marquer ces IDs comme supprimés pour éviter de les re-supprimer
           serverDeletedIds.forEach(id => alreadyDeletedOnServer.add(id));
           return { status: 'success', id: node.id, serverDeletedIds };
-        } catch (err: any) {
+        } catch (err: unknown) {
           const status = err?.status || 500;
           // 404 = déjà supprimé (cascade serveur) → considéré comme succès
           if (status === 404) {
@@ -1976,8 +1976,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         console.log('🔄🔄🔄 [SYNC DELETE] Recherche repeater avec countSourceNodeId dans allNodes:', allNodes?.length || 0, 'nodes');
         
         // 🔍 DEBUG: Lister tous les repeaters trouvés
-        const allRepeaters = (allNodes || []).filter((n: any) => n.type === 'branch_repeater' || n.type === 'leaf_repeater');
-        console.log('🔄🔄🔄 [SYNC DELETE] Repeaters dans allNodes:', allRepeaters.map((r: any) => ({
+        const allRepeaters = (allNodes || []).filter((n: Record<string, unknown>) => n.type === 'branch_repeater' || n.type === 'leaf_repeater');
+        console.log('🔄🔄🔄 [SYNC DELETE] Repeaters dans allNodes:', allRepeaters.map((r: Record<string, unknown>) => ({
           id: r.id,
           type: r.type,
           hasMetadata: !!r.metadata,
@@ -1987,7 +1987,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         
         // 🔧 FIX: Chercher à la fois les types 'branch_repeater' ET 'leaf_repeater'
         const repeaterWithSync = (allNodes || []).find(
-          (n: any) => (n.type === 'branch_repeater' || n.type === 'leaf_repeater') && n.metadata?.repeater?.countSourceNodeId
+          (n: unknown) => (n.type === 'branch_repeater' || n.type === 'leaf_repeater') && n.metadata?.repeater?.countSourceNodeId
         );
         
         console.log('🔄🔄🔄 [SYNC DELETE] Repeater trouvé:', repeaterWithSync ? {
@@ -2005,8 +2005,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           }
           
           // 🔧 FIX: Utiliser section.fields ou allNodes (fields n'existait pas dans ce scope!)
-          const currentField = section.fields.find((fld: any) => fld.id === countSourceNodeId) 
-            || allNodes.find((n: any) => n.id === countSourceNodeId);
+          const currentField = section.fields.find((fld: Record<string, unknown>) => fld.id === countSourceNodeId) 
+            || allNodes.find((n: Record<string, unknown>) => n.id === countSourceNodeId);
           const currentValue = parseInt(String(currentField?.value || currentField?.defaultValue || '1'), 10);
           const newValue = Math.max(1, currentValue - 1); // MINIMUM 1 !
           
@@ -2106,7 +2106,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       id: string;
       label: string;
       value: string;
-      metadata?: any;
+      metadata?: unknown;
       conditionalFields?: TBLField[];
     }> | undefined;
 
@@ -2695,7 +2695,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     isConditional: true,
                     parentFieldId: f.id,
                     parentOptionValue: selectedValue,
-                    mirrorTargetLabel: (selectedOption as any)?.label || String(selectedValue ?? '')
+                    mirrorTargetLabel: (selectedOption as unknown)?.label || String(selectedValue ?? '')
                   } as TBLField & { isConditional: true; parentFieldId: string; parentOptionValue: unknown };
 
                   finalFields.push(fieldWithOrder);
@@ -2730,7 +2730,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               const removeButtonField = {
                 ...field,
                 id: `${field.id}_removeBtn_${copyIndex}`,
-                type: 'REPEATER_REMOVE_INSTANCE_BUTTON' as any,
+                type: 'REPEATER_REMOVE_INSTANCE_BUTTON' as unknown,
                 label: copyLabel,
                 order: nextOrder,
                 isRepeaterButton: true,
@@ -2752,7 +2752,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 const removeButtonField = {
                   ...field,
                   id: `${field.id}_removeBtn_${copyIndex}_tab${tabIdx}`,
-                  type: 'REPEATER_REMOVE_INSTANCE_BUTTON' as any,
+                  type: 'REPEATER_REMOVE_INSTANCE_BUTTON' as unknown,
                   label: copyLabel,
                   order: nextOrder,
                   isRepeaterButton: true,
@@ -2782,7 +2782,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         const addButtonField: TBLField = {
           ...field,
           id: `${field.id}_addButton`,
-          type: 'REPEATER_ADD_BUTTON' as any,
+          type: 'REPEATER_ADD_BUTTON' as unknown,
           label: buttonLabel,
           order: nextOrder,
           isRepeaterButton: true,
@@ -3158,7 +3158,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 //    (originalFieldId/sourceTemplateId) et utiliser leur `${copyId}__selectedNodeId`
                 if ((!maybeId || typeof maybeId !== 'string') && Array.isArray(fields)) {
                   const relatedCopies = fields.filter(f => 
-                    (f as any)?.originalFieldId === field.id || (f as any)?.sourceTemplateId === field.id
+                    (f as unknown)?.originalFieldId === field.id || (f as unknown)?.sourceTemplateId === field.id
                   );
                   for (const copy of relatedCopies) {
                     const key = `${copy.id}__selectedNodeId`;
@@ -3940,7 +3940,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       order: f.order
       , subTabKey: (f as any).subTabKey,
       parentRepeaterId: (f as any).parentRepeaterId,
-      sourceTemplateId: (f as any).sourceTemplateId || (f.metadata as any)?.sourceTemplateId,
+      sourceTemplateId: (f as any).sourceTemplateId || (f.metadata as unknown)?.sourceTemplateId,
       isDeletableCopy: !!(f as any).isDeletableCopy
     }));
     if (isTBLDebugEnabled()) tblLog(`�🚨🚨 [ULTRA DEBUG] ORDEREDFIELDS Section "${section.title}" (${section.sectionName}): ${orderedFields.length} champs`, fieldDetails);
@@ -4028,7 +4028,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     // un des produits sélectionnés dans le champ source correspond
 
     fieldsAfterDeletion = fieldsAfterDeletion.filter(field => {
-      const f = field as any;
+      const f = field as unknown;
       // Si pas de configuration produit, toujours visible
       if (!f.hasProduct) return true;
       if (!f.product_visibleFor || !Array.isArray(f.product_visibleFor) || f.product_visibleFor.length === 0) return true;
@@ -4175,7 +4175,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       const instances: Record<string, { metadata: Record<string, unknown> }> = {};
       let syntheticActiveId: string | undefined;
 
-      metadataDataEntries.forEach((entry: any, index: number) => {
+      metadataDataEntries.forEach((entry: unknown, index: number) => {
         const sourceRef = entry?.config?.sourceRef as string | undefined;
         const derivedId = deriveNodeIdFromSourceRef(sourceRef);
         const instanceId = derivedId || entry?.id || `${field.id}-data-${index}`;
@@ -4281,7 +4281,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       }
 
       // ✅ Définition de resolveBackendNodeId AVANT utilisation
-      const resolveBackendNodeId = (f: any): string | undefined => {
+      const resolveBackendNodeId = (f: unknown): string | undefined => {
         try {
           const meta = (f && f.metadata) || {};
           
@@ -4412,8 +4412,8 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     hasData: !!capabilities?.data,
     dataActiveId: capabilities?.data?.activeId,
     dataInstancesCount: Object.keys(capabilities?.data?.instances || {}).length,
-    dataSourceType: (capabilities?.data?.instances?.[capabilities?.data?.activeId as string] as any)?.metadata?.sourceType,
-    dataSourceRef: (capabilities?.data?.instances?.[capabilities?.data?.activeId as string] as any)?.metadata?.sourceRef,
+    dataSourceType: (capabilities?.data?.instances?.[capabilities?.data?.activeId as string] as unknown)?.metadata?.sourceType,
+    dataSourceRef: (capabilities?.data?.instances?.[capabilities?.data?.activeId as string] as unknown)?.metadata?.sourceRef,
     hasTable: !!capabilities?.table,
     hasFormula: !!capabilities?.formula,
     fieldId: field.id,
@@ -4543,7 +4543,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               dlog(`✅ [FIX @VALUE] Extraction nodeId direct de sourceRef: ${nodeIdToUse}`);
             } else if (r.startsWith('@table.')) {
               // Cas @table.*: correctif existant car activeId peut être la table conteneur
-              const tableActiveId = (capabilities?.table as any)?.activeId as string | undefined;
+              const tableActiveId = (capabilities?.table as unknown)?.activeId as string | undefined;
               const fieldNodeId = (field as any).nodeId || (field as any).metadata?.originalNodeId || field.id;
               nodeIdToUse = dataActiveId;
               // Si activeId est égal à l'ID de table ou est absent, basculer sur l'ID du champ
@@ -5254,9 +5254,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   <Row gutter={getDataRowGutter(section)} justify="center">
                     {(() => {
                       const filteredFields = orderedFields.filter(field => {
-                        const meta = (field.metadata || {}) as any;
+                        const meta = (field.metadata || {}) as unknown;
                         const sourceTemplateId = meta?.sourceTemplateId;
-                        const fieldParentId = (field as any)?.parentRepeaterId || (field as any)?.parentId || (allNodes.find(n => n.id === field.id)?.parentId || undefined);
+                        const fieldParentId = (field as unknown)?.parentRepeaterId || (field as unknown)?.parentId || (allNodes.find(n => n.id === field.id)?.parentId || undefined);
                         const isPhysicalRepeaterCopy = Boolean(meta?.duplicatedFromRepeater);
                         const isRepeaterVariant = Boolean((field as any).parentRepeaterId) || (sourceTemplateId && isCopyFromRepeater(sourceTemplateId, allNodes, fieldParentId));
                         
@@ -5387,7 +5387,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                             const styledEl = React.cloneElement(el, {
                               key: `depth${depth}-${fieldId}`,
                               style: {
-                                ...(el.props as any)?.style,
+                                ...(el.props as unknown)?.style,
                                 animation: 'tbl-child-slide-in 0.3s ease-out',
                               },
                               children: (
@@ -5405,10 +5405,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                     border: '2px solid #fff',
                                     zIndex: 10,
                                   }} />
-                                  {(el.props as any)?.children}
+                                  {(el.props as unknown)?.children}
                                 </div>
                               ),
-                            } as any);
+                            } as unknown);
                             result.push(styledEl);
                           } else {
                             result.push(el);
@@ -5417,7 +5417,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                           // 🎯 Bulle parent (avec enfants) : badge + onClick
                           const parentBubble = React.cloneElement(el, {
                             key: depth > 0 ? `depth${depth}-${fieldId}` : fieldId,
-                            style: { ...(el.props as any)?.style, position: 'relative' as const, ...(depth > 0 ? { animation: 'tbl-child-slide-in 0.3s ease-out' } : {}) },
+                            style: { ...(el.props as unknown)?.style, position: 'relative' as const, ...(depth > 0 ? { animation: 'tbl-child-slide-in 0.3s ease-out' } : {}) },
                             children: (
                               <div 
                                 onClick={() => toggleExpand(fieldId)} 
@@ -5462,10 +5462,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   }} />
                                 )}
                                 {/* La bulle originale */}
-                                {(el.props as any)?.children}
+                                {(el.props as unknown)?.children}
                               </div>
                             ),
-                          } as any);
+                          } as unknown);
                           result.push(parentBubble);
                           
                           // 🎯 Si expanded, rendre les enfants et RÉCURSIVEMENT traiter leurs propres enfants
@@ -5699,7 +5699,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                 // 🎯🎯🎯 DEBUG: Afficher les infos de triggers dans la console frontend
                                 if (response?.debug?.triggersFix) {
                                   console.log('🎯🎯🎯 [REPEAT-EXECUTOR DEBUG] Infos triggers/subType:');
-                                  response.debug.triggersFix.forEach((item: any, idx: number) => {
+                                  response.debug.triggersFix.forEach((item: unknown, idx: number) => {
                                     console.log(`  [${idx}] ${item.label} (${item.nodeId})`);
                                     console.log(`      originalSubType: "${item.originalSubType}" → appliedSubType: "${item.appliedSubType}"`);
                                     console.log(`      originalTriggers:`, item.originalTriggers);
@@ -5737,7 +5737,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                     
                                     // Compter les copies existantes (nœuds avec rootOriginalId = repeaterParentId)
                                     const existingCopiesCount = (allNodes || []).filter(
-                                      (n: any) => n.metadata?.copyOf?.rootOriginalId === repeaterParentId
+                                      (n: unknown) => n.metadata?.copyOf?.rootOriginalId === repeaterParentId
                                     ).length;
                                     // Total = 1 (original) + copies existantes + 1 (nouvelle copie)
                                     const newTotal = 1 + existingCopiesCount + 1;
@@ -5756,13 +5756,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   if (isTBLDebugEnabled()) tblLog('[COPY-API] Processing response for event dispatch...', { hasResponse: !!response });
                                   const duplicatedArray = (response && (response.duplicated || (response as any).data?.duplicated)) || [];
                                   if (isTBLDebugEnabled()) tblLog('[COPY-API] duplicatedArray extracted:', { count: duplicatedArray.length, items: duplicatedArray });
-                                  const normalizedDuplicated = duplicatedArray.map((d: any) => ({ id: d?.id || d, parentId: d?.parentId || (d?.node || {})?.parentId || undefined, sourceTemplateId: d?.sourceTemplateId || (d?.metadata || {})?.sourceTemplateId || undefined }));
+                                  const normalizedDuplicated = duplicatedArray.map((d: Record<string, unknown>) => ({ id: d?.id || d, parentId: d?.parentId || (d?.node || {})?.parentId || undefined, sourceTemplateId: d?.sourceTemplateId || (d?.metadata || {})?.sourceTemplateId || undefined }));
                                   const newNodesPayload = (response && (response.nodes || (response as any).data?.nodes)) || [];
                                   const eventDebugId = Math.random().toString(36).slice(2,9);
                                   // 🚀 OPTIMISATION: Utiliser directement les nœuds de la réponse sans fetches supplémentaires
                                   // Le backend devrait retourner les nœuds complets dans response.nodes
-                                  const finalNodesPayload: any[] = Array.isArray(newNodesPayload) ? [...newNodesPayload] : [];
-                                  const duplicatedIds = normalizedDuplicated.map((d:any)=>d.id).filter(Boolean);
+                                  const finalNodesPayload: unknown[] = Array.isArray(newNodesPayload) ? [...newNodesPayload] : [];
+                                  const duplicatedIds = normalizedDuplicated.map((d: Record<string, unknown>)=>d.id).filter(Boolean);
                                   
                                   // 🚀 SUPPRESSION DES FETCHES BLOQUANTS
                                   // Les fetches individuels avec retries (5 tentatives × N nœuds) bloquaient l'UI
@@ -5978,7 +5978,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   // ❌ CETTE INJECTION EST MAINTENANT DÉSACTIVÉE CAR LES CHAMPS CONDITIONNELS 
                   // SONT DÉJÀ GÉRÉS PAR LE SYSTÈME INTÉGRÉ DANS orderedFields
                   // Cette injection directe causait des doublons de champs conditionnels
-                  const shouldInjectConditionalFields = (_field: any) => {
+                  const shouldInjectConditionalFields = (_field: unknown) => {
                     // ❌ DÉSACTIVÉ - retourne toujours false pour éviter la double injection
                     return false;
                     
@@ -5999,7 +5999,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                     
                     if (selectedValue && field.options) {
                       // Chercher l'option sélectionnée
-                      const selectedOption = field.options.find((opt: any) => opt.value === selectedValue);
+                      const selectedOption = field.options.find((opt: Record<string, unknown>) => opt.value === selectedValue);
                       
                       if (selectedOption && selectedOption.conditionalFields && selectedOption.conditionalFields.length > 0) {
                         if (isTBLDebugEnabled()) tblLog('🚨🚨🚨 [CONDITIONAL FIELD DIRECT RENDER] Rendu champ conditionnel injecté:', {
@@ -6011,7 +6011,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                         });
                         
                         // ⚡ INJECTION RÉELLE : Rendre les conditionalFields directement après le champ
-                        const conditionalFieldsToRender = selectedOption.conditionalFields.map((condField: any, condIdx: number) => {
+                        const conditionalFieldsToRender = selectedOption.conditionalFields.map((condField: unknown, condIdx: number) => {
                           const conditionalColProps = getFieldColProps(section, condField);
                           
                           return (
@@ -6528,10 +6528,10 @@ const buildSectionStructureSignature = (section: TBLSection): string[] => {
 
 // ✅ MÉMOÏSATION AVEC COMPARAISON CUSTOM pour éviter les re-rendus à chaque frappe
 // Collecte tous les field IDs pertinents pour cette section (y compris sous-sections et dépendances cross-section)
-const collectRelevantFieldIds = (section: any): Set<string> => {
+const collectRelevantFieldIds = (section: unknown): Set<string> => {
   const ids = new Set<string>();
-  const visit = (sec: any) => {
-    (sec.fields || []).forEach((f: any) => {
+  const visit = (sec: unknown) => {
+    (sec.fields || []).forEach((f: Record<string, unknown>) => {
       ids.add(f.id);
       // Dépendances cross-section: conditions (ex: Versant select dans une autre section)
       if (f.conditions?.[0]?.dependsOn) {
@@ -6543,7 +6543,7 @@ const collectRelevantFieldIds = (section: any): Set<string> => {
       }
     });
     if (Array.isArray(sec.subsections)) {
-      sec.subsections.forEach((sub: any) => visit(sub));
+      sec.subsections.forEach((sub: Record<string, unknown>) => visit(sub));
     }
   };
   visit(section);

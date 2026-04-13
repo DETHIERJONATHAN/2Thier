@@ -47,7 +47,7 @@ const FormulaireRemplissage: React.FC<FormulaireRemplissageProps> = ({ formDefin
   // Pour la prévisualisation d'une section, on s'attend souvent à un seul block filtré.
   const block = blocksFromProps && blocksFromProps.length > 0 ? blocksFromProps[0] : null;
 
-  const [values, setValues] = useState<Record<string, any>>({});
+  const [values, setValues] = useState<Record<string, unknown>>({});
   const [openSections, setOpenSections] = useState<Record<number, boolean>>({});
   // Ajout : stockage des formules par fieldId
   const [fieldFormulas, setFieldFormulas] = useState<Record<string, any[]>>({});
@@ -89,7 +89,7 @@ const FormulaireRemplissage: React.FC<FormulaireRemplissageProps> = ({ formDefin
     return <div className="text-gray-400 p-4">Aucune section à afficher pour l'aperçu.</div>;
   }
 
-  const handleChange = (fieldId: string | number, value: any) => { // fieldId peut être string ou number
+  const handleChange = (fieldId: string | number, value: unknown) => { // fieldId peut être string ou number
     setValues(v => ({ ...v, [fieldId]: value }));
   };
 
@@ -111,7 +111,7 @@ const FormulaireRemplissage: React.FC<FormulaireRemplissageProps> = ({ formDefin
   };
 
   // Fonction utilitaire pour évaluer une formule (version simple, supporte +, -, *, /, parenthèses)
-  function evalFormula(formulaArr: any[], currentValues: Record<string, any>) { // Renommé values en currentValues pour éviter conflit
+  function evalFormula(formulaArr: unknown[], currentValues: Record<string, unknown>) { // Renommé values en currentValues pour éviter conflit
     if (!Array.isArray(formulaArr) || formulaArr.length === 0) return '';
     // On convertit la formule en string JS safe
     let expr = '';
@@ -180,7 +180,7 @@ const FormulaireRemplissage: React.FC<FormulaireRemplissageProps> = ({ formDefin
   }
 
   // Nouvelle fonction utilitaire pour récupérer les options persistées (FieldOption[])
-  const getOptions = (field: any) => {
+  const getOptions = (field: unknown) => {
     // Priorité à field.FieldOption (retour Prisma/API), fallback sur field.options (legacy ou compatibilité)
     if (Array.isArray(field.FieldOption) && field.FieldOption.length > 0) return field.FieldOption;
     if (Array.isArray(field.options) && field.options.length > 0) return field.options;
@@ -226,7 +226,7 @@ const FormulaireRemplissage: React.FC<FormulaireRemplissageProps> = ({ formDefin
                     const formulaDescription = firstFormula?.description;
                     
                     let formulaResult = '';
-                    let parsedFormulaItems: any[] = []; 
+                    let parsedFormulaItems: unknown[] = []; 
 
                     if (firstFormula && firstFormula.formula) {
                       const parseFormulaString = (str: string): Array<{type: string, value: string}> => {
@@ -321,14 +321,14 @@ const FormulaireRemplissage: React.FC<FormulaireRemplissageProps> = ({ formDefin
                             onChange={e => handleChange(String(field.id), e.target.value)}
                           >
                             <option value="">Sélectionner...</option>
-                            {getOptions(field).map((opt: any, idx: number) => (
+                            {getOptions(field).map((opt: unknown, idx: number) => (
                               <option key={opt.id || idx} value={opt.label}>{opt.label}</option>
                             ))}
                           </select>
                         )}
                         {field.type === 'checkboxes' && getOptions(field).length > 0 && (
                           <div className="flex flex-col gap-1" style={fieldStyle}>
-                            {getOptions(field).map((opt: any, idx: number) => (
+                            {getOptions(field).map((opt: unknown, idx: number) => (
                               <label key={opt.id || idx} className="inline-flex items-center gap-2" style={{ color: fieldStyle.color }}>
                                 <input
                                   type="checkbox"
@@ -349,7 +349,7 @@ const FormulaireRemplissage: React.FC<FormulaireRemplissageProps> = ({ formDefin
                         )}
                         {field.type === 'radio' && getOptions(field).length > 0 && (
                           <div className="flex flex-col gap-1" style={fieldStyle}>
-                            {getOptions(field).map((opt: any, idx: number) => (
+                            {getOptions(field).map((opt: unknown, idx: number) => (
                               <label key={opt.id || idx} className="inline-flex items-center gap-2" style={{ color: fieldStyle.color }}>
                                 <input
                                   type="radio"

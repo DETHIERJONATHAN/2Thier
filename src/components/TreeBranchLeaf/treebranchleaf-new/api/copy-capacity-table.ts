@@ -153,7 +153,7 @@ export async function copyTableCapacity(
         // Compter le total des cellules depuis les rows
         let totalCells = 0;
         for (const row of cached.tableRows) {
-          const cells = (row.cells as any) || [];
+          const cells = (row.cells as unknown) || [];
           totalCells += Array.isArray(cells) ? cells.length : Object.keys(cells).length;
         }
         
@@ -200,7 +200,7 @@ export async function copyTableCapacity(
     // Compter le total des cellules depuis les rows
     let originalTotalCells = 0;
     for (const row of originalTable.tableRows) {
-      const cells = (row.cells as any) || [];
+      const cells = (row.cells as unknown) || [];
       originalTotalCells += Array.isArray(cells) ? cells.length : Object.keys(cells).length;
     }
 
@@ -249,7 +249,7 @@ export async function copyTableCapacity(
           // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
           meta: (() => {
             const rewriteMaps: RewriteMaps = { nodeIdMap, formulaIdMap: new Map(), conditionIdMap: new Map(), tableIdMap };
-            const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps, suffix) as any;
+            const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps, suffix) as unknown;
             const suffixNum = parseInt(suffix) || 1;
             // Suffixer les UUIDs dans selectors
             if (rewritten?.lookup?.selectors?.columnFieldId && !rewritten.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
@@ -289,7 +289,7 @@ export async function copyTableCapacity(
             // Ã°Å¸â€Â¢ COPIE TABLE META: suffixer TOUS les UUIDs et comparisonColumn
             meta: (() => {
               const rewriteMaps: RewriteMaps = { nodeIdMap, formulaIdMap: new Map(), conditionIdMap: new Map(), tableIdMap };
-              const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps) as any;
+              const rewritten = rewriteJsonReferences(originalTable.meta, rewriteMaps) as unknown;
               const suffixNum = parseInt(suffix) || 1;
               // Suffixer les UUIDs dans selectors
               if (rewritten?.lookup?.selectors?.columnFieldId && !rewritten.lookup.selectors.columnFieldId.endsWith(`-${suffixNum}`)) {
@@ -485,9 +485,9 @@ export async function copyTableCapacity(
 
 
       // Copier table_instances en remappant les clÃƒÂ©s (ancien tableId Ã¢â€ â€™ nouveau tableId)
-      let newTableInstances: Record<string, any> = {};
+      let newTableInstances: Record<string, unknown> = {};
       if (originalNode?.table_instances && typeof originalNode.table_instances === 'object') {
-        const originalInstances = originalNode.table_instances as Record<string, any>;
+        const originalInstances = originalNode.table_instances as Record<string, unknown>;
         
         for (const [tableId, config] of Object.entries(originalInstances)) {
           // Remapper l'ID de la table
@@ -521,7 +521,7 @@ export async function copyTableCapacity(
         data: {
           hasTable: true,
           table_activeId: newTableId,
-          table_instances: newTableInstances as any,
+          table_instances: newTableInstances as unknown,
           table_name: newTable.name,
           table_type: newTable.type
         }

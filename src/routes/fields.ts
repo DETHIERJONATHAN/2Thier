@@ -10,6 +10,7 @@ import formulasRouter from './formulas';
 import dependenciesRouter from './dependencies';
 import validationsRouter from './validations';
 import type { AuthenticatedRequest } from "../middlewares/auth";
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -67,7 +68,7 @@ router.get("/", requireRole(['admin', 'super_admin']), async (req: Authenticated
         });
         res.json(fields);
     } catch (error) {
-        console.error("Erreur lors de la récupération des champs:", error);
+        logger.error("Erreur lors de la récupération des champs:", error);
         res.status(500).json({ error: "Erreur interne du serveur" });
     }
 });
@@ -94,7 +95,7 @@ router.post('/:id/reorder-dependencies', requireRole(['admin', 'super_admin']), 
         );
         res.json({ success: true });
     } catch (error: unknown) {
-        console.error('[API] [POST /fields/:id/reorder-dependencies] Erreur:', error);
+        logger.error('[API] [POST /fields/:id/reorder-dependencies] Erreur:', error);
         res.status(500).json({ error: 'Erreur lors du réordonnancement des dépendances', details: (error as Error).message });
     }
 });
@@ -122,7 +123,7 @@ router.put('/:id', requireRole(['admin', 'super_admin']), async (req, res) => {
     
     res.json(field);
     } catch (err: unknown) {
-    console.error('[fields.ts] PUT /:id - Erreur:', err);
+    logger.error('[fields.ts] PUT /:id - Erreur:', err);
     const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
     res.status(404).json({ error: "Champ non trouvé ou erreur lors de la mise à jour", details: errorMessage });
   }
@@ -164,7 +165,7 @@ router.post('/:fieldId/options', requireRole(['admin', 'super_admin']), async (r
         });
         res.json(mapFieldForFrontend(updatedField));
     } catch (err: unknown) {
-    console.error('[API] [POST /fields/:fieldId/options] Erreur création option:', err);
+    logger.error('[API] [POST /fields/:fieldId/options] Erreur création option:', err);
     res.status(400).json({ error: "Erreur lors de la création de l'option", details: err.message });
   }
 });
@@ -194,7 +195,7 @@ router.delete('/:fieldId/options/:optionId', requireRole(['admin', 'super_admin'
         }
         res.json(mapFieldForFrontend(updatedField));
     } catch (err: unknown) {
-        console.error('[API] [DELETE /fields/:fieldId/options/:optionId] Erreur suppression option:', err);
+        logger.error('[API] [DELETE /fields/:fieldId/options/:optionId] Erreur suppression option:', err);
         res.status(400).json({ error: "Erreur lors de la suppression de l'option", details: err.message });
     }
 });
@@ -244,7 +245,7 @@ router.post('/meta-counts', requireRole(['admin', 'super_admin']), async (req, r
 
     res.json(result);
     } catch (err: unknown) {
-    console.error('[API] [POST /fields/meta-counts] Erreur:', err);
+    logger.error('[API] [POST /fields/meta-counts] Erreur:', err);
     res.status(500).json({ error: "Erreur serveur lors de la récupération des métadonnées", details: err.message });
   }
 });
@@ -273,7 +274,7 @@ router.patch('/:id/protection', requireRole(['super_admin']), async (req: Reques
 
         res.status(200).json(updated);
     } catch (error: unknown) {
-        console.error('[API] Erreur toggle protection champ:', error);
+        logger.error('[API] Erreur toggle protection champ:', error);
         res.status(500).json({ error: "Erreur lors de la mise à jour de la protection du champ" });
     }
 });
@@ -351,7 +352,7 @@ router.delete('/:id', requireRole(['admin', 'super_admin']), async (req: Request
 
         res.status(200).json(updatedBlock);
     } catch (error: unknown) {
-        console.error("Error deleting field:", error);
+        logger.error("Error deleting field:", error);
         res.status(500).json({ error: "An error occurred while deleting the field" });
     }
 });
@@ -431,7 +432,7 @@ router.put('/:id/move', requireRole(['admin', 'super_admin']) as unknown as (req
     res.json(adaptedBlock);
 
     } catch (err: unknown) {
-        console.error("[API] [PUT /fields/:id/move] Erreur:", err);
+        logger.error("[API] [PUT /fields/:id/move] Erreur:", err);
         res.status(500).json({ error: "Erreur lors du déplacement du champ", details: err.message });
     }
 });
@@ -490,7 +491,7 @@ router.put('/:id/reorder', requireRole(['admin', 'super_admin']), async (req: Re
 
         res.status(200).json(updatedSection);
     } catch (error: unknown) {
-        console.error("Error reordering field:", error);
+        logger.error("Error reordering field:", error);
         res.status(500).json({ error: "An error occurred while reordering the field" });
     }
 });

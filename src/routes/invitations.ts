@@ -11,6 +11,7 @@ import { prisma } from '../lib/prisma';
 import { GoogleWorkspaceIntegrationService } from "../services/GoogleWorkspaceIntegrationService";
 import { notify } from '../services/NotificationHelper';
 import { getPostalService } from '../services/PostalEmailService.js';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -19,7 +20,7 @@ const router = Router();
 const publicPaths = ['/verify', '/accept'];
 router.use((req: Request, res: Response, next: NextFunction) => {
     if (publicPaths.includes(req.path)) return next();
-    authMiddleware(req as AuthenticatedRequest, res, (err?: any) => {
+    authMiddleware(req as AuthenticatedRequest, res, (err?: unknown) => {
         if (err) return next(err);
         impersonationMiddleware(req as AuthenticatedRequest, res, next);
     });
@@ -129,7 +130,7 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
         organizationId: organizationId,
       });
     } catch (emailError) {
-        console.error("Échec de l'envoi de l'e-mail d'invitation:", emailError);
+        logger.error("Échec de l'envoi de l'e-mail d'invitation:", emailError);
         // Ne pas bloquer la réponse si l'e-mail échoue.
         // Un système de logging plus robuste serait utile ici en production.
     }
@@ -172,14 +173,14 @@ router.post('/', authMiddleware, requireRole(['admin', 'super_admin']), async (r
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
         const target = error.meta?.target ?? 'champs inconnus';
-        console.error(`Erreur de contrainte unique (P2002) sur ${target}:`, error);
+        logger.error(`Erreur de contrainte unique (P2002) sur ${target}:`, error);
         res.status(409).json({
             message: `Conflit de données. Une entrée avec ces informations existe déjà.`
         });
         return;
       }
     }
-    console.error("Erreur lors de la création de l'invitation:", error);
+    logger.error("Erreur lors de la création de l'invitation:", error);
     res.status(500).json({ message: "Erreur interne du serveur." });
   }
 });
@@ -274,7 +275,7 @@ router.post('/invite-user', authMiddleware, requireRole(['admin', 'super_admin']
         organizationId,
       });
     } catch (emailError) {
-      console.error("Échec envoi e-mail invitation:", emailError);
+      logger.error("Échec envoi e-mail invitation:", emailError);
     }
 
     // 7. Notifications
@@ -295,7 +296,7 @@ router.post('/invite-user', authMiddleware, requireRole(['admin', 'super_admin']
       res.status(400).json({ message: 'Données invalides.', details: error.errors });
       return;
     }
-    console.error("Erreur lors de l'invitation par userId:", error);
+    logger.error("Erreur lors de l'invitation par userId:", error);
     res.status(500).json({ message: "Erreur interne du serveur." });
   }
 });
@@ -334,7 +335,7 @@ router.post('/:id/resend', authMiddleware, requireRole(['admin', 'super_admin'])
     res.status(200).json({ success: true, message: "L'invitation a été renvoyée avec succès.", data: { token: updatedInvitation.token } });
 
   } catch (error) {
-    console.error("Erreur lors du renvoi de l'invitation:", error);
+    logger.error("Erreur lors du renvoi de l'invitation:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur." });
   }
 });
@@ -369,7 +370,7 @@ router.patch('/:id/status', authMiddleware, requireRole(['admin', 'super_admin']
 
         res.json({ success: true, data: updatedInvitation });
     } catch (error) {
-        console.error(`Erreur lors de la mise à jour du statut de l'invitation ${id}:`, error);
+        logger.error(`Erreur lors de la mise à jour du statut de l'invitation ${id}:`, error);
         res.status(500).json({ success: false, message: "Erreur interne du serveur." });
     }
 });
@@ -419,7 +420,7 @@ router.get('/verify', async (req: Request, res: Response): Promise<void> => {
             res.status(400).json({ message: 'Jeton invalide fourni.', details: error.errors });
             return;
         }
-        console.error("Erreur lors de la vérification du jeton d'invitation:", error);
+        logger.error("Erreur lors de la vérification du jeton d'invitation:", error);
         res.status(500).json({ message: "Erreur interne du serveur." });
     }
 });
@@ -540,10 +541,10 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                   const postal = getPostalService();
                   await postal.createMailbox(zhiiveEmail, `${user.firstName} ${user.lastName}`);
                 } catch (postalErr) {
-                  console.error(`⚠️ [Invitation] Erreur provisionnement Postal (non bloquant):`, postalErr);
+                  logger.error(`⚠️ [Invitation] Erreur provisionnement Postal (non bloquant):`, postalErr);
                 }
               } catch (emailAccErr) {
-                console.error(`⚠️ [Invitation] Erreur création EmailAccount (existant):`, emailAccErr);
+                logger.error(`⚠️ [Invitation] Erreur création EmailAccount (existant):`, emailAccErr);
               }
             }
 
@@ -561,10 +562,10 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                     
                     if (workspaceResult.success) {
                     } else {
-                        console.error(`⚠️ [Invitation] Échec création workspace pour ${user.email}:`, workspaceResult.error);
+                        logger.error(`⚠️ [Invitation] Échec création workspace pour ${user.email}:`, workspaceResult.error);
                     }
                 } catch (wsError) {
-                    console.error(`⚠️ [Invitation] Erreur création workspace:`, wsError);
+                    logger.error(`⚠️ [Invitation] Erreur création workspace:`, wsError);
                     // Ne pas bloquer l'acceptation si le workspace échoue
                 }
             }
@@ -669,7 +670,7 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                 },
               });
             } catch (emailAccErr) {
-              console.error(`⚠️ [Invitation] Erreur création EmailAccount:`, emailAccErr);
+              logger.error(`⚠️ [Invitation] Erreur création EmailAccount:`, emailAccErr);
             }
 
             return { user: createdUser, zhiiveEmail };
@@ -681,7 +682,7 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
             const postal = getPostalService();
             await postal.createMailbox(newUser.zhiiveEmail, `${firstName} ${lastName}`);
           } catch (postalErr) {
-            console.error(`⚠️ [Invitation] Erreur provisionnement Postal (non bloquant):`, postalErr);
+            logger.error(`⚠️ [Invitation] Erreur provisionnement Postal (non bloquant):`, postalErr);
           }
         }
 
@@ -701,10 +702,10 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                 if (workspaceResult.success) {
                     workspaceEmail = workspaceResult.email || null;
                 } else {
-                    console.error(`⚠️ [Invitation] Échec création workspace:`, workspaceResult.error);
+                    logger.error(`⚠️ [Invitation] Échec création workspace:`, workspaceResult.error);
                 }
             } catch (wsError) {
-                console.error(`⚠️ [Invitation] Erreur création workspace:`, wsError);
+                logger.error(`⚠️ [Invitation] Erreur création workspace:`, wsError);
                 // Ne pas bloquer l'inscription si le workspace échoue
             }
         }
@@ -731,7 +732,7 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
             res.status(400).json({ message: 'Données d\'inscription invalides.', details: error.errors });
             return;
         }
-        console.error("Erreur lors de l'acceptation de l'invitation:", error);
+        logger.error("Erreur lors de l'acceptation de l'invitation:", error);
         res.status(500).json({ message: "Erreur interne du serveur." });
     }
 });
@@ -768,7 +769,7 @@ router.delete('/:id', authMiddleware, requireRole(['admin', 'super_admin']), asy
     res.status(200).json({ success: true, message: "L'invitation a été annulée avec succès." });
 
   } catch (error) {
-    console.error("Erreur lors de l'annulation de l'invitation:", error);
+    logger.error("Erreur lors de l'annulation de l'invitation:", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur." });
   }
 });
@@ -854,7 +855,7 @@ router.post('/:id/force-accept', requireRole(['super_admin']), async (req: Authe
   res.status(201).json({ success: true, message: "L'utilisateur a été créé et l'invitation acceptée.", data: newUser });
 
     } catch (error) {
-  console.error("Erreur lors de l'acceptation forcée de l'invitation:", error);
+  logger.error("Erreur lors de l'acceptation forcée de l'invitation:", error);
         res.status(500).json({ success: false, message: "Erreur interne du serveur." });
     }
 });
@@ -898,7 +899,7 @@ router.get('/', authMiddleware, requireRole(['admin', 'super_admin']), async (re
 
     res.json({ success: true, data: invitations });
   } catch (error) {
-    console.error('Erreur lors de la récupération des invitations:', error);
+    logger.error('Erreur lors de la récupération des invitations:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération des invitations.' });
   }
 });

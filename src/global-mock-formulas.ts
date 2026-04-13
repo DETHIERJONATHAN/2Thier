@@ -13,7 +13,7 @@ declare global {
     fieldId: string,
     formulaId?: string,
     status: string,
-    details?: any
+    details?: unknown
   }>;
 }
 
@@ -36,7 +36,7 @@ if (!global._formulasOperationLog) {
 }
 
 // Fonction de journalisation des opÃƒÂ©rations
-const logOperation = (operation: string, fieldId: string, formulaId: string | null = null, status: string = 'success', details: any = null) => {
+const logOperation = (operation: string, fieldId: string, formulaId: string | null = null, status: string = 'success', details: unknown = null) => {
   const logEntry = {
     timestamp: new Date(),
     operation,
@@ -59,7 +59,7 @@ const logOperation = (operation: string, fieldId: string, formulaId: string | nu
 /**
  * RÃƒÂ©cupÃƒÂ¨re les formules stockÃƒÂ©es pour un champ spÃƒÂ©cifique
  */
-export const getFormulasForField = (fieldId: string): any[] => {
+export const getFormulasForField = (fieldId: string): unknown[] => {
   try {
     if (!fieldId) {
       console.error('[MOCK] Erreur: fieldId est undefined ou null');
@@ -88,7 +88,7 @@ export const getFormulasForField = (fieldId: string): any[] => {
     
     // Effectuer une copie profonde pour ÃƒÂ©viter toute modification accidentelle
     return JSON.parse(JSON.stringify(storedData));
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[MOCK] Erreur lors de la rÃƒÂ©cupÃƒÂ©ration des formules pour le champ ' + fieldId + ':', error);
     logOperation('getFormulasForField', fieldId, null, 'error', error.message || String(error));
     return [];
@@ -98,7 +98,7 @@ export const getFormulasForField = (fieldId: string): any[] => {
 /**
  * Met ÃƒÂ  jour une formule ou la crÃƒÂ©e si elle n'existe pas
  */
-export const updateFormula = (fieldId: string, formulaId: string, data: any): any => {
+export const updateFormula = (fieldId: string, formulaId: string, data: unknown): any => {
   try {
     if (!fieldId || !formulaId) {
       console.error('[MOCK] Erreur: fieldId ou formulaId manquant');
@@ -111,7 +111,7 @@ export const updateFormula = (fieldId: string, formulaId: string, data: any): an
     const formulas = JSON.parse(JSON.stringify(getFormulasForField(fieldId)));
     
     // Trouver l'index de la formule ÃƒÂ  mettre ÃƒÂ  jour
-    const index = formulas.findIndex((f: any) => f.id === formulaId);
+    const index = formulas.findIndex((f: unknown) => f.id === formulaId);
     
     // CrÃƒÂ©er un objet formule avec les donnÃƒÂ©es
     const formula = {
@@ -136,7 +136,7 @@ export const updateFormula = (fieldId: string, formulaId: string, data: any): an
     const formulasCopy = JSON.parse(JSON.stringify(formulas));
     
     // Tri des formules par ordre pour garantir la cohÃƒÂ©rence
-    const sortedFormulas = formulasCopy.sort((a: any, b: any) => a.order - b.order);
+    const sortedFormulas = formulasCopy.sort((a: unknown, b: unknown) => a.order - b.order);
     
     // CORRECTIF MAJEUR : Double sauvegarde dans deux stores sÃƒÂ©parÃƒÂ©s pour redondance
     // Sauvegarde dans le store principal
@@ -157,7 +157,7 @@ export const updateFormula = (fieldId: string, formulaId: string, data: any): an
     if (storedFormulas && storedFormulas.length > 0) {
       
       // VÃƒÂ©rifier la structure complÃƒÂ¨te pour dÃƒÂ©tecter les anomalies
-      storedFormulas.forEach((f: any, idx: number) => {
+      storedFormulas.forEach((f: unknown, idx: number) => {
         if (!f.id || !f.sequence) {
           console.warn(`[MOCK] Ã¢Å¡Â Ã¯Â¸Â Formule #${idx} potentiellement corrompue:`, 
             JSON.stringify({id: f.id, hasSequence: !!f.sequence, sequenceType: typeof f.sequence}));
@@ -167,7 +167,7 @@ export const updateFormula = (fieldId: string, formulaId: string, data: any): an
     
     // Renvoyer la formule mise ÃƒÂ  jour
     return formula;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[MOCK] Erreur lors de la mise ÃƒÂ  jour de la formule ' + formulaId + ':', error);
     logOperation('updateFormula', fieldId, formulaId, 'error', error.message || String(error));
     return null;
@@ -197,7 +197,7 @@ export const deleteFormula = (fieldId: string, formulaId: string): boolean => {
     
     logOperation('deleteFormula', fieldId, formulaId, 'warning', 'Formule non trouvÃƒÂ©e');
     return false;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[MOCK] Erreur lors de la suppression de la formule ' + formulaId + ':', error);
     logOperation('deleteFormula', fieldId, formulaId, 'error', error.message || String(error));
     return false;
@@ -233,14 +233,14 @@ export const clearStorage = (fieldId?: string) => {
 };
 
 // Fonction pour forcer le rechargement du store avec systÃƒÂ¨me de secours (utile pour dÃƒÂ©boguer)
-export const forceRefreshStore = (fieldId: string): any[] => {
+export const forceRefreshStore = (fieldId: string): unknown[] => {
   if (!fieldId) {
     console.error('[MOCK] Ã¢ÂÅ’ forceRefreshStore - ERREUR: fieldId est vide ou null');
     return [];
   }
   
   
-  let formulas: any[] = [];
+  let formulas: unknown[] = [];
   let source = 'aucune';
   
   // Tentative 1: RÃƒÂ©cupÃƒÂ©rer depuis le store principal

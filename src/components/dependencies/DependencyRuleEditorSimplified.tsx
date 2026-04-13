@@ -94,7 +94,7 @@ const DependencyRuleEditorSimplified: React.FC<DependencyRuleEditorProps> = ({
       onUpdate({
         id: dependency.id,
         targetFieldId: mainCondition.targetFieldId,
-        operator: mainCondition.operator as any,
+        operator: mainCondition.operator as unknown,
         value: mainCondition.value
       });
     }

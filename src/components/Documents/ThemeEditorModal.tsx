@@ -6,8 +6,8 @@ import type { Color } from 'antd/es/color-picker';
 interface ThemeEditorModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (theme: any) => Promise<void>;
-  initialTheme?: any;
+  onSave: (theme: unknown) => Promise<void>;
+  initialTheme?: unknown;
 }
 
 const ThemeEditorModal = ({ visible, onClose, onSave, initialTheme }: ThemeEditorModalProps) => {

@@ -40,7 +40,7 @@ interface TimeEntry {
   clockOutAddress: string | null;
   clockOutDistance: number | null;
   clockOutPhotoUrl: string | null;
-  deviceInfo: any;
+  deviceInfo: unknown;
   ipAddress: string | null;
   Technician: {
     id: string;
@@ -114,7 +114,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
           message.success(`📍 Position du chantier enregistrée (±${Math.round(position.coords.accuracy)}m)`);
           // Force reload of the parent page to pick up new coordinates
           window.location.reload();
-        } catch (err: any) {
+        } catch (err: unknown) {
           message.error(err?.message || 'Erreur');
         } finally {
           setSettingGeo(false);
@@ -131,7 +131,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
   const fetchEntries = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/api/teams/time-entries?chantierId=${chantierId}`) as any;
+      const res = await api.get(`/api/teams/time-entries?chantierId=${chantierId}`) as unknown;
       setEntries(res.data || []);
     } catch (err) {
       console.error('[Pointage] Erreur:', err);
@@ -142,9 +142,9 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
 
   const fetchTechnicians = useCallback(async () => {
     try {
-      const res = await api.get('/api/teams/technicians?scopeAction=pointage') as any;
+      const res = await api.get('/api/teams/technicians?scopeAction=pointage') as unknown;
       // Filtrer: internes + sous-traitants en régie uniquement
-      const eligible = (res.data || []).filter((t: any) =>
+      const eligible = (res.data || []).filter((t: Record<string, unknown>) =>
         t.type === 'INTERNAL' || (t.type === 'SUBCONTRACTOR' && t.billingMode === 'REGIE')
       );
       setTechnicians(eligible);
@@ -163,7 +163,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
       await api.delete(`/api/teams/time-entries/${entryId}`);
       message.success('Pointage supprimé');
       fetchEntries();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur');
     }
   }, [api, fetchEntries]);
@@ -177,7 +177,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
       title: 'Technicien',
       key: 'tech',
       width: 150,
-      render: (_: any, r: TimeEntry) => (
+      render: (_: unknown, r: TimeEntry) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: r.Technician.color }} />
           <span style={{ fontSize: 12 }}>
@@ -191,19 +191,19 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
       title: 'Date',
       key: 'date',
       width: 90,
-      render: (_: any, r: TimeEntry) => <span style={{ fontSize: 12 }}>{dayjs(r.date).format('DD/MM/YYYY')}</span>,
+      render: (_: unknown, r: TimeEntry) => <span style={{ fontSize: 12 }}>{dayjs(r.date).format('DD/MM/YYYY')}</span>,
     },
     {
       title: 'Heure',
       key: 'start',
       width: 70,
-      render: (_: any, r: TimeEntry) => <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{dayjs(r.startTime).format('HH:mm')}</span>,
+      render: (_: unknown, r: TimeEntry) => <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{dayjs(r.startTime).format('HH:mm')}</span>,
     },
     {
       title: 'Statut',
       key: 'type',
       width: 130,
-      render: (_: any, r: TimeEntry) => {
+      render: (_: unknown, r: TimeEntry) => {
         const cfg = TYPE_CONFIG[r.type] || TYPE_CONFIG.CHANTIER;
         const sl = STATUS_LABELS[r.type];
         return <Tag icon={cfg.icon} color={cfg.color} style={{ fontSize: 10 }}>{sl?.emoji || ''} {cfg.label}</Tag>;
@@ -213,7 +213,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
       title: 'Durée',
       key: 'duration',
       width: 70,
-      render: (_: any, r: TimeEntry) => {
+      render: (_: unknown, r: TimeEntry) => {
         if (!r.durationMinutes || r.durationMinutes <= 0) return <span style={{ fontSize: 11, color: '#bfbfbf' }}>-</span>;
         return (
           <Text strong style={{ fontSize: 12, color: '#262626' }}>
@@ -226,7 +226,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
       title: '📍',
       key: 'geo',
       width: 55,
-      render: (_: any, r: TimeEntry) => {
+      render: (_: unknown, r: TimeEntry) => {
         const hasIn = r.clockInLatitude != null;
         const hasOut = r.clockOutLatitude != null;
         const fenceRadius = r.Chantier?.geoFenceRadius || geoFenceRadius || 500;
@@ -259,7 +259,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
       title: '📸',
       key: 'photos',
       width: 55,
-      render: (_: any, r: TimeEntry) => {
+      render: (_: unknown, r: TimeEntry) => {
         const hasInPhoto = !!r.clockInPhotoUrl;
         const hasOutPhoto = !!r.clockOutPhotoUrl;
         return (
@@ -295,7 +295,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
       title: '📱',
       key: 'device',
       width: 35,
-      render: (_: any, r: TimeEntry) => {
+      render: (_: unknown, r: TimeEntry) => {
         if (!r.deviceInfo) return <MobileOutlined style={{ color: '#d9d9d9', fontSize: 13 }} />;
         const info = typeof r.deviceInfo === 'string' ? JSON.parse(r.deviceInfo) : r.deviceInfo;
         const isAndroid = /Android/i.test(info.userAgent || '');
@@ -317,13 +317,13 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
       title: 'Note',
       key: 'note',
       ellipsis: true,
-      render: (_: any, r: TimeEntry) => <span style={{ fontSize: 11, color: '#8c8c8c' }}>{r.note || '-'}</span>,
+      render: (_: unknown, r: TimeEntry) => <span style={{ fontSize: 11, color: '#8c8c8c' }}>{r.note || '-'}</span>,
     },
     {
       title: '',
       key: 'actions',
       width: 50,
-      render: (_: any, r: TimeEntry) => (
+      render: (_: unknown, r: TimeEntry) => (
         <Space size={4}>
           <Popconfirm title="Supprimer ce pointage ?" onConfirm={() => handleDelete(r.id)} okText="Oui" cancelText="Non">
             <Button danger size="small" icon={<DeleteOutlined />} style={{ fontSize: 10 }} />
@@ -360,7 +360,7 @@ const ChantierPointageTab: React.FC<ChantierPointageTabProps> = ({ chantierId, c
                 size="small"
                 showSearch
                 optionFilterProp="label"
-                options={technicians.map((t: any) => ({
+                options={technicians.map((t: Record<string, unknown>) => ({
                   value: t.id,
                   label: `${t.firstName} ${t.lastName}`.trim(),
                 }))}

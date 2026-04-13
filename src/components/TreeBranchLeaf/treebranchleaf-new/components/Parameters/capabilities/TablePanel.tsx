@@ -571,7 +571,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
   const [filterResults, setFilterResults] = useState<{
     totalOptions: number;
     filteredOptions: number;
-    matchingRows: any[];
+    matchingRows: unknown[];
     conditions: Array<{ id: string; result: boolean; description: string }>;
   } | null>(null);
   const [evaluationLoading, setEvaluationLoading] = useState(false);
@@ -591,7 +591,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
         const res = await api.get(`/api/gestionnaire/trees/${initialTreeId}/exposed`);
         if (cancelled) return;
         const tables = res?.tables || [];
-        const found = tables.find((t: any) => t.id === activeId);
+        const found = tables.find((t: Record<string, unknown>) => t.id === activeId);
         setGestionnaireExposed(!!found);
         setGestionnaireLabel(found?.gestionnaireLabel || '');
       } catch (err) {
@@ -1393,7 +1393,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       key: 'row',
       fixed: 'left' as const,
       // Use record.rowIndex which references the actual index in cfg.rows/cfg.data (includes header at index 0)
-      render: (_: unknown, record: any) => {
+      render: (_: unknown, record: unknown) => {
         const idx = typeof record?.rowIndex === 'number' ? record.rowIndex : 0;
         // Afficher le label correspondant (cfg.rows peut contenir arrays ou strings)
         const label = Array.isArray((cfg.rows || [])[idx]) ? String((cfg.rows || [])[idx][0]) : String((cfg.rows || [])[idx] ?? '');
@@ -1412,7 +1412,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
       dataIndex: String(cIdx),
       key: String(cIdx),
       // Use record.rowIndex to resolve the correct row in cfg.data (which may include header at index 0)
-      render: (_: unknown, record: any) => {
+      render: (_: unknown, record: unknown) => {
         const idx = typeof record?.rowIndex === 'number' ? record.rowIndex : 0;
   const value = (cfg.data?.[idx]?.[cIdx] ?? '') as string | number;
         return (
@@ -1933,7 +1933,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                     capabilityId: activeId,
                     exposed: false,
                     label: null,
-                  }).catch((err: any) => console.error('[Gestionnaire] Failed to unexpose table:', err));
+                  }).catch((err: unknown) => console.error('[Gestionnaire] Failed to unexpose table:', err));
                 }
               }
             }}
@@ -2341,7 +2341,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                 enabled: true,
                                 columnLookupEnabled: true,
                                 rowLookupEnabled: prev.rowLookupEnabled ?? false,
-                                columnSourceOption: { ...(prev.columnSourceOption || {}), type: 'select', description: (prev.columnSourceOption as any)?.description || 'Colonne de la table' },
+                                columnSourceOption: { ...(prev.columnSourceOption || {}), type: 'select', description: (prev.columnSourceOption as unknown)?.description || 'Colonne de la table' },
                                 selectors: { ...(prev.selectors || {}), columnFieldId: value || null },
                               }));
 
@@ -2422,7 +2422,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                             </Text>
                             
                             <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                              {(lookupConfig.columnSourceOption?.filters || []).map((filter: any, index: number) => (
+                              {(lookupConfig.columnSourceOption?.filters || []).map((filter: unknown, index: number) => (
                                 <div key={index} style={{ background: '#fff', padding: 16, borderRadius: 6, border: '1px solid #d9d9d9' }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                                     <Text strong style={{ fontSize: 12 }}>Filtre {index + 1}</Text>
@@ -2435,7 +2435,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                           ...prev,
                                           columnSourceOption: {
                                             ...(prev.columnSourceOption || {}),
-                                            filters: prev.columnSourceOption?.filters?.filter((_: any, i: number) => i !== index) || []
+                                            filters: prev.columnSourceOption?.filters?.filter((_: unknown, i: number) => i !== index) || []
                                           }
                                         }));
                                       }}
@@ -2613,7 +2613,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                               </Select>
                                             </div>
                                             {/* Liste des conditions */}
-                                            {(filter.multiplier.conditions || []).map((cond: any, condIdx: number) => (
+                                            {(filter.multiplier.conditions || []).map((cond: unknown, condIdx: number) => (
                                               <div key={condIdx} style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '4px', background: '#fff', border: '1px solid #f0f0f0', borderRadius: 4 }}>
                                                 <Text type="secondary" style={{ fontSize: 10, minWidth: 12 }}>{condIdx === 0 ? 'SI' : 'ET'}</Text>
                                                 {/* Champ A */}
@@ -2796,7 +2796,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                               border: `1px solid ${(filter.multiplier.mode || 'multiply') === 'fixed' ? '#adc6ff' : '#ffe58f'}` 
                                             }}>
                                               <Text style={{ fontSize: 10, color: (filter.multiplier.mode || 'multiply') === 'fixed' ? '#1d39c4' : '#874d00' }}>
-                                                {(filter.multiplier.mode || 'multiply') === 'fixed' ? '🎯' : '📐'} SI {(filter.multiplier.conditions || []).map((c: any, i: number) => 
+                                                {(filter.multiplier.mode || 'multiply') === 'fixed' ? '🎯' : '📐'} SI {(filter.multiplier.conditions || []).map((c: unknown, i: number) => 
                                                   `${i > 0 ? ' ET ' : ''}${c.fieldA || '?'} ${
                                                     c.operator === 'equals' ? '=' :
                                                     c.operator === 'notEquals' ? '≠' :
@@ -3687,7 +3687,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                     onChange={() => {
                                       updateLookupConfig((prev) => ({
                                         ...prev,
-                                        columnSourceOption: { ...(prev.columnSourceOption || {}), operator: op as any }
+                                        columnSourceOption: { ...(prev.columnSourceOption || {}), operator: op as unknown }
                                       }));
                                     }}
                                     disabled={readOnly}
@@ -3846,7 +3846,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                               onChange={(value) => {
                                 updateLookupConfig((prev) => ({
                                   ...prev,
-                                  rowSourceOption: { ...(prev.rowSourceOption || {}), type: 'select', description: (prev.rowSourceOption as any)?.description || 'Ligne de la table' },
+                                  rowSourceOption: { ...(prev.rowSourceOption || {}), type: 'select', description: (prev.rowSourceOption as unknown)?.description || 'Ligne de la table' },
                                   selectors: { ...(prev.selectors || {}), rowFieldId: value || null },
                                 }));
 
@@ -4017,7 +4017,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                           </Text>
                           
                           <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                            {(lookupConfig.rowSourceOption?.filters || []).map((filter: any, index: number) => (
+                            {(lookupConfig.rowSourceOption?.filters || []).map((filter: unknown, index: number) => (
                               <div key={index} style={{ background: '#fff', padding: 16, borderRadius: 6, border: '1px solid #ffd591' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                                   <Text strong style={{ fontSize: 12 }}>Filtre {index + 1}</Text>
@@ -4030,7 +4030,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                         ...prev,
                                         rowSourceOption: {
                                           ...(prev.rowSourceOption || {}),
-                                          filters: prev.rowSourceOption?.filters?.filter((_: any, i: number) => i !== index) || []
+                                          filters: prev.rowSourceOption?.filters?.filter((_: unknown, i: number) => i !== index) || []
                                         }
                                       }));
                                     }}
@@ -4201,7 +4201,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                               <Select.Option value="fixed">🎯 Valeur fixe (= valeur)</Select.Option>
                                             </Select>
                                           </div>
-                                          {(filter.multiplier.conditions || []).map((cond: any, condIdx: number) => (
+                                          {(filter.multiplier.conditions || []).map((cond: unknown, condIdx: number) => (
                                             <div key={condIdx} style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '4px', background: '#fff', border: '1px solid #f0f0f0', borderRadius: 4 }}>
                                               <Text type="secondary" style={{ fontSize: 10, minWidth: 12 }}>{condIdx === 0 ? 'SI' : 'ET'}</Text>
                                               <div style={{ flex: 1 }}>
@@ -4362,7 +4362,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                                     onChange={() => {
                                       updateLookupConfig((prev) => ({
                                         ...prev,
-                                        rowSourceOption: { ...(prev.rowSourceOption || {}), operator: op as any }
+                                        rowSourceOption: { ...(prev.rowSourceOption || {}), operator: op as unknown }
                                       }));
                                     }}
                                     disabled={readOnly}

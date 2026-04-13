@@ -782,7 +782,7 @@ export async function deepCopyNodeInternal(
       displayNodeIds.push(newId);
     }
 
-    if (oldNode.aiMeasure_keys && Array.isArray(oldNode.aiMeasure_keys) && (oldNode.aiMeasure_keys as any[]).length > 0) {
+    if (oldNode.aiMeasure_keys && Array.isArray(oldNode.aiMeasure_keys) && (oldNode.aiMeasure_keys as unknown[]).length > 0) {
       aiMeasureNodes.push({ oldNode, newId });
     }
   }
@@ -918,7 +918,7 @@ export async function deepCopyNodeInternal(
   // PERF: Accumulate formula ref updates for batch flush (instead of per-formula linkFormulaToAllNodes)
   const pendingLinkedFormulaUpdates = new Map<string, Set<string>>();
   // PERF R6: Accumulate capacity flags for merged final update
-  const pendingCapacityFlags = new Map<string, Record<string, any>>();
+  const pendingCapacityFlags = new Map<string, Record<string, unknown>>();
 
   // PERF R7: Process all nodes' capacities in PARALLEL (independent nodes, shared Maps safe in single-threaded JS)
   await Promise.all(createdNodes.map(async ({ oldId, newId, newParentId }) => {
@@ -1127,7 +1127,7 @@ export async function deepCopyNodeInternal(
     const shouldHaveFormula = (oldNode.hasFormula === true) || formulas.length > 0;
     const shouldHaveCondition = (oldNode.hasCondition === true) || conditions.length > 0;
     if (shouldHaveFormula || shouldHaveCondition) {
-      const caps: Record<string, any> = {};
+      const caps: Record<string, unknown> = {};
       if (shouldHaveFormula) {
         caps.hasFormula = true;
         const mappedActive = oldNode.formula_activeId ? (formulaIdMap.get(oldNode.formula_activeId) || null) : null;
@@ -1255,7 +1255,7 @@ export async function deepCopyNodeInternal(
                 parentId: resolvedParentId,                // 🔧 FIX: section fixe → non suffixé
                 order: originalOwnerNode.order,            // 🔧 FIX: était 0 → hériter
                 fieldType: originalOwnerNode.fieldType,
-                fieldSubType: originalOwnerNode.fieldSubType as any,
+                fieldSubType: originalOwnerNode.fieldSubType as unknown,
                 hasData: originalOwnerNode.hasData,
                 hasFormula: originalOwnerNode.hasFormula,
                 hasCondition: originalOwnerNode.hasCondition,
@@ -1263,7 +1263,7 @@ export async function deepCopyNodeInternal(
                 hasAPI: originalOwnerNode.hasAPI ?? false,
                 hasLink: originalOwnerNode.hasLink ?? false,
                 hasMarkers: originalOwnerNode.hasMarkers ?? false,
-                metadata: originalMeta as any,             // 🔧 FIX: était vide → copié
+                metadata: originalMeta as unknown,             // 🔧 FIX: était vide → copié
                 data_unit: originalOwnerNode.data_unit,
                 data_precision: originalOwnerNode.data_precision,
                 data_displayFormat: originalOwnerNode.data_displayFormat,
@@ -1275,7 +1275,7 @@ export async function deepCopyNodeInternal(
             });
             nodeExists = createdNode;
             existingNodeIds.add(tableOwnerNodeId);
-          } catch (err: any) {
+          } catch (err: unknown) {
             // P2002 = unique constraint → nœud créé entretemps par un processus parallèle
             if (err?.code === 'P2002') {
               nodeExists = { id: tableOwnerNodeId };
@@ -1442,7 +1442,7 @@ export async function deepCopyNodeInternal(
             data: {
               id: copiedSelectConfigId,
               nodeId: newId,
-              options: originalSelectConfig.options as any,
+              options: originalSelectConfig.options as unknown,
               multiple: originalSelectConfig.multiple,
               searchable: originalSelectConfig.searchable,
               allowCustom: originalSelectConfig.allowCustom,

@@ -166,7 +166,7 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ websiteId, sit
     }
   };
 
-  const handleDragEnd = async (event: any) => {
+  const handleDragEnd = async (event: unknown) => {
     const { active, over } = event;
 
     if (active.id !== over.id) {
@@ -226,7 +226,7 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ websiteId, sit
     }
   };
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: unknown) => {
     try {
       if (editingService) {
         await api.put(`/api/website-services/${editingService.id}`, values);
@@ -246,7 +246,7 @@ export const ServicesManager: React.FC<ServicesManagerProps> = ({ websiteId, sit
     }
   };
 
-  const handleAIGenerated = (content: any) => {
+  const handleAIGenerated = (content: unknown) => {
     form.setFieldsValue({
       key: content.key,
       icon: content.icon,

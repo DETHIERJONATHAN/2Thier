@@ -94,7 +94,7 @@ router.post('/send-meeting-confirmation', authenticateToken, async (req, res) =>
       subject: emailContent.subject
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Gmail] ❌ Erreur envoi email confirmation:', error);
     res.status(500).json({
       error: 'Erreur lors de l\'envoi de l\'email de confirmation',

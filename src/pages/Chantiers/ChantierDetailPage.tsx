@@ -94,14 +94,14 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
   const fetchUpcomingEvents = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await api.get(`/api/chantier-workflow/chantiers/${id}/events`) as any;
+      const res = await api.get(`/api/chantier-workflow/chantiers/${id}/events`) as unknown;
       const all = res.data || res || [];
       // Stocker tous les événements non annulés (pour le reviewEventId)
-      setAllEvents(all.filter((e: any) => e.status !== 'CANCELLED'));
+      setAllEvents(all.filter((e: Record<string, unknown>) => e.status !== 'CANCELLED'));
       const now = new Date();
       const upcoming = all
-        .filter((e: any) => new Date(e.startDate) >= now && e.status !== 'CANCELLED')
-        .sort((a: any, b: any) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+        .filter((e: Record<string, unknown>) => new Date(e.startDate) >= now && e.status !== 'CANCELLED')
+        .sort((a: unknown, b: unknown) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
         .slice(0, 3);
       setUpcomingEvents(upcoming);
     } catch { /* silencieux */ }
@@ -124,7 +124,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
   const fetchReception = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await api.get(`/api/chantier-workflow/chantiers/${id}/reception`) as any;
+      const res = await api.get(`/api/chantier-workflow/chantiers/${id}/reception`) as unknown;
       setReceptionData(res.data || null);
     } catch { /* silencieux */ }
   }, [api, id]);
@@ -133,10 +133,10 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
     if (!id) return;
     setPreparingReception(true);
     try {
-      const res = await api.post(`/api/chantier-workflow/chantiers/${id}/reception/prepare`, {}) as any;
+      const res = await api.post(`/api/chantier-workflow/chantiers/${id}/reception/prepare`, {}) as unknown;
       message.success('PV de réception préparé');
       setReceptionData(res.data || null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur lors de la préparation');
     } finally {
       setPreparingReception(false);
@@ -147,10 +147,10 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
     if (!id) return;
     setSendingToClient(true);
     try {
-      const res = await api.post(`/api/chantier-workflow/chantiers/${id}/reception/send-to-client`, {}) as any;
+      const res = await api.post(`/api/chantier-workflow/chantiers/${id}/reception/send-to-client`, {}) as unknown;
       message.success(res.message || 'Lien envoyé au client');
       fetchReception();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur lors de l\'envoi');
     } finally {
       setSendingToClient(false);
@@ -199,7 +199,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
         try {
           await api.put(`/api/chantiers/${id}/status`, { statusId: newStatusId });
           message.success('Chantier et statut mis à jour');
-        } catch (statusErr: any) {
+        } catch (statusErr: unknown) {
           const errMsg = statusErr?.message || statusErr?.data?.message || 'Transition non autorisée';
           message.warning(`Chantier sauvegardé, mais le statut n'a pas changé : ${errMsg}`);
         }
@@ -267,17 +267,17 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
     if (!allEvents?.length) return null;
     // D'abord chercher dans les événements futurs non complétés
     const now = new Date();
-    const futureRelevant = allEvents.find((e: any) =>
+    const futureRelevant = allEvents.find((e: Record<string, unknown>) =>
       ['VISITE_TECHNIQUE', 'CHANTIER'].includes(e.type) && e.status !== 'COMPLETED' && new Date(e.startDate) >= now
     );
     if (futureRelevant) return futureRelevant.id;
     // Ensuite chercher parmi tous les événements non complétés (même passés)
-    const anyRelevant = allEvents.find((e: any) =>
+    const anyRelevant = allEvents.find((e: Record<string, unknown>) =>
       ['VISITE_TECHNIQUE', 'CHANTIER'].includes(e.type) && e.status !== 'COMPLETED'
     );
     if (anyRelevant) return anyRelevant.id;
     // En dernier recours, prendre le plus récent événement (même complété)
-    const sorted = [...allEvents].sort((a: any, b: any) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+    const sorted = [...allEvents].sort((a: unknown, b: unknown) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
     return sorted[0]?.id || null;
   })();
   const tblUrl = chantier.leadId
@@ -286,7 +286,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
 
   // Données du devis lié (GeneratedDocument + dataSnapshot)
   const genDoc = chantier.GeneratedDocument;
-  const snapshot = (genDoc?.dataSnapshot as any) || {};
+  const snapshot = (genDoc?.dataSnapshot as unknown) || {};
   const quoteData = snapshot?.quote || {};
   const leadSnapshotData = snapshot?.lead || {};
 
@@ -300,7 +300,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
   const displayAddress = chantier.siteAddress
     || leadSnapshotData.address
     || (() => {
-      const ld = chantier.Lead?.data || {} as any;
+      const ld = chantier.Lead?.data || {} as unknown;
       const parts = [];
       const street = ld.street || ld.address || '';
       if (street) parts.push(street + (ld.number ? ' ' + ld.number : ''));
@@ -393,7 +393,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                     await api.post(`/api/chantier-workflow/chantiers/${chantier.id}/validate`, {});
                     message.success('Chantier validé !');
                     fetchChantier();
-                  } catch (err: any) {
+                  } catch (err: unknown) {
                     message.error(err?.message || 'Erreur lors de la validation');
                   }
                 }}
@@ -813,7 +813,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                       <div>
                         <Text type="secondary" style={{ fontSize: '12px' }}>Techniciens assignés</Text>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
-                          {chantier.ChantierAssignments.map((a: any) => (
+                          {chantier.ChantierAssignments.map((a: Record<string, unknown>) => (
                             <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px', borderRadius: 6, background: '#fafafa' }}>
                               <Avatar
                                 size={28}
@@ -854,7 +854,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                                         await api.delete(`/api/teams/assignments/${a.id}`);
                                         message.success('Technicien retiré');
                                         fetchChantier();
-                                      } catch (err: any) {
+                                      } catch (err: unknown) {
                                         message.error(err?.message || 'Erreur lors du retrait');
                                       }
                                     }}
@@ -894,7 +894,7 @@ const ChantierDetailPage: React.FC<{ chantierId?: string; onBack?: () => void }>
                   }}>Voir tout</Button>}
                 >
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {upcomingEvents.map((evt: any) => (
+                    {upcomingEvents.map((evt: Record<string, unknown>) => (
                       <div key={evt.id} style={{
                         display: 'flex', alignItems: 'center', gap: 8,
                         padding: '6px 8px', borderRadius: 6,

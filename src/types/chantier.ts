@@ -69,7 +69,7 @@ export interface Chantier {
     company?: string | null;
     email?: string | null;
     phone?: string | null;
-    data?: Record<string, any> | null;
+    data?: Record<string, unknown> | null;
   } | null;
   ChantierStatus?: ChantierStatus | null;
   Responsable?: {
@@ -98,14 +98,14 @@ export interface Chantier {
     status?: string;
     pdfUrl?: string | null;
     submissionId?: string | null;
-    dataSnapshot?: Record<string, any> | null;
+    dataSnapshot?: Record<string, unknown> | null;
     paymentAmount?: number | null;
     createdAt?: string;
   } | null;
   TreeBranchLeafSubmission?: {
     id: string;
     treeId?: string;
-    summary?: Record<string, any> | null;
+    summary?: Record<string, unknown> | null;
     status?: string;
   } | null;
 
@@ -239,7 +239,7 @@ export interface TimeEntry {
   clockOutAddress: string | null;
   clockOutDistance: number | null;
   clockOutPhotoUrl: string | null;
-  deviceInfo: any;
+  deviceInfo: unknown;
   ipAddress: string | null;
   Technician: {
     id: string;

@@ -34,7 +34,7 @@ const CreateMeetingModal: React.FC<CreateMeetingModalProps> = ({
   const [loading, setLoading] = useState(false);
   const { createProjectMeeting, createLeadMeeting } = useCalendarIntegration();
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: unknown) => {
     try {
       setLoading(true);
 

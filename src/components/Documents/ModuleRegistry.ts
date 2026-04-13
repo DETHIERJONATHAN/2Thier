@@ -10,7 +10,7 @@ export interface ModuleTheme {
   name: string;
   description: string;
   preview?: string; // URL preview image
-  styles: Record<string, any>;
+  styles: Record<string, unknown>;
 }
 
 export interface ModuleDefinition {
@@ -20,7 +20,7 @@ export interface ModuleDefinition {
   category: ModuleCategory;
   description: string;
   // Configuration par défaut du module
-  defaultConfig: Record<string, any>;
+  defaultConfig: Record<string, unknown>;
   // Thèmes disponibles pour ce module
   themes: ModuleTheme[];
   // Champs configurables
@@ -36,7 +36,7 @@ export interface ConfigField {
   label: string;
   type: 'text' | 'textarea' | 'number' | 'color' | 'select' | 'image' | 'toggle' | 'date' | 'rich-text' | 'data-binding' | 'icon-picker';
   options?: { value: string; label: string }[];
-  defaultValue?: any;
+  defaultValue?: unknown;
   placeholder?: string;
   group?: string; // Pour regrouper les champs
   /**

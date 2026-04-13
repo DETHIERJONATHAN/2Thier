@@ -8,8 +8,11 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { google } from 'googleapis';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
+router.use(authenticateToken);
 
 // ============================================================================
 // 🔐 Helper pour extraire le contexte d'auth
@@ -82,8 +85,8 @@ router.post('/gmail/modify', async (req: Request, res: Response) => {
       message: `${messageIds.length} message(s) modifié(s)` 
     });
 
-  } catch (error: any) {
-    console.error('[BATCH] ❌ Gmail modify error:', error);
+  } catch (error: unknown) {
+    logger.error('[BATCH] ❌ Gmail modify error:', error);
     res.status(500).json({ error: error.message || 'Erreur batch Gmail' });
   }
 });
@@ -135,8 +138,8 @@ router.post('/gmail/trash', async (req: Request, res: Response) => {
       message: `${messageIds.length} message(s) mis à la corbeille` 
     });
 
-  } catch (error: any) {
-    console.error('[BATCH] ❌ Gmail trash error:', error);
+  } catch (error: unknown) {
+    logger.error('[BATCH] ❌ Gmail trash error:', error);
     res.status(500).json({ error: error.message || 'Erreur batch Gmail' });
   }
 });
@@ -186,8 +189,8 @@ router.delete('/gmail/delete', async (req: Request, res: Response) => {
       message: `${messageIds.length} message(s) supprimé(s) définitivement` 
     });
 
-  } catch (error: any) {
-    console.error('[BATCH] ❌ Gmail delete error:', error);
+  } catch (error: unknown) {
+    logger.error('[BATCH] ❌ Gmail delete error:', error);
     res.status(500).json({ error: error.message || 'Erreur batch Gmail' });
   }
 });
@@ -242,8 +245,8 @@ router.patch('/leads/status', async (req: Request, res: Response) => {
       message: `${result.count} lead(s) mis à jour` 
     });
 
-  } catch (error: any) {
-    console.error('[BATCH] ❌ Leads status error:', error);
+  } catch (error: unknown) {
+    logger.error('[BATCH] ❌ Leads status error:', error);
     res.status(500).json({ error: error.message || 'Erreur batch leads' });
   }
 });
@@ -281,8 +284,8 @@ router.patch('/leads/assign', async (req: Request, res: Response) => {
       message: `${result.count} lead(s) assigné(s)` 
     });
 
-  } catch (error: any) {
-    console.error('[BATCH] ❌ Leads assign error:', error);
+  } catch (error: unknown) {
+    logger.error('[BATCH] ❌ Leads assign error:', error);
     res.status(500).json({ error: error.message || 'Erreur batch leads' });
   }
 });
@@ -316,8 +319,8 @@ router.delete('/leads', async (req: Request, res: Response) => {
       message: `${result.count} lead(s) supprimé(s)` 
     });
 
-  } catch (error: any) {
-    console.error('[BATCH] ❌ Leads delete error:', error);
+  } catch (error: unknown) {
+    logger.error('[BATCH] ❌ Leads delete error:', error);
     res.status(500).json({ error: error.message || 'Erreur batch leads' });
   }
 });
@@ -351,7 +354,7 @@ router.post('/fields/configs', async (req: Request, res: Response) => {
     });
 
     // Organiser par fieldId pour faciliter l'accès côté client
-    const configsByFieldId: Record<string, any> = {};
+    const configsByFieldId: Record<string, unknown> = {};
     for (const config of configs) {
       configsByFieldId[config.fieldId] = config;
     }
@@ -362,8 +365,8 @@ router.post('/fields/configs', async (req: Request, res: Response) => {
       configs: configsByFieldId 
     });
 
-  } catch (error: any) {
-    console.error('[BATCH] ❌ Fields configs error:', error);
+  } catch (error: unknown) {
+    logger.error('[BATCH] ❌ Fields configs error:', error);
     res.status(500).json({ error: error.message || 'Erreur batch fields' });
   }
 });
@@ -409,8 +412,8 @@ router.patch('/modules/toggle', async (req: Request, res: Response) => {
       message: `${result.count} module(s) ${enabled ? 'activé(s)' : 'désactivé(s)'}` 
     });
 
-  } catch (error: any) {
-    console.error('[BATCH] ❌ Modules toggle error:', error);
+  } catch (error: unknown) {
+    logger.error('[BATCH] ❌ Modules toggle error:', error);
     res.status(500).json({ error: error.message || 'Erreur batch modules' });
   }
 });
@@ -456,8 +459,8 @@ router.get('/analytics/leads-by-status', async (req: Request, res: Response) => 
 
     res.json({ success: true, data: result });
 
-  } catch (error: any) {
-    console.error('[BATCH] ❌ Analytics leads-by-status error:', error);
+  } catch (error: unknown) {
+    logger.error('[BATCH] ❌ Analytics leads-by-status error:', error);
     res.status(500).json({ error: error.message || 'Erreur analytics' });
   }
 });
@@ -487,8 +490,8 @@ router.get('/analytics/leads-by-source', async (req: Request, res: Response) => 
 
     res.json({ success: true, data: result });
 
-  } catch (error: any) {
-    console.error('[BATCH] ❌ Analytics leads-by-source error:', error);
+  } catch (error: unknown) {
+    logger.error('[BATCH] ❌ Analytics leads-by-source error:', error);
     res.status(500).json({ error: error.message || 'Erreur analytics' });
   }
 });
@@ -530,8 +533,8 @@ router.get('/analytics/leads-by-assignee', async (req: Request, res: Response) =
 
     res.json({ success: true, data: result });
 
-  } catch (error: any) {
-    console.error('[BATCH] ❌ Analytics leads-by-assignee error:', error);
+  } catch (error: unknown) {
+    logger.error('[BATCH] ❌ Analytics leads-by-assignee error:', error);
     res.status(500).json({ error: error.message || 'Erreur analytics' });
   }
 });

@@ -24,8 +24,8 @@ const { Panel } = Collapse;
 const { TextArea } = Input;
 
 interface HeaderEditorProps {
-  section: any;
-  onSave: (content: any) => void;
+  section: unknown;
+  onSave: (content: unknown) => void;
   onCancel: () => void;
 }
 
@@ -135,13 +135,13 @@ export const HeaderEditor: React.FC<HeaderEditorProps> = ({ section, onSave, onC
     setMenuItems(menuItems.filter((_, i) => i !== index));
   };
 
-  const handleMenuItemChange = (index: number, field: string, value: any) => {
+  const handleMenuItemChange = (index: number, field: string, value: unknown) => {
     const newItems = [...menuItems];
     newItems[index][field] = value;
     setMenuItems(newItems);
   };
 
-  const handleSubmit = (values: any) => {
+  const handleSubmit = (values: unknown) => {
     const content = {
       // Logo
       logo: logoFile[0]?.url || logoFile[0]?.response?.url || values.logoUrl || '',
@@ -227,7 +227,7 @@ export const HeaderEditor: React.FC<HeaderEditorProps> = ({ section, onSave, onC
       }
       return isImage && isLt2M;
     },
-    onChange: (info: any) => {
+    onChange: (info: unknown) => {
       setLogoFile(info.fileList);
     },
     maxCount: 1

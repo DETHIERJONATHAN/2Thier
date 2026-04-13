@@ -23,8 +23,8 @@ interface WebSiteConfig {
   postalCode?: string;
   country: string;
   mapUrl?: string;
-  businessHours?: any;
-  socialLinks?: any;
+  businessHours?: unknown;
+  socialLinks?: unknown;
   heroTitle?: string;
   heroSubtitle?: string;
   heroCtaPrimary?: string;
@@ -34,13 +34,13 @@ interface WebSiteConfig {
   metaDescription?: string;
   metaKeywords?: string;
   ogImageFileId?: number;
-  stats?: any;
+  stats?: unknown;
   aboutText?: string;
-  valuesJson?: any;
-  logoFile?: any;
-  faviconFile?: any;
-  heroBackgroundFile?: any;
-  ogImageFile?: any;
+  valuesJson?: unknown;
+  logoFile?: unknown;
+  faviconFile?: unknown;
+  heroBackgroundFile?: unknown;
+  ogImageFile?: unknown;
 }
 
 interface WebSiteService {
@@ -114,7 +114,7 @@ interface WebSiteSection {
   key: string;
   type: string;
   name: string;
-  content: any;
+  content: unknown;
   backgroundColor?: string;
   textColor?: string;
   customCss?: string;
@@ -142,7 +142,7 @@ interface WebSiteData {
   projects: WebSiteProject[];
   testimonials: WebSiteTestimonial[];
   blogPosts: WebSiteBlogPost[];
-  mediaFiles: any[];
+  mediaFiles: unknown[];
 }
 
 interface UseWebSiteReturn {
@@ -182,7 +182,7 @@ export const useWebSite = (slug: string): UseWebSiteReturn => {
       };
       
       setData(mappedData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching website:', err);
       setError(err.response?.data?.error || 'Une erreur est survenue lors du chargement du site');
     } finally {
@@ -218,7 +218,7 @@ export const useWebSiteServices = (slug: string) => {
         setLoading(true);
         const response = await axios.get(`${API_BASE_URL}/api/websites/${slug}/services`);
         setData(response.data);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error fetching services:', err);
         setError(err.response?.data?.error || 'Erreur de chargement');
       } finally {
@@ -249,7 +249,7 @@ export const useWebSiteProjects = (slug: string, featuredOnly = false) => {
         const url = `${API_BASE_URL}/api/websites/${slug}/projects${featuredOnly ? '?featured=true' : ''}`;
         const response = await axios.get(url);
         setData(response.data);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error fetching projects:', err);
         setError(err.response?.data?.error || 'Erreur de chargement');
       } finally {
@@ -280,7 +280,7 @@ export const useWebSiteTestimonials = (slug: string, featuredOnly = false) => {
         const url = `${API_BASE_URL}/api/websites/${slug}/testimonials${featuredOnly ? '?featured=true' : ''}`;
         const response = await axios.get(url);
         setData(response.data);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error fetching testimonials:', err);
         setError(err.response?.data?.error || 'Erreur de chargement');
       } finally {
@@ -313,7 +313,7 @@ export const useWebSiteBlog = (slug: string, limit = 10, featuredOnly = false) =
         
         const response = await axios.get(`${API_BASE_URL}/api/websites/${slug}/blog?${params}`);
         setData(response.data);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error fetching blog:', err);
         setError(err.response?.data?.error || 'Erreur de chargement');
       } finally {

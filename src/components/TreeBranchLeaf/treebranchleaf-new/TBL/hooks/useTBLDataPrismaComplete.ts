@@ -9,7 +9,7 @@ const verbose = () => (typeof window !== 'undefined' && window.__TBL_VERBOSE__ =
 const diagEnabled = () => {
   try { return localStorage.getItem('TBL_DIAG') === '1'; } catch { return false; }
 };
-const ddiag = (...args: unknown[]) => { if (diagEnabled()) if (verbose()) console.log('[TBL_DIAG]', ...args as any); };
+const ddiag = (...args: unknown[]) => { if (diagEnabled()) if (verbose()) console.log('[TBL_DIAG]', ...args as unknown); };
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 
 // 🎯 FONCTION: Création automatique des mirrors pour tous les champs TreeBranchLeaf
@@ -935,7 +935,7 @@ const transformPrismaNodeToField = (
   childrenMap: Map<string, TreeBranchLeafNode[]>,
   nodeLookup: Map<string, TreeBranchLeafNode>,
   activeSharedReferences?: Map<string, string[]>, // 🔗 NOUVEAU: Références partagées actives
-  _formData?: Record<string, any> // 🔗 NOUVEAU: Pour vérifier les sélections
+  _formData?: Record<string, unknown> // 🔗 NOUVEAU: Pour vérifier les sélections
 ): TBLField => {
   // 🔗 RÉSOLUTION DES RÉFÉRENCES PARTAGÉES
   let resolvedNode = node;
@@ -1505,7 +1505,7 @@ const transformPrismaNodeToField = (
       // 🎯 APPARENCE CONFIG avec tooltips intégrés
       appearanceConfig: {
         ...(node.appearanceConfig || {}),
-        ...((node.metadata as any)?.appearance || {}),
+        ...((node.metadata as unknown)?.appearance || {}),
         // ✅ Ajouter les tooltips dans appearanceConfig
         helpTooltipType: node.text_helpTooltipType,
         helpTooltipText: node.text_helpTooltipText,
@@ -1654,7 +1654,7 @@ const transformPrismaNodeToField = (
       // 🎯 APPARENCE CONFIG pour le repeater
       appearanceConfig: {
         ...(node.appearanceConfig || {}),
-        ...((node.metadata as any)?.appearance || {}),
+        ...((node.metadata as unknown)?.appearance || {}),
         // ✅ Ajouter les tooltips dans appearanceConfig
         helpTooltipType: node.text_helpTooltipType,
         helpTooltipText: node.text_helpTooltipText,
@@ -1722,7 +1722,7 @@ const transformPrismaNodeToField = (
       name: node.label,
       label: node.label,
       type: effectiveFieldType,
-      displayIcon: (node as any)?.metadata?.appearance?.displayIcon || (node as any)?.appearanceConfig?.displayIcon,
+      displayIcon: (node as unknown)?.metadata?.appearance?.displayIcon || (node as unknown)?.appearanceConfig?.displayIcon,
       required: node.isRequired,
       value: node.defaultValue || node.value || node.bool_defaultValue || node.text_defaultValue || node.number_defaultValue || node.select_defaultValue || node.date_defaultValue,
       visible: node.isVisible,
@@ -1738,7 +1738,7 @@ const transformPrismaNodeToField = (
       // 🎯 APPARENCE CONFIG avec tooltips intégrés
       appearanceConfig: {
         ...(node.appearanceConfig || {}),
-        ...((node.metadata as any)?.appearance || {}),
+        ...((node.metadata as unknown)?.appearance || {}),
         // ✅ Ajouter les tooltips dans appearanceConfig
         helpTooltipType: node.text_helpTooltipType,
         helpTooltipText: node.text_helpTooltipText,
@@ -1750,7 +1750,7 @@ const transformPrismaNodeToField = (
         size: node.appearance_size,
         width: node.appearance_width,
         variant: node.appearance_variant,
-        displayIcon: (node as any)?.metadata?.appearance?.displayIcon || (node as any)?.appearanceConfig?.displayIcon,
+        displayIcon: (node as unknown)?.metadata?.appearance?.displayIcon || (node as unknown)?.appearanceConfig?.displayIcon,
         minLength: node.text_minLength,
         maxLength: node.text_maxLength,
         rows: node.text_rows,
@@ -1841,7 +1841,7 @@ const transformPrismaNodeToField = (
 // 🌳 FONCTION PRINCIPALE: Transformation hiérarchique DYNAMIQUE PRISMA
 export const transformNodesToTBLComplete = (
   nodes: TreeBranchLeafNode[],
-  formData?: Record<string, any> // 🔗 NOUVEAU: Pour vérifier les sélections d'options
+  formData?: Record<string, unknown> // 🔗 NOUVEAU: Pour vérifier les sélections d'options
 ): {
   tree: TBLTree;
   tabs: TBLTab[];
@@ -2261,7 +2261,7 @@ export const transformNodesToTBLComplete = (
           const templates = allChildren.filter(node => templateNodeIds.includes(node.id));
           // Real copies are any children that are NOT templates; as a fallback use metadata
           const realCopies = allChildren.filter(node => {
-            const meta = node.metadata as any || {};
+            const meta = node.metadata as unknown || {};
             const copiedFrom = meta?.sourceTemplateId || meta?.copiedFromNodeId || meta?.copied_from_node_id || undefined;
             if (copiedFrom && templateNodeIds.includes(copiedFrom)) return true;
             // If template ids exist, treat any child NOT present in template IDs as a copy
@@ -2286,14 +2286,14 @@ export const transformNodesToTBLComplete = (
             // 🗑️ AJOUTER LES MÉTADONNÉES DE SUPPRESSION
             copyField.isDeletableCopy = true;
             copyField.parentRepeaterId = child.id;
-            copyField.sourceTemplateId = (copyNode.metadata as any)?.sourceTemplateId;
+            copyField.sourceTemplateId = (copyNode.metadata as unknown)?.sourceTemplateId;
             // ✅ INDEX INSTANCE (utilisé pour suppression ciblée)
             (copyField as any).repeaterInstanceIndex = index;
             copyField.metadata = {
               ...(copyField.metadata || {}),
               repeaterParentId: child.id,
               repeaterInstanceIndex: index
-            } as any;
+            } as unknown;
             
             // ➕ AJOUTER LE BOUTON + SUR LA DERNIÈRE COPIE
             copyField.isLastInCopyGroup = (index === realCopies.length - 1);
@@ -2301,7 +2301,7 @@ export const transformNodesToTBLComplete = (
             
             processedFields.push(assignHierarchyOrder(copyField));
             processedNodeIds.add(copyNode.id);
-            if (verbose()) dlog(`        📋 Copie ajoutée: "${copyField.label}" (sourceTemplate: ${(copyNode.metadata as any)?.sourceTemplateId}) ${copyField.isLastInCopyGroup ? '➕' : ''}`);
+            if (verbose()) dlog(`        📋 Copie ajoutée: "${copyField.label}" (sourceTemplate: ${(copyNode.metadata as unknown)?.sourceTemplateId}) ${copyField.isLastInCopyGroup ? '➕' : ''}`);
           });
           
           // ➕ SI AUCUNE COPIE, LE TEMPLATE PEUT CRÉER UNE NOUVELLE COPIE
@@ -2468,7 +2468,7 @@ export const transformNodesToTBLComplete = (
       // 2. Fallback: metadata.subTabs si subtabs n'est pas défini
       if (definedSubTabs.length === 0) {
         try {
-          const nodeTabs = (ongletNode.metadata && (ongletNode.metadata as any).subTabs) as string[] | undefined;
+          const nodeTabs = (ongletNode.metadata && (ongletNode.metadata as unknown).subTabs) as string[] | undefined;
           if (Array.isArray(nodeTabs)) {
             definedSubTabs = nodeTabs.map(s => String(s));
           }
@@ -2573,7 +2573,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
   
   // 🔥 GLOBAL EVENT LISTENER FOR DEBUG
   useEffect(() => {
-    const globalListener = (event: any) => {
+    const globalListener = (event: unknown) => {
       try {
         window.__tblEventLog = window.__tblEventLog || [];
         window.__tblEventLog.push({ event: event.type, time: new Date().toISOString(), detail: event.detail });
@@ -2665,9 +2665,9 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
       
       // 🔗 DEBUG: Vérifier les nodes avec hasLink AVANT transformation (verbose only)
       if (Array.isArray(response) && verbose()) {
-        const nodesWithLink = (response as any[]).filter((n: any) => n.hasLink === true);
+        const nodesWithLink = (response as unknown[]).filter((n: Record<string, unknown>) => n.hasLink === true);
         console.log(`🔗🔗🔗 [FETCH-DATA RAW] ${nodesWithLink.length} nodes avec hasLink=true reçus de l'API:`, 
-          nodesWithLink.map((n: any) => ({ id: n.id, label: n.label, hasLink: n.hasLink, link_targetNodeId: n.link_targetNodeId, link_mode: n.link_mode }))
+          nodesWithLink.map((n: Record<string, unknown>) => ({ id: n.id, label: n.label, hasLink: n.hasLink, link_targetNodeId: n.link_targetNodeId, link_mode: n.link_mode }))
         );
       }
       
@@ -2675,12 +2675,12 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
         // 🔧 FIX: Filtrer les IDs récemment supprimés pour empêcher
         // un fetch silent de ramener des display nodes que le serveur n'a pas encore nettoyé
         const filteredResponse = recentlyDeletedIdsRef.current.size > 0 && silent
-          ? response.filter((n: any) => !recentlyDeletedIdsRef.current.has(n.id))
+          ? response.filter((n: Record<string, unknown>) => !recentlyDeletedIdsRef.current.has(n.id))
           : response;
         // store raw
         updateRawRef.current(filteredResponse);
         if (process.env.NODE_ENV === 'development') {
-          const withDisplayAlways = filteredResponse.filter(r => r.metadata && typeof r.metadata === 'object' && (r.metadata as any).displayAlways === true);
+          const withDisplayAlways = filteredResponse.filter(r => r.metadata && typeof r.metadata === 'object' && (r.metadata as unknown).displayAlways === true);
           if (verbose()) console.log('🔎 [TBL Hook - Prisma] fetch nodes with displayAlways', withDisplayAlways.map(n => ({ id: n.id, label: n.label }))); 
         }
         const formData = (typeof window !== 'undefined' && window.TBL_FORM_DATA) || {};
@@ -2745,7 +2745,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
             label: f.label,
             parentId: (f as any).parentId,
             sourceTemplateId: (f as any).sourceTemplateId,
-            copySuffix: (f.metadata as any)?.copySuffix
+            copySuffix: (f.metadata as unknown)?.copySuffix
             , subTabKey: (f as any).subTabKey,
             subTabKeys: (f as any).subTabKeys
           })));
@@ -2777,7 +2777,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
               if (sectionBaseFieldIds.includes(field.id)) return true;
               
               // 🎯 NOUVEAU: Garder aussi les copies dont le sourceTemplateId est dans cette section
-              const sourceTemplateId = (field as any).sourceTemplateId || (field.metadata as any)?.sourceTemplateId;
+              const sourceTemplateId = (field as any).sourceTemplateId || (field.metadata as unknown)?.sourceTemplateId;
               if (sourceTemplateId && sectionBaseFieldIds.includes(sourceTemplateId)) {
                 if (verbose()) dlog(`🔗 [CROSS-TAB COPY] Ajout de "${field.label}" (du tab source) à section "${section.name}" du tab "${tabId}"`);
                 return true;
@@ -2929,7 +2929,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
           }
           const sourceParentSet = new Set(sourceParentIds);
           const candidates = allNodes.filter(n => {
-            const meta: any = n.metadata || {};
+            const meta: unknown = n.metadata || {};
             const parentMatchesSource = !!(n.parentId && sourceParentSet.has(n.parentId));
             return (meta.copiedFromNodeId && duplicateIds.has(meta.copiedFromNodeId)) ||
                    (meta.copiedFromNodeId && duplicateSourceTemplateIds.has(meta.copiedFromNodeId)) ||
@@ -3300,7 +3300,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                   });
                           // Debug: log inline node ids merged and basic metadata for diagnostics
                           try {
-                            const inlineSummaries = inlineNodes.filter(n => n && n.id).map(n => ({ id: n.id, type: n.type, parentId: n.parentId, metadataSummary: (n.metadata && typeof n.metadata === 'object') ? (n.metadata as any).sourceTemplateId || (n.metadata as any).copiedFromNodeId || null : null }));
+                            const inlineSummaries = inlineNodes.filter(n => n && n.id).map(n => ({ id: n.id, type: n.type, parentId: n.parentId, metadataSummary: (n.metadata && typeof n.metadata === 'object') ? (n.metadata as unknown).sourceTemplateId || (n.metadata as unknown).copiedFromNodeId || null : null }));
                             if (verbose()) console.log('[TBL Hook] inline nodes merged (summaries):', inlineSummaries);
                           } catch { /* noop */ }
                 }
@@ -3350,13 +3350,13 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
             if (eventRepeaterId && deletedSuffixes.size > 0) {
               // Pré-calculer les templateNodeIds du repeater pour vérification d'appartenance
               const repeaterNode = prev.find(n => n.id === eventRepeaterId);
-              const repeaterMeta: any = repeaterNode?.metadata || {};
+              const repeaterMeta: unknown = repeaterNode?.metadata || {};
               const templateIds = new Set<string>([
                 ...(repeaterMeta.repeater?.templateNodeIds || []),
                 ...(() => {
                   try {
-                    const raw = (repeaterNode as any)?.repeater_templateNodeIds 
-                                || (repeaterNode as any)?.repeaterTemplateNodeIds;
+                    const raw = (repeaterNode as unknown)?.repeater_templateNodeIds 
+                                || (repeaterNode as unknown)?.repeaterTemplateNodeIds;
                     if (raw) return typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []);
                   } catch { /* ignore */ }
                   return [];
@@ -3616,13 +3616,13 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                   visible: node.isVisible,
                   order: node.order,
                   parentRepeaterId: node.parentId,
-                  sourceTemplateId: (node.metadata as any)?.sourceTemplateId,
+                  sourceTemplateId: (node.metadata as unknown)?.sourceTemplateId,
                   isDeletableCopy: true,
                   isLastInCopyGroup: false,
                   canAddNewCopy: false,
                   metadata: node.metadata,
                   capabilities
-                } as any as TBLField;
+                } as unknown as TBLField;
               };
 
               // Map sectionsByTab to mutate locally
@@ -3645,7 +3645,7 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                 const field = buildMinimalField(node);
                 
                 // CRITICAL: For copies, find the TEMPLATE FIELD section (not repeater button!) and place copy NEXT TO original
-                const sourceTemplateId = (node.metadata as any)?.sourceTemplateId;
+                const sourceTemplateId = (node.metadata as unknown)?.sourceTemplateId;
                 const parentRepeaterId = node.parentId;
                 let inserted = false;
                 
@@ -3699,13 +3699,13 @@ export const useTBLDataPrismaComplete = ({ tree_id, disabled = false, triggerRet
                       
                       if (templateFieldIdx !== -1) {
                         if (isPanneauField) {
-                          console.log(`✅✅✅ [PANNEAU FOUND] Template trouvé! "${(section.fields[templateFieldIdx] as any).label}" à l'index ${templateFieldIdx} dans section "${section.name}"`);
+                          console.log(`✅✅✅ [PANNEAU FOUND] Template trouvé! "${(section.fields[templateFieldIdx] as unknown).label}" à l'index ${templateFieldIdx} dans section "${section.name}"`);
                         }
-                        console.log(`✅ [COPY PLACEMENT] Found template field "${(section.fields[templateFieldIdx] as any).label}" in section "${section.name}"`);
+                        console.log(`✅ [COPY PLACEMENT] Found template field "${(section.fields[templateFieldIdx] as unknown).label}" in section "${section.name}"`);
                         // Place the copy right after the template field in the SAME section
                         const nextFields = [ ...section.fields ];
                         nextFields.splice(templateFieldIdx + 1, 0, field);
-                        secs[si] = { ...section, fields: nextFields } as any;
+                        secs[si] = { ...section, fields: nextFields } as unknown;
                         inserted = true;
                         console.log(`✅ [COPY PLACEMENT] Copy "${field.label}" placed in section "${section.name}" (next to template field)`);
                         if (isPanneauField) {

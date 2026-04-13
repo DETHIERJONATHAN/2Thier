@@ -38,7 +38,7 @@ const UsersAdminPage: React.FC = () => {
       ]);
 
       let fetchedUsers: User[] = [];
-      const processUsers = (rawData: any[]) => rawData.map((u: any) => ({
+      const processUsers = (rawData: unknown[]) => rawData.map((u: Record<string, unknown>) => ({
         ...u,
         key: u.id,
         organizationRole: u.UserOrganization?.[0]?.Role,
@@ -126,7 +126,7 @@ const UsersAdminPage: React.FC = () => {
       await apiInstance.delete(`/users/${user.id}`);
       message.success(`Utilisateur ${user.email} supprimé avec succès`);
       fetchAllData(); // Recharger la liste des utilisateurs
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de la suppression:', error);
       const errorMessage = error?.response?.data?.message || 'Erreur lors de la suppression de l\'utilisateur';
       message.error(errorMessage);
@@ -161,7 +161,7 @@ const UsersAdminPage: React.FC = () => {
     {
       title: 'Services',
       key: 'services',
-      render: (_: any, record: User) => {
+      render: (_: unknown, record: User) => {
         const services = userServices[record.id] || [];
         const emailService = services.find(s => s.serviceType === 'EMAIL');
         const telnyxService = services.find(s => s.serviceType === 'TELNYX');
@@ -190,7 +190,7 @@ const UsersAdminPage: React.FC = () => {
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, record: User) => (
+      render: (_: unknown, record: User) => (
         <Space>
           <Tooltip title="Modifier l'utilisateur">
             <Button icon={<EditOutlined />} onClick={() => handleEditUser(record)} />

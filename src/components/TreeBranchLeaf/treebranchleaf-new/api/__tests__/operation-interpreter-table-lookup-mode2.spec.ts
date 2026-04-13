@@ -31,7 +31,7 @@ describe('interpretTable - lookup Mode 2 (row-only)', () => {
         { id: 'r2', rowIndex: 2, cells: JSON.stringify(['26901-38300', 'R2 - X4']) },
         { id: 'r3', rowIndex: 3, cells: JSON.stringify(['38301-50600', 'R3 - X3']) },
       ]
-    } as any;
+    } as unknown;
 
     const prisma = {
       treeBranchLeafNodeTable: {

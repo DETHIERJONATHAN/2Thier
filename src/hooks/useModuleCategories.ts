@@ -14,8 +14,8 @@ export interface ModuleCategory {
   active: boolean;
   organizationId?: string;
   superAdminOnly: boolean;
-  allowedRoles?: any;
-  requiredPermissions?: any;
+  allowedRoles?: unknown;
+  requiredPermissions?: unknown;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,8 +40,8 @@ export interface ModuleWithCategory {
   organizationId?: string;
   // Relations
   Category?: ModuleCategory;
-  OrganizationModuleStatus?: any[];
-  Permission?: any[];
+  OrganizationModuleStatus?: unknown[];
+  Permission?: unknown[];
 }
 
 // Categories par défaut si elles n'existent pas
@@ -227,9 +227,9 @@ export const useModuleCategories = () => {
       if (response?.success && response.data?.sections) {
         // Extraire tous les modules de toutes les sections
         const allModules: ModuleWithCategory[] = [];
-        response.data.sections.forEach((section: any) => {
+        response.data.sections.forEach((section: Record<string, unknown>) => {
           if (section.modules && Array.isArray(section.modules)) {
-            allModules.push(...section.modules.map((module: any) => ({
+            allModules.push(...section.modules.map((module: Record<string, unknown>) => ({
               ...module,
               isActiveForOrg: module.isActiveInOrg || module.isActiveForOrg || false
             })));

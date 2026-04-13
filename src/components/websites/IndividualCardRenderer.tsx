@@ -272,7 +272,7 @@ export const IndividualCardRenderer: React.FC<IndividualCardRendererProps> = ({
         >
           {config.footer.button?.show && config.footer.button.text && (
             <Button
-              type={config.footer.button.variant as any || 'primary'}
+              type={config.footer.button.variant as unknown || 'primary'}
               href={!preview ? config.footer.button.url : undefined}
               block={config.footer.button.fullWidth}
               style={{ marginBottom: config.footer.link?.show ? 8 : 0 }}

@@ -495,7 +495,7 @@ async function calculateConditionResult(
   conditionSet: unknown,
   values: ValuesMap,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  dbClient: any
+  dbClient: unknown
 ): Promise<string> {
   const setObj = (conditionSet && typeof conditionSet === 'object') ? (conditionSet as Record<string, unknown>) : {};
   
@@ -661,7 +661,7 @@ async function calculateConditionResult(
 // =============================================================================
 async function buildDetailAndResultForOperation(
   type: 'condition' | 'formula' | 'table',
-  record: any,
+  record: unknown,
   display: string,
   valueStr: string | null,
   unit: string | null,
@@ -690,7 +690,7 @@ async function buildDetailAndResultForOperation(
 // =============================================================================
 async function buildDetailAndResultForOperationLegacy(
   type: 'condition' | 'formula' | 'table',
-  record: any,
+  record: unknown,
   display: string,
   valueStr: string | null,
   unit: string | null,
@@ -852,7 +852,7 @@ async function buildConditionExpressionReadable(
   labels: LabelMap,
   values: ValuesMap,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  dbClient: any
+  dbClient: unknown
 ): Promise<string> {
   // ÃƒÂ°Ã…Â¸Ã…Â¡Ã‚Â« CETTE FONCTION LEGACY EST DÃƒÆ’Ã¢â‚¬Â°SACTIVÃƒÆ’Ã¢â‚¬Â°E !
   // TOUT DOIT PASSER PAR TBL PRISMA MAINTENANT !
@@ -1497,7 +1497,7 @@ router.post('/trees/:id/duplicate', async (req, res) => {
 
     // 6. Insérer tous les noeuds en batch
     const created = await prisma.treeBranchLeafNode.createMany({
-      data: nodeCreateData as any[],
+      data: nodeCreateData as unknown[],
     });
 
     // 7. Copier les variables liées
@@ -1525,7 +1525,7 @@ router.post('/trees/:id/duplicate', async (req, res) => {
         sourceRef: v.sourceRef,
         sourceType: v.sourceType,
       }));
-      await prisma.treeBranchLeafNodeVariable.createMany({ data: varCreateData as any[] });
+      await prisma.treeBranchLeafNodeVariable.createMany({ data: varCreateData as unknown[] });
     }
 
     // 8. Copier les conditions
@@ -1545,7 +1545,7 @@ router.post('/trees/:id/duplicate', async (req, res) => {
         createdAt: now,
         updatedAt: now,
       }));
-      await prisma.treeBranchLeafNodeCondition.createMany({ data: condCreateData as any[] });
+      await prisma.treeBranchLeafNodeCondition.createMany({ data: condCreateData as unknown[] });
     }
 
     // 9. Copier les formules
@@ -1567,7 +1567,7 @@ router.post('/trees/:id/duplicate', async (req, res) => {
         targetProperty: f.targetProperty,
         constraintMessage: f.constraintMessage,
       }));
-      await prisma.treeBranchLeafNodeFormula.createMany({ data: formulaCreateData as any[] });
+      await prisma.treeBranchLeafNodeFormula.createMany({ data: formulaCreateData as unknown[] });
     }
 
     // 10. Copier les tables liées
@@ -1638,7 +1638,7 @@ router.post('/trees/:id/duplicate', async (req, res) => {
         createdAt: now,
         updatedAt: now,
       }));
-      await prisma.treeBranchLeafSelectConfig.createMany({ data: selectCreateData as any[] });
+      await prisma.treeBranchLeafSelectConfig.createMany({ data: selectCreateData as unknown[] });
     }
 
     // console.log(`[DUPLICATE TREE] Arbre ${sourceTreeId} dupliqué -> ${newTreeId} (${created.count} noeuds, ${sourceVariables.length} variables, ${sourceConditions.length} conditions, ${sourceFormulas.length} formules, ${sourceTables.length} tables)`);
@@ -1836,7 +1836,7 @@ router.get('/trees/:treeId/repeater-nodes', async (req, res) => {
     for (const node of repeaterNodes) {
       try {
         // Priorité metadata, fallback colonne
-        const meta = node.metadata as any;
+        const meta = node.metadata as unknown;
         const ids = meta?.repeater?.templateNodeIds || (node.repeater_templateNodeIds ? JSON.parse(node.repeater_templateNodeIds) : []);
         if (Array.isArray(ids)) allTemplateIds.push(...ids);
       } catch { /* skip parse errors */ }
@@ -1854,7 +1854,7 @@ router.get('/trees/:treeId/repeater-nodes', async (req, res) => {
     const result = repeaterNodes.map(node => {
       let templateIds: string[] = [];
       try {
-        const meta = node.metadata as any;
+        const meta = node.metadata as unknown;
         templateIds = meta?.repeater?.templateNodeIds || (node.repeater_templateNodeIds ? JSON.parse(node.repeater_templateNodeIds) : []);
       } catch { /* skip */ }
 
@@ -1925,7 +1925,7 @@ router.get('/trees/:treeId/repeater-fields', async (req, res) => {
     // Parcourir tous les nÃƒâ€¦Ã¢â‚¬Å“uds pour trouver ceux avec des repeaters
     for (const node of allNodes) {
       // VÃƒÆ’Ã‚Â©rifier si le nÃƒâ€¦Ã¢â‚¬Å“ud a des mÃƒÆ’Ã‚Â©tadonnÃƒÆ’Ã‚Â©es repeater
-      const metadata = node.metadata as any;
+      const metadata = node.metadata as unknown;
       if (!metadata?.repeater) continue;
 
       const repeaterMeta = metadata.repeater;
@@ -1954,7 +1954,7 @@ router.get('/trees/:treeId/repeater-fields', async (req, res) => {
       const physicalChildren = allNodes.filter(child => {
         if (child.parentId !== node.id) return false;
         
-        const childMeta = child.metadata as any;
+        const childMeta = child.metadata as unknown;
         // VÃƒÆ’Ã‚Â©rifier que l'enfant a bien ÃƒÆ’Ã‚Â©tÃƒÆ’Ã‚Â© crÃƒÆ’Ã‚Â©ÃƒÆ’Ã‚Â© via duplication (a sourceTemplateId)
         // ET que ce sourceTemplateId correspond ÃƒÆ’Ã‚Â  un template configurÃƒÆ’Ã‚Â©
         return childMeta?.sourceTemplateId && templateNodeIds.includes(childMeta.sourceTemplateId);
@@ -3370,7 +3370,7 @@ function mapJSONToColumns(updateData: Record<string, unknown>): Record<string, u
  * ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â¤ NETTOYER LA RÃƒÆ’Ã¢â‚¬Â°PONSE : Colonnes dÃƒÆ’Ã‚Â©diÃƒÆ’Ã‚Â©es ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Interface frontend
  * Reconstruit les objets JSON pour la compatibilitÃƒÆ’Ã‚Â© frontend MAIS depuis les colonnes
  */
-function buildResponseFromColumns(node: any): Record<string, unknown> {
+function buildResponseFromColumns(node: unknown): Record<string, unknown> {
   type LegacyRepeaterMeta = {
     templateNodeIds?: unknown;
     templateNodeLabels?: unknown;
@@ -3394,10 +3394,10 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     helpTooltipType: node.text_helpTooltipType || 'none',
     helpTooltipText: node.text_helpTooltipText || null,
     helpTooltipImage: node.text_helpTooltipImage || null,
-    displayIcon: node.appearance_displayIcon || (storedAppearanceConfig as any)?.displayIcon || (metadataAppearance as any)?.displayIcon || null,
+    displayIcon: node.appearance_displayIcon || (storedAppearanceConfig as unknown)?.displayIcon || (metadataAppearance as unknown)?.displayIcon || null,
     // 🎨 Couleurs personnalisées
-    bubbleColor: (metadataAppearance as any)?.bubbleColor || null,
-    labelColor: (metadataAppearance as any)?.labelColor || null
+    bubbleColor: (metadataAppearance as unknown)?.bubbleColor || null,
+    labelColor: (metadataAppearance as unknown)?.labelColor || null
   };
 
   // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â¥ NOUVEAU : Construire l'objet repeater depuis les colonnes dÃƒÆ’Ã‚Â©diÃƒÆ’Ã‚Â©es
@@ -3464,10 +3464,10 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
     helpTooltipText: node.text_helpTooltipText || null,
     helpTooltipImage: node.text_helpTooltipImage || null,
     // 🎨 FIX: Lire displayIcon depuis la colonne dédiée EN PRIORITÉ
-    displayIcon: node.appearance_displayIcon || (storedAppearanceConfig as any)?.displayIcon || (metadataAppearance as any)?.displayIcon,
+    displayIcon: node.appearance_displayIcon || (storedAppearanceConfig as unknown)?.displayIcon || (metadataAppearance as unknown)?.displayIcon,
     // 🎨 Couleurs personnalisées (stockées dans metadata.appearance)
-    bubbleColor: (metadataAppearance as any)?.bubbleColor || (storedAppearanceConfig as any)?.bubbleColor || null,
-    labelColor: (metadataAppearance as any)?.labelColor || (storedAppearanceConfig as any)?.labelColor || null
+    bubbleColor: (metadataAppearance as unknown)?.bubbleColor || (storedAppearanceConfig as unknown)?.bubbleColor || null,
+    labelColor: (metadataAppearance as unknown)?.labelColor || (storedAppearanceConfig as unknown)?.labelColor || null
   };
   
   // Construire fieldConfig depuis les colonnes dÃƒÆ’Ã‚Â©diÃƒÆ’Ã‚Â©es
@@ -3622,7 +3622,7 @@ function buildResponseFromColumns(node: any): Record<string, unknown> {
   // Si metadata.capabilities existe dÃƒÂ¯Ã‚Â¿Ã‚Â½jÃƒÂ¯Ã‚Â¿Ã‚Â½ (anciennes donnÃƒÂ¯Ã‚Â¿Ã‚Â½es), on la prÃƒÂ¯Ã‚Â¿Ã‚Â½serve et on fusionne.
 
   try {
-    const legacyMetaCaps = (node.metadata && typeof node.metadata === 'object') ? (node.metadata as any).capabilities : undefined;
+    const legacyMetaCaps = (node.metadata && typeof node.metadata === 'object') ? (node.metadata as unknown).capabilities : undefined;
 
     const buildInstances = (raw: unknown): Record<string, unknown> | undefined => {
       if (!raw) return undefined;
@@ -4160,13 +4160,13 @@ const updateOrMoveNode = async (req, res) => {
     }
 
     // 🔧 FIX: Sauvegarder les clés metadata entrantes AVANT le bloc repeater qui peut les écraser
-    const incomingMetadataBeforeRepeater = updateObj.metadata ? { ...(updateObj.metadata as any) } : null;
+    const incomingMetadataBeforeRepeater = updateObj.metadata ? { ...(updateObj.metadata as unknown) } : null;
     
     // 🔧 FIX CRITICAL: Reconstruire metadata.repeater avec TOUS les champs, y compris templateNodeIds
     // ⚠️ CORRECTION : Le bloc précédent écrasait templateNodeIds avec l'ancienne valeur !
     if (updateObj.repeater_buttonSize || updateObj.repeater_maxItems !== undefined || updateObj.repeater_minItems !== undefined || updateObj.repeater_templateNodeIds !== undefined) {
-      const currentMetadata = existingNode.metadata as any || {};
-      const newMetadataRepeater = (updateObj.metadata as any)?.repeater || {};
+      const currentMetadata = existingNode.metadata as unknown || {};
+      const newMetadataRepeater = (updateObj.metadata as unknown)?.repeater || {};
       
       // 🔧 CRITICAL FIX: Priorité au nouveau templateNodeIds s'il est présent
       const resolvedTemplateNodeIds = (() => {
@@ -4216,14 +4216,14 @@ const updateOrMoveNode = async (req, res) => {
     }
 
     if (updateObj.metadata && typeof updateObj.metadata === 'object') {
-      const currentMetadata = existingNode.metadata as any || {};
-      const newMetadata = updateObj.metadata as any;
+      const currentMetadata = existingNode.metadata as unknown || {};
+      const newMetadata = updateObj.metadata as unknown;
       
       // 🛡️ PROTECTION FANTÔMES: Empêcher l'écriture de capabilities parasites
       // Si le nœud n'a pas hasData/hasCondition activé, ne pas accepter capabilities.datas/conditions
       // On vérifie aussi updateObj au cas où hasData est envoyé dans le même appel
       if (newMetadata?.capabilities) {
-        const nodeFlags = existingNode as any;
+        const nodeFlags = existingNode as unknown;
         const hasDataFlag = updateObj.hasData ?? nodeFlags.hasData;
         const hasConditionFlag = updateObj.hasCondition ?? nodeFlags.hasCondition;
         if (newMetadata.capabilities.datas && !hasDataFlag) {
@@ -4238,7 +4238,7 @@ const updateOrMoveNode = async (req, res) => {
       
       // 🎨 DEBUG: Log displayIcon AVANT fusion
       // console.log('🎨 [updateOrMoveNode] displayIcon AVANT fusion:', {
-        // dansUpdateObjMetadata: (updateObj.metadata as any)?.appearance?.displayIcon,
+        // dansUpdateObjMetadata: (updateObj.metadata as unknown)?.appearance?.displayIcon,
         // dansCurrentMetadata: currentMetadata?.appearance?.displayIcon,
         // dansNewMetadata: newMetadata?.appearance?.displayIcon
       // });
@@ -4279,12 +4279,12 @@ const updateOrMoveNode = async (req, res) => {
       // 🎨 DEBUG: Log displayIcon APRÈS fusion
       // console.log('🎨 [updateOrMoveNode] displayIcon APRÈS fusion:', {
         // mergedAppearance,
-        // finalDisplayIcon: (updateObj.metadata as any)?.appearance?.displayIcon
+        // finalDisplayIcon: (updateObj.metadata as unknown)?.appearance?.displayIcon
       // });
       
       // Nettoyer aiMeasure de metadata.existant aussi
-      if ((updateObj.metadata as any).aiMeasure) {
-        delete (updateObj.metadata as any).aiMeasure;
+      if ((updateObj.metadata as unknown).aiMeasure) {
+        delete (updateObj.metadata as unknown).aiMeasure;
       }
       
       // console.log('🔀 [updateOrMoveNode] Fusion metadata:', {
@@ -4297,7 +4297,7 @@ const updateOrMoveNode = async (req, res) => {
     // 🔥 CRITIQUE : Si repeater_templateNodeIds est explicitement NULL, supprimer metadata.repeater
     // ⚠️ DOIT ÊTRE APRÈS la fusion des métadonnées pour ne pas être écrasé par currentMetadata
     if ('repeater_templateNodeIds' in updateObj && updateObj.repeater_templateNodeIds === null) {
-      const currentMeta = (updateObj.metadata || existingNode.metadata) as any || {};
+      const currentMeta = (updateObj.metadata || existingNode.metadata) as unknown || {};
       if (currentMeta.repeater) {
         const { repeater, ...metadataWithoutRepeater } = currentMeta;
         updateObj.metadata = metadataWithoutRepeater;
@@ -4316,13 +4316,13 @@ const updateOrMoveNode = async (req, res) => {
     // 🎨 DEBUG displayIcon: Log avant sauvegarde DB
     // console.log('🎨 [updateOrMoveNode] displayIcon AVANT DB.update:', {
       // metadataComplet: updateObj.metadata,
-      // displayIcon: (updateObj.metadata as any)?.appearance?.displayIcon
+      // displayIcon: (updateObj.metadata as unknown)?.appearance?.displayIcon
     // });
     
     // 🔧 DEBUG repeater_templateNodeIds: Log avant sauvegarde pour identifier le bug
     // console.log('🔧 [updateOrMoveNode] repeater_templateNodeIds AVANT DB.update:', {
       // 'updateObj.repeater_templateNodeIds': updateObj.repeater_templateNodeIds,
-      // 'metadata.repeater?.templateNodeIds': (updateObj.metadata as any)?.repeater?.templateNodeIds
+      // 'metadata.repeater?.templateNodeIds': (updateObj.metadata as unknown)?.repeater?.templateNodeIds
     // });
 
     await prisma.treeBranchLeafNode.update({
@@ -4343,13 +4343,13 @@ const updateOrMoveNode = async (req, res) => {
     // 🎨 DEBUG displayIcon: Log après lecture DB
     // console.log('🎨 [updateOrMoveNode] displayIcon APRÈS DB.read:', {
       // metadataDB: updatedNode?.metadata,
-      // displayIcon: (updatedNode?.metadata as any)?.appearance?.displayIcon
+      // displayIcon: (updatedNode?.metadata as unknown)?.appearance?.displayIcon
     // });
     
     // 🔧 DEBUG repeater_templateNodeIds: Log après lecture pour vérifier persistance
     // console.log('🔧 [updateOrMoveNode] repeater_templateNodeIds APRÈS DB.read:', {
       // 'repeater_templateNodeIds (colonne)': updatedNode?.repeater_templateNodeIds,
-      // 'metadata.repeater?.templateNodeIds': (updatedNode?.metadata as any)?.repeater?.templateNodeIds
+      // 'metadata.repeater?.templateNodeIds': (updatedNode?.metadata as unknown)?.repeater?.templateNodeIds
     // });
     
     const responseData = updatedNode ? buildResponseFromColumns(updatedNode) : updatedNode;
@@ -4477,10 +4477,10 @@ router.get('/trees/:treeId/nodes/:nodeId/check-dependencies', async (req, res) =
       if (typeof data === 'object') {
         const obj = data as Record<string, unknown>;
         if (typeof obj.ref === 'string') out.add(obj.ref.replace(/^@(?:value|table|calculated|select|condition)\./, '').replace(/-\d+$/, ''));
-        const lr = (obj as any)?.left?.ref; if (typeof lr === 'string') out.add(lr.replace(/^@(?:value|table|calculated|select|condition)\./, '').replace(/-\d+$/, ''));
-        const rr = (obj as any)?.right?.ref; if (typeof rr === 'string') out.add(rr.replace(/^@(?:value|table|calculated|select|condition)\./, '').replace(/-\d+$/, ''));
+        const lr = (obj as unknown)?.left?.ref; if (typeof lr === 'string') out.add(lr.replace(/^@(?:value|table|calculated|select|condition)\./, '').replace(/-\d+$/, ''));
+        const rr = (obj as unknown)?.right?.ref; if (typeof rr === 'string') out.add(rr.replace(/^@(?:value|table|calculated|select|condition)\./, '').replace(/-\d+$/, ''));
         if (Array.isArray((obj as any).nodeIds)) for (const raw of (obj as any).nodeIds) if (typeof raw === 'string') out.add(raw.replace(/^@(?:value|table|calculated|select|condition)\./, '').replace(/-\d+$/, ''));
-        const lk = (obj as any)?.lookup?.selectors;
+        const lk = (obj as unknown)?.lookup?.selectors;
         if (lk?.rowFieldId) out.add(String(lk.rowFieldId));
         if (lk?.columnFieldId) out.add(String(lk.columnFieldId));
         for (const key of Object.keys(obj)) extractRefs(obj[key], out);
@@ -4564,7 +4564,7 @@ router.get('/trees/:treeId/nodes/:nodeId/check-dependencies', async (req, res) =
 
     // Scanner metadata.triggerNodeIds
     for (const node of outsideNodes) {
-      const triggerIds = (node.metadata as any)?.triggerNodeIds;
+      const triggerIds = (node.metadata as unknown)?.triggerNodeIds;
       if (Array.isArray(triggerIds)) {
         const hits = triggerIds.filter((id: string) => subtreeIds.has(id));
         if (hits.length > 0) {
@@ -4698,7 +4698,7 @@ router.get('/trees/:treeId/nodes/:nodeId/check-dependencies', async (req, res) =
       nodesToDeleteCount: subtreeIds.size,
       externalDependencies: dependencies
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[TreeBranchLeaf API] Erreur check-dependencies:', error);
     res.status(500).json({ error: 'Erreur vérification dépendances', details: error.message });
   }
@@ -4855,7 +4855,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
         for (const rid of toDelete) {
           const n = allNodes.find(x => x.id === rid);
           if (!n) continue;
-          const dm: any = n.metadata || {};
+          const dm: unknown = n.metadata || {};
           const rId = dm?.duplicatedFromRepeater || n.parentId || null;
           const cs = (dm?.copySuffix ?? dm?.suffixNum) ?? extractSuffixFromLabel(n.label) ?? null;
           // skip building relatedTemplateIds: avoid template-only deletion heuristics
@@ -4874,7 +4874,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       // Trouver candidats additionnels qui ressemblent ÃƒÆ’Ã‚Â  des nÃƒÆ’Ã‚Â¸uds d'affichage
   const debugDelete = typeof process !== 'undefined' && process.env && process.env.DEBUG_TBL_DELETE === '1';
   const extraCandidates = nodesToScan.filter(n => {
-        const meta: any = n.metadata || {};
+        const meta: unknown = n.metadata || {};
         // ??? PROTECTION: Ne JAMAIS supprimer les nÃƒÂ¯Ã‚Â¿Ã‚Â½uds Total (sum-display-field)
         if (meta?.isSumDisplayField === true || /-sum-total(-\d+)?$/.test(n.id)) {
           return false;
@@ -5239,12 +5239,11 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       while (orphanPassCount < maxOrphanPasses) {
         orphanPassCount++;
         // Trouver les nœuds dont le parentId n'existe plus
-        const orphanedNodes = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-          `SELECT n.id FROM "TreeBranchLeafNode" n
-           WHERE n."treeId" = $1
+        const orphanedNodes = await prisma.$queryRaw<Array<{ id: string }>>(
+          Prisma.sql`SELECT n.id FROM "TreeBranchLeafNode" n
+           WHERE n."treeId" = ${treeId}
              AND n."parentId" IS NOT NULL
-             AND NOT EXISTS (SELECT 1 FROM "TreeBranchLeafNode" p WHERE p.id = n."parentId")`,
-          treeId
+             AND NOT EXISTS (SELECT 1 FROM "TreeBranchLeafNode" p WHERE p.id = n."parentId")`
         );
         
         if (orphanedNodes.length === 0) break;
@@ -5282,12 +5281,11 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
       const submissionIds = treeSubmissions.map(s => s.id);
       
       if (submissionIds.length > 0) {
-        const orphanedSD = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
-          `DELETE FROM "TreeBranchLeafSubmissionData" sd
-           WHERE sd."submissionId" = ANY($1::text[])
+        const orphanedSD = await prisma.$queryRaw<Array<{ count: bigint }>>(
+          Prisma.sql`DELETE FROM "TreeBranchLeafSubmissionData" sd
+           WHERE sd."submissionId" = ANY(${submissionIds}::text[])
              AND NOT EXISTS (SELECT 1 FROM "TreeBranchLeafNode" n WHERE n.id = sd."nodeId")
-           RETURNING 1 as count`,
-          submissionIds
+           RETURNING 1 as count`
         );
         if (orphanedSD.length > 0) {
           console.log(`[DELETE] 🧹 ${orphanedSD.length} SubmissionData orpheline(s) supprimée(s)`);
@@ -5327,7 +5325,7 @@ router.delete('/trees/:treeId/nodes/:nodeId', async (req, res) => {
         if (typeof val === 'number' || typeof val === 'boolean') return false;
         if (Array.isArray(val)) return val.some(v => containsRemovedId(v));
         if (typeof val === 'object') {
-          for (const k of Object.keys(val as any)) {
+          for (const k of Object.keys(val as unknown)) {
             if (containsRemovedId((val as any)[k])) return true;
           }
         }
@@ -5695,7 +5693,7 @@ async function applySharedReferencesFromOriginalInternal(req: MinimalReq, nodeId
 
   // 4ter) DÃƒÆ’Ã‚Â©terminer le suffixe ÃƒÆ’Ã‚Â  utiliser pour CETTE copie, puis construire/assurer les copies des rÃƒÆ’Ã‚Â©fÃƒÆ’Ã‚Â©rences (ID suffixÃƒÆ’Ã‚Â© "-N")
   // a) DÃƒÆ’Ã‚Â©terminer/attribuer le suffixe
-  const metaRoot = (copyRoot.metadata as any) || {};
+  const metaRoot = (copyRoot.metadata as unknown) || {};
   let chosenSuffix: number | null = typeof metaRoot.copySuffix === 'number' ? metaRoot.copySuffix : null;
   if (!chosenSuffix) {
     // Chercher le prochain suffixe disponible en scannant les IDs de rÃƒÆ’Ã‚Â©fÃƒÆ’Ã‚Â©rences partagÃƒÆ’Ã‚Â©es existantes
@@ -5710,7 +5708,7 @@ async function applySharedReferencesFromOriginalInternal(req: MinimalReq, nodeId
     }
     chosenSuffix = maxSuffix + 1 || 1;
     // Persister ce suffixe sur la racine de la copie pour qu'il soit rÃƒÆ’Ã‚Â©utilisÃƒÆ’Ã‚Â© ensuite
-    await prisma.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } as any } });
+    await prisma.treeBranchLeafNode.update({ where: { id: copyRoot.id }, data: { metadata: { ...metaRoot, copySuffix: chosenSuffix } as unknown } });
   }
 
   // b) Construire/assurer les copies des rÃƒÆ’Ã‚Â©fÃƒÆ’Ã‚Â©rences avec ce suffixe
@@ -5796,7 +5794,7 @@ async function applySharedReferencesFromOriginalInternal(req: MinimalReq, nodeId
         linkedVariableIds: Array.isArray((orig as any).linkedVariableIds)
           ? (orig as any).linkedVariableIds.map((id: string) => `${id}-${chosenSuffix}`).filter(Boolean)
           : [],
-        metadata: { ...(orig.metadata as any || {}), copiedFromNodeId: orig.id } as any,
+        metadata: { ...(orig.metadata as unknown || {}), copiedFromNodeId: orig.id } as unknown,
         updatedAt: new Date(),
       };
       await prisma.treeBranchLeafNode.create({ data: toCreate });
@@ -6079,7 +6077,7 @@ router.get('/nodes/:tableNodeId/table/lookup', async (req, res) => {
     let keyColumnFromLookup: string | undefined;
     
     if (selectFieldNode?.table_instances && typeof selectFieldNode.table_instances === 'object') {
-      const instances = selectFieldNode.table_instances as Record<string, any>;
+      const instances = selectFieldNode.table_instances as Record<string, unknown>;
       const activeInstance = selectFieldNode.table_activeId ? instances[selectFieldNode.table_activeId] : null;
       
       if (activeInstance) {
@@ -6330,7 +6328,7 @@ router.put('/trees/:treeId/nodes/:nodeId/data', async (req, res) => {
       // Marquer le nÃƒÂ¯Ã‚Â¿Ã‚Â½"ud comme ayant des donnÃƒÆ’Ã‚Â©es configurÃƒÆ’Ã‚Â©es (capacitÃƒÆ’Ã‚Â© "DonnÃƒÆ’Ã‚Â©e" active)
       // ?? NOUVEAU: Si sourceRef pointe vers une table, mettre ÃƒÂ¯Ã‚Â¿Ã‚Â½ jour table_activeId et table_instances
       // ?? FIX: Synchroniser data_unit et data_precision depuis la variable vers le nÃƒÂ¯Ã‚Â¿Ã‚Â½ud
-      const nodeUpdateData: any = { 
+      const nodeUpdateData: unknown = { 
         hasData: true, 
         updatedAt: new Date(),
         // ?? FIX: Toujours synchroniser unit et precision de la variable vers le nÃƒÂ¯Ã‚Â¿Ã‚Â½ud
@@ -7737,7 +7735,7 @@ router.get('/tables/:id', async (req, res) => {
     res.json({
       ...table,
       rows: rows.map(r => r.cells), // Renvoyer uniquement les donnÃƒÆ’Ã‚Â©es des cellules
-      columns: (table.tableColumns || []).map((c: any) => ({ name: c.name, type: c.type, width: c.width, format: c.format, metadata: c.metadata })),
+      columns: (table.tableColumns || []).map((c: Record<string, unknown>) => ({ name: c.name, type: c.type, width: c.width, format: c.format, metadata: c.metadata })),
       page,
       limit,
       totalRows: table.rowCount,
@@ -7762,10 +7760,10 @@ const jsonClone = <T>(value: T): T => JSON.parse(JSON.stringify(value ?? null)) 
 // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â FONCTION DE FILTRAGE D'OPTIONS DE TABLE PAR FILTRE SIMPLE
 // ==================================================================================
 function applySingleFilter(
-  filter: any,
+  filter: unknown,
   options: Array<{ value: string; label: string }>,
   tableData: NormalizedTable,
-  formValues: Record<string, any>
+  formValues: Record<string, unknown>
 ): Array<{ value: string; label: string }> {
   const { columnName, operator, value: filterValue } = filter;
 
@@ -7932,14 +7930,14 @@ const normalizeTableInstance = (
     
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã…Â  ARCHITECTURE NORMALISÃƒÆ’Ã¢â‚¬Â°E : tableColumns et tableRows
     const columns = (table.tableColumns || [])
-      .sort((a: any, b: any) => a.columnIndex - b.columnIndex)
-      .map((col: any) => col.name);
+      .sort((a: unknown, b: unknown) => a.columnIndex - b.columnIndex)
+      .map((col: Record<string, unknown>) => col.name);
     
     const rows = (table.tableRows || [])
-      .sort((a: any, b: any) => a.rowIndex - b.rowIndex)
-      .map((row: any) => {
+      .sort((a: unknown, b: unknown) => a.rowIndex - b.rowIndex)
+      .map((row: Record<string, unknown>) => {
         // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ NOUVEAU: Prisma Json type retourne directement l'objet
-        let cells: any;
+        let cells: unknown;
         
         if (Array.isArray(row.cells)) {
           // Format actuel: cells est dÃƒÆ’Ã‚Â©jÃƒÆ’Ã‚Â  un array d'objets JS
@@ -7960,10 +7958,10 @@ const normalizeTableInstance = (
       });
     
     const matrix = (table.tableRows || [])
-      .sort((a: any, b: any) => a.rowIndex - b.rowIndex)
-      .map((row: any) => {
+      .sort((a: unknown, b: unknown) => a.rowIndex - b.rowIndex)
+      .map((row: Record<string, unknown>) => {
         // ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ NOUVEAU: Prisma Json type retourne directement l'objet
-        let cells: any;
+        let cells: unknown;
         
         if (Array.isArray(row.cells)) {
           // Format actuel: cells est dÃƒÆ’Ã‚Â©jÃƒÆ’Ã‚Â  un array d'objets JS
@@ -8053,7 +8051,7 @@ const syncNodeTableCapability = async (
   const sourceIds = [...new Set(
     tables.filter(t => t.sourceTableId).map(t => t.sourceTableId!)
   )];
-  const sourceTables: Record<string, any> = {};
+  const sourceTables: Record<string, unknown> = {};
   if (sourceIds.length > 0) {
     // Charger les tables sources qui ne sont pas déjà dans la liste
     const localSourceIds = sourceIds.filter(sid => tables.some(t => t.id === sid));
@@ -8332,7 +8330,7 @@ async function applyTableFilters(
           }
         };
         
-        const allConditionsMet = conditions.every((cond: any, idx: number) => evaluateSingleCondition(cond, idx));
+        const allConditionsMet = conditions.every((cond: unknown, idx: number) => evaluateSingleCondition(cond, idx));
         
         const mode = mult.mode || 'multiply';
         if (mode === 'fixed') {
@@ -8956,7 +8954,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
     }
 
     // ÃƒÂ°Ã…Â¸Ã¢â‚¬â€Ã…â€œÃƒÂ¯Ã‚Â¸Ã‚Â Compresser les donnÃƒÆ’Ã‚Â©es volumineuses si fournies
-    const updateData: any = {
+    const updateData: unknown = {
       ...(name !== undefined && { name }),
       ...(description !== undefined && { description }),
       ...(type !== undefined && { type }),
@@ -11036,7 +11034,7 @@ router.get('/submissions/:id/fields', async (req, res) => {
       type: string;
       fieldType?: string;
       fieldSubType?: string;
-      value: any;
+      value: unknown;
       rawValue: string;
       calculatedBy?: string;
     }> = {};
@@ -11084,7 +11082,7 @@ router.get('/submissions/:id/fields', async (req, res) => {
         email: lead.email,
         phone: lead.phone,
         company: lead.company,
-        fullAddress: (lead.data as any)?.address || null,
+        fullAddress: (lead.data as unknown)?.address || null,
         data: lead.data
       } : null,
       status: submission.status,
@@ -12052,7 +12050,7 @@ router.get('/nodes/:fieldId/select-config', async (req, res) => {
       });
 
       if (node?.hasTable && node.table_activeId && node.table_instances) {
-        const instances = node.table_instances as Record<string, any>;
+        const instances = node.table_instances as Record<string, unknown>;
         const activeInstance = instances[node.table_activeId];
         
         const isRowBased = activeInstance?.rowBased === true;
@@ -12462,11 +12460,11 @@ router.all('/nodes/:nodeId/table/lookup', async (req, res) => {
     
     // ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â¯ Extraire rows[] et data[] depuis cells
     const rows: string[] = [];
-    const data: any[][] = [];
+    const data: unknown[][] = [];
     
     table.tableRows.forEach(row => {
       try {
-        let cellsData: any;
+        let cellsData: unknown;
         
         // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â Tentative 1: Parse JSON si c'est une string
         if (typeof row.cells === 'string') {
@@ -12546,7 +12544,7 @@ router.all('/nodes/:nodeId/table/lookup', async (req, res) => {
     // Reconstruire fullMatrix avec cells COMPLETS (sans le slice qui enlÃƒÆ’Ã‚Â¨ve cells[0])
     const fullMatrixForFilters = table.tableRows.map(row => {
       try {
-        let cellsData: any;
+        let cellsData: unknown;
         if (typeof row.cells === 'string') {
           try {
             cellsData = JSON.parse(row.cells);
@@ -13629,7 +13627,7 @@ router.put('/submissions/:id', async (req, res) => {
             const evaluation = await evaluateVariableOperation(
               row.nodeId,
               id, // submissionId
-              tx as any // Utiliser la transaction Prisma
+              tx as unknown // Utiliser la transaction Prisma
             );
             
             
@@ -14561,7 +14559,7 @@ router.post('/submissions/stage/commit', async (req, res) => {
               const evalResult = await evaluateVariableOperation(
                 node.id,
                 stage.submissionId!,
-                tx as any,
+                tx as unknown,
                 valueMapLocal
               );
               return {
@@ -14718,7 +14716,7 @@ router.get('/submissions/my-drafts', async (req, res) => {
     const { leadId, treeId } = req.query;
 
 
-    const where: any = {
+    const where: unknown = {
       userId,
       expiresAt: { gt: new Date() } // Seulement les non-expirÃƒÆ’Ã‚Â©s
     };
@@ -15384,7 +15382,7 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
       targetNodeId = exists ? `${candidateId}-${Date.now()}` : candidateId;
 
       // Gérer proprement la réécriture des références dans les configs
-      const rewriter = (json: any): any => {
+      const rewriter = (json: unknown): any => {
          if (!json) return json ?? {};
          const str = JSON.stringify(json);
          const rewritten = rewriteReferences(str, {
@@ -15413,12 +15411,12 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
           isActive: ownerNode.isActive ?? true,
           isMultiple: ownerNode.isMultiple ?? false,
           hasData: ownerNode.hasData ?? false,
-          metadata: rewriter(ownerNode.metadata) as any,
-          tableConfig: rewriter(ownerNode.tableConfig) as any,
-          formulaConfig: rewriter(ownerNode.formulaConfig) as any,
-          conditionConfig: rewriter(ownerNode.conditionConfig) as any,
-          apiConfig: rewriter(ownerNode.apiConfig) as any,
-          linkConfig: rewriter(ownerNode.linkConfig) as any,
+          metadata: rewriter(ownerNode.metadata) as unknown,
+          tableConfig: rewriter(ownerNode.tableConfig) as unknown,
+          formulaConfig: rewriter(ownerNode.formulaConfig) as unknown,
+          conditionConfig: rewriter(ownerNode.conditionConfig) as unknown,
+          apiConfig: rewriter(ownerNode.apiConfig) as unknown,
+          linkConfig: rewriter(ownerNode.linkConfig) as unknown,
           createdAt: new Date(),
           updatedAt: new Date(),
         }
@@ -15472,7 +15470,7 @@ router.post('/nodes/:nodeId/copy-linked-variable', async (req, res) => {
       const shouldUpdateVariableActiveId =
         !ownerNodeForDuplication.variable_activeId || ownerNodeForDuplication.variable_activeId === variableId;
 
-      const updateData: any = {
+      const updateData: unknown = {
         table_activeId: newTableActiveId,
         formula_activeId: newFormulaActiveId,
         condition_activeId: newConditionActiveId,
@@ -15580,7 +15578,7 @@ router.get('/variables/search', async (req, res) => {
     const q = String(req.query.displayName || '').trim();
     if (!q) return res.status(400).json({ error: 'displayName query string requis' });
     const found = await prisma.treeBranchLeafNodeVariable.findMany({
-      where: { displayName: { contains: q, mode: 'insensitive' as any } },
+      where: { displayName: { contains: q, mode: 'insensitive' as unknown } },
       select: { id: true, nodeId: true, exposedKey: true, displayName: true, sourceType: true, sourceRef: true }
     });
     res.json({ count: found.length, items: found });

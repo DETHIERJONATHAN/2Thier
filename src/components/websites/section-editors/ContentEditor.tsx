@@ -15,8 +15,8 @@ const { TextArea } = Input;
 const { Option } = Select;
 
 interface ContentEditorProps {
-  section: any;
-  onSave: (content: any) => void;
+  section: unknown;
+  onSave: (content: unknown) => void;
   onCancel: () => void;
 }
 
@@ -82,7 +82,7 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({ section, onSave, o
     setColumns(newColumns);
   };
 
-  const handleSubmit = (values: any) => {
+  const handleSubmit = (values: unknown) => {
     onSave({
       name: values.name,
       content: {
@@ -114,7 +114,7 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({ section, onSave, o
       }
       return isImage && isLt5M;
     },
-    onChange: (info: any) => {
+    onChange: (info: unknown) => {
       setImageFiles(info.fileList);
     },
     multiple: true

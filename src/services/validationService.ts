@@ -42,7 +42,7 @@ export const getValidationsByFieldId = async (fieldId: string) => {
  * @param validationData Les données de la validation à créer.
  * @returns Une promesse qui se résout avec la validation créée.
  */
-export const createValidation = async (fieldId: string, validationData: any) => {
+export const createValidation = async (fieldId: string, validationData: unknown) => {
   
   try {
     // Vérifier que le champ existe
@@ -82,7 +82,7 @@ export const createValidation = async (fieldId: string, validationData: any) => 
  * @param updateData Les données à mettre à jour.
  * @returns Une promesse qui se résout avec la validation mise à jour.
  */
-export const updateValidation = async (validationId: string, updateData: any) => {
+export const updateValidation = async (validationId: string, updateData: unknown) => {
   
   try {
     // Vérifier si le modèle fieldValidation existe dans Prisma
@@ -118,7 +118,7 @@ export const updateValidation = async (validationId: string, updateData: any) =>
     }
     
     // Préparer les données de mise à jour
-    const updateObject: any = {};
+    const updateObject: unknown = {};
     
     // Ne mettre à jour que les champs fournis
     if (updateData.type !== undefined) updateObject.type = updateData.type;

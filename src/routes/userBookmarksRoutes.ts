@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authMiddleware } from '../middlewares/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -20,7 +21,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 
     res.json({ bookmarks });
   } catch (error) {
-    console.error('[UserBookmarks] ❌ Erreur GET /bookmarks:', error);
+    logger.error('[UserBookmarks] ❌ Erreur GET /bookmarks:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des bookmarks' });
   }
 });
@@ -71,7 +72,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 
     res.status(201).json({ bookmark });
   } catch (error) {
-    console.error('[UserBookmarks] ❌ Erreur POST /bookmarks:', error);
+    logger.error('[UserBookmarks] ❌ Erreur POST /bookmarks:', error);
     res.status(500).json({ error: 'Erreur lors de l\'ajout du bookmark' });
   }
 });
@@ -95,7 +96,7 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
     await db.userBookmark.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
-    console.error('[UserBookmarks] ❌ Erreur DELETE /bookmarks:', error);
+    logger.error('[UserBookmarks] ❌ Erreur DELETE /bookmarks:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du bookmark' });
   }
 });
@@ -122,7 +123,7 @@ router.post('/remove-by-url', authMiddleware, async (req: Request, res: Response
     await db.userBookmark.delete({ where: { id: bookmark.id } });
     res.json({ success: true });
   } catch (error) {
-    console.error('[UserBookmarks] ❌ Erreur remove-by-url:', error);
+    logger.error('[UserBookmarks] ❌ Erreur remove-by-url:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression du bookmark' });
   }
 });
@@ -154,7 +155,7 @@ router.put('/reorder', authMiddleware, async (req: Request, res: Response) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('[UserBookmarks] ❌ Erreur PUT /reorder:', error);
+    logger.error('[UserBookmarks] ❌ Erreur PUT /reorder:', error);
     res.status(500).json({ error: 'Erreur lors du réordonnement' });
   }
 });

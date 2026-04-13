@@ -80,7 +80,7 @@ router.put('/website-sections/:id', async (req, res) => {
     }
 
     // 🔥 FIX: Deep merge du content pour préserver les propriétés imbriquées
-    const deepMerge = (target: any, source: any): any => {
+    const deepMerge = (target: unknown, source: unknown): any => {
       if (!source || typeof source !== 'object' || Array.isArray(source)) {
         return source;
       }
@@ -147,7 +147,7 @@ router.patch('/website-sections/:id', async (req, res) => {
     }
 
     // 🔥 FIX: Deep merge du content pour préserver les propriétés imbriquées
-    const deepMerge = (target: any, source: any): any => {
+    const deepMerge = (target: unknown, source: unknown): any => {
       if (!source || typeof source !== 'object' || Array.isArray(source)) {
         return source;
       }

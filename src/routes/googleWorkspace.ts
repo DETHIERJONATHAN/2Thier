@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { decrypt, encrypt } from '../utils/crypto.js';
 import { authMiddleware } from '../middlewares/auth.js';
 import { nanoid } from 'nanoid';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -115,7 +116,7 @@ router.get('/:id/google-workspace/config', requireRole(['admin', 'super_admin'])
     });
     
   } catch (error) {
-    console.error('[GOOGLE-WORKSPACE] Erreur GET config:', error);
+    logger.error('[GOOGLE-WORKSPACE] Erreur GET config:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la récupération de la configuration'
@@ -217,9 +218,9 @@ router.post('/:id/google-workspace/config', requireRole(['super_admin']), async 
     });
     
   } catch (error) {
-    console.error('[GOOGLE-WORKSPACE] Erreur POST config:', error);
-    console.error('[GOOGLE-WORKSPACE] Détails erreur:', error instanceof Error ? error.message : String(error));
-    console.error('[GOOGLE-WORKSPACE] Stack:', error instanceof Error ? error.stack : 'N/A');
+    logger.error('[GOOGLE-WORKSPACE] Erreur POST config:', error);
+    logger.error('[GOOGLE-WORKSPACE] Détails erreur:', error instanceof Error ? error.message : String(error));
+    logger.error('[GOOGLE-WORKSPACE] Stack:', error instanceof Error ? error.stack : 'N/A');
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la sauvegarde de la configuration',
@@ -329,7 +330,7 @@ router.get('/:id/google-workspace/auth-url', requireRole(['admin', 'super_admin'
     });
     
   } catch (error) {
-    console.error('[GOOGLE-WORKSPACE] Erreur GET auth-url:', error);
+    logger.error('[GOOGLE-WORKSPACE] Erreur GET auth-url:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la génération de l\'URL d\'authentification'
@@ -429,7 +430,7 @@ router.get('/users/:userId/status', requireRole(['admin', 'super_admin']), async
     });
     
   } catch (error) {
-    console.error('[GOOGLE-WORKSPACE] Erreur GET status:', error);
+    logger.error('[GOOGLE-WORKSPACE] Erreur GET status:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la récupération du statut'
@@ -541,7 +542,7 @@ router.post('/users/create', requireRole(['admin', 'super_admin']), async (req: 
     }
     
   } catch (error) {
-    console.error('[GOOGLE-WORKSPACE] Erreur POST create:', error);
+    logger.error('[GOOGLE-WORKSPACE] Erreur POST create:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la création du compte'
@@ -599,7 +600,7 @@ router.post('/users/:userId/sync', requireRole(['admin', 'super_admin']), async 
     });
     
   } catch (error) {
-    console.error('[GOOGLE-WORKSPACE] Erreur POST sync:', error);
+    logger.error('[GOOGLE-WORKSPACE] Erreur POST sync:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la synchronisation'
@@ -662,7 +663,7 @@ router.post('/users/:userId/deactivate', requireRole(['admin', 'super_admin']), 
     });
     
   } catch (error) {
-    console.error('[GOOGLE-WORKSPACE] Erreur POST deactivate:', error);
+    logger.error('[GOOGLE-WORKSPACE] Erreur POST deactivate:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la désactivation'

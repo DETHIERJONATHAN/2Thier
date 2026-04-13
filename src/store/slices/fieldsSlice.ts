@@ -67,7 +67,7 @@ export const createFieldsSlice: StateCreator<
       }));
 
       // On cherche le champ créé pour le retourner (utile pour l'UI)
-      const section = updatedBlock.sections.find((s: any) => String(s.id) === String(sectionId));
+      const section = updatedBlock.sections.find((s: Record<string, unknown>) => String(s.id) === String(sectionId));
       const createdField = section?.fields.find((f: Field) => 
         f.label === field.label && 
         !stateBeforeUpdate.blocks.flatMap(b => b.sections)
@@ -82,7 +82,7 @@ export const createFieldsSlice: StateCreator<
       toast.success("Champ ajouté avec succès !");
       return createdField || null;
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[CRMStore] addFieldToSection error:', err);
       toast.error(err.message || "Une erreur est survenue.");
       set({ blocks: stateBeforeUpdate.blocks });
@@ -209,7 +209,7 @@ export const createFieldsSlice: StateCreator<
       }));
       
       toast.success("Champ déplacé avec succès !");
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err.message);
       console.error('[CRMStore] moveFieldToSection error:', err);
     }
@@ -276,7 +276,7 @@ export const createFieldsSlice: StateCreator<
       });
       
       toast.success("Option ajoutée avec succès !");
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err.message);
       console.error('[CRMStore] addOptionToField error:', err);
       throw err;
@@ -314,7 +314,7 @@ export const createFieldsSlice: StateCreator<
       });
       
       toast.success("Option supprimée avec succès !");
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(err.message);
       console.error('[CRMStore] removeOptionFromField error:', err);
       throw err;

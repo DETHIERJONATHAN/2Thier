@@ -238,7 +238,7 @@ const ProfilePage = () => {
     if (!isColonyView || !currentOrganization?.id) return;
     setColonyLoading(true);
     api.get(`/api/organizations/public/${currentOrganization.id}`)
-      .then((r: any) => { setColonyData(r?.data || r); })
+      .then((r: unknown) => { setColonyData(r?.data || r); })
       .catch(() => { message.error('Impossible de charger le profil Colony'); })
       .finally(() => setColonyLoading(false));
   }, [isColonyView, currentOrganization?.id, api]);
@@ -255,9 +255,9 @@ const ProfilePage = () => {
     if (!isColonyView || activeTab !== 'publications' || !currentOrganization?.id) return;
     setColonyPostsLoading(true);
     api.get('/api/wall/feed?mode=org&visibility=ALL')
-      .then((r: any) => {
+      .then((r: unknown) => {
         const allPosts: WallPostData[] = r?.posts || [];
-        setColonyPosts(allPosts.filter((p: any) => p.publishAsOrg && p.organization?.id === currentOrganization.id));
+        setColonyPosts(allPosts.filter((p: Record<string, unknown>) => p.publishAsOrg && p.organization?.id === currentOrganization.id));
       })
       .catch(() => setColonyPosts([]))
       .finally(() => setColonyPostsLoading(false));
@@ -271,7 +271,7 @@ const ProfilePage = () => {
 
   // ═══ Colony invite state ═══
   const [inviteLoading, setInviteLoading] = useState(false);
-  const viewedUserOrgId = (profile as any)?.organization?.id;
+  const viewedUserOrgId = (profile as unknown)?.organization?.id;
   const isAlreadyInMyColony = !!viewedUserOrgId && viewedUserOrgId === currentOrganization?.id;
   const canInviteToColony = isViewingOther && currentOrganization && !isAlreadyInMyColony && (currentOrganization.role === 'admin' || currentOrganization.role === 'super_admin' || isSuperAdmin);
 
@@ -296,7 +296,7 @@ const ProfilePage = () => {
       setIsCreateOrgModalVisible(false);
       orgForm.resetFields();
       window.location.reload();
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = err?.response?.data?.message || err?.data?.message || "Erreur lors de la création de la Colony";
       message.error(msg);
     } finally {
@@ -314,7 +314,7 @@ const ProfilePage = () => {
     try {
       const formData = new FormData();
       formData.append('logo', file);
-      const resp: any = await api.post(`/api/organizations/${orgId}/logo`, formData);
+      const resp: unknown = await api.post(`/api/organizations/${orgId}/logo`, formData);
       if (resp.success) {
         message.success('Logo mis à jour !');
         if (refetchUser) await refetchUser();
@@ -331,7 +331,7 @@ const ProfilePage = () => {
     if (!user) return;
     setLoading(true);
     const endpoint = isViewingOther ? `/api/profile/user/${viewUserId}` : '/api/profile';
-    api.get(endpoint).then((r: any) => {
+    api.get(endpoint).then((r: unknown) => {
       setProfile(r);
       setCoverPosY(r.coverPositionY ?? 50);
       setLoading(false);
@@ -342,7 +342,7 @@ const ProfilePage = () => {
   const fetchPhotos = useCallback(async () => {
     setPhotosLoading(true);
     try {
-      const r: any = await api.get('/api/profile/photos');
+      const r: unknown = await api.get('/api/profile/photos');
       setUserPhotos(r.photos || []);
     } catch { /* silently fail */ }
     finally { setPhotosLoading(false); }
@@ -368,7 +368,7 @@ const ProfilePage = () => {
       if (isViewingOther && viewUserId) params.set('userId', viewUserId);
       if (mediaFilter !== 'all') params.set('type', mediaFilter);
       if (mediaCategoryFilter) params.set('category', mediaCategoryFilter);
-      const r: any = await api.get(`/api/profile/media?${params}`);
+      const r: unknown = await api.get(`/api/profile/media?${params}`);
       setUserMedia(r.media || []);
     } catch { /* silently fail */ }
     finally { setMediaLoading(false); }
@@ -442,7 +442,7 @@ const ProfilePage = () => {
       params.set('limit', '10');
       params.set('mode', feedMode);
       if (!reset && wallCursor) params.set('cursor', wallCursor);
-      const r: any = await api.get(`/api/wall/my-feed?${params.toString()}`);
+      const r: unknown = await api.get(`/api/wall/my-feed?${params.toString()}`);
       const posts: WallPostData[] = r.posts || [];
       setWallPosts(prev => reset ? posts : [...prev, ...posts]);
       setWallCursor(r.nextCursor || null);
@@ -468,7 +468,7 @@ const ProfilePage = () => {
     try {
       const fd = new FormData();
       fd.append('avatar', e.target.files[0]);
-      const r: any = await api.post('/api/profile/avatar', fd);
+      const r: unknown = await api.post('/api/profile/avatar', fd);
       const newUrl = r.avatarUrl ? `${r.avatarUrl}?t=${Date.now()}` : '';
       setProfile(p => ({ ...p, avatarUrl: newUrl }));
       message.success('Photo mise à jour !');
@@ -483,7 +483,7 @@ const ProfilePage = () => {
     try {
       const fd = new FormData();
       fd.append('cover', e.target.files[0]);
-      const r: any = await api.post('/api/profile/cover', fd);
+      const r: unknown = await api.post('/api/profile/cover', fd);
       // Add cache-buster to force browser to reload the new image
       const newUrl = r.coverUrl ? `${r.coverUrl}?t=${Date.now()}` : '';
       setProfile(p => ({ ...p, coverUrl: newUrl, coverPositionY: 50 }));
@@ -501,7 +501,7 @@ const ProfilePage = () => {
     try {
       const fd = new FormData();
       fd.append('cover', e.target.files[0]);
-      const r: any = await api.post(`/api/organizations/${currentOrganization.id}/cover`, fd);
+      const r: unknown = await api.post(`/api/organizations/${currentOrganization.id}/cover`, fd);
       const newUrl = r?.data?.coverUrl ? `${r.data.coverUrl}?t=${Date.now()}` : '';
       setColonyData(prev => prev ? { ...prev, coverUrl: newUrl, coverPositionY: 50 } : prev);
       setCoverPosY(50);
@@ -529,7 +529,7 @@ const ProfilePage = () => {
     try {
       const fd = new FormData();
       fd.append('logo', e.target.files[0]);
-      const r: any = await api.post(`/api/organizations/${currentOrganization.id}/logo`, fd);
+      const r: unknown = await api.post(`/api/organizations/${currentOrganization.id}/logo`, fd);
       if (r?.success || r?.data) {
         const newUrl = r?.data?.logoUrl ? `${r.data.logoUrl}?t=${Date.now()}` : '';
         setColonyData(prev => prev ? { ...prev, logoUrl: newUrl } : prev);
@@ -552,7 +552,7 @@ const ProfilePage = () => {
     if (!isViewingOther || !viewUserId) return;
     (async () => {
       try {
-        const r: any = await api.get(`/api/friends/status/${viewUserId}`);
+        const r: unknown = await api.get(`/api/friends/status/${viewUserId}`);
         setFriendStatus(r.status || null);
         setFriendDirection(r.direction || null);
         setFriendshipId(r.friendshipId || null);
@@ -588,7 +588,7 @@ const ProfilePage = () => {
         message.info('Demande annulée');
       } else {
         // Send friend request
-        const r: any = await api.post('/api/friends/request', { userId: viewUserId });
+        const r: unknown = await api.post('/api/friends/request', { userId: viewUserId });
         if (r.friendship) {
           setFriendStatus('pending');
           setFriendDirection('sent');
@@ -606,7 +606,7 @@ const ProfilePage = () => {
   const handleOpenMessenger = async () => {
     if (!viewUserId) return;
     try {
-      const res: any = await api.post('/api/messenger/conversations', { participantIds: [viewUserId] });
+      const res: unknown = await api.post('/api/messenger/conversations', { participantIds: [viewUserId] });
       const convId = res?.conversation?.id || res?.id;
       if (convId) {
         window.dispatchEvent(new CustomEvent('open-messenger', { detail: { conversationId: convId } }));
@@ -640,8 +640,8 @@ const ProfilePage = () => {
   };
 
   const handleBlockColony = async () => {
-    const orgId = (profile as any)?.organization?.id;
-    const orgName = (profile as any)?.organization?.name;
+    const orgId = (profile as unknown)?.organization?.id;
+    const orgName = (profile as unknown)?.organization?.name;
     if (!orgId || friendLoading) return;
     Modal.confirm({
       title: `Bloquer la Colony « ${orgName} » ?`,
@@ -677,12 +677,12 @@ const ProfilePage = () => {
     if (!viewUserId || !currentOrganization) return;
     setInviteLoading(true);
     try {
-      const result: any = await api.post('/api/invitations/invite-user', {
+      const result: unknown = await api.post('/api/invitations/invite-user', {
         targetUserId: viewUserId,
         roleName,
       });
       message.success(result?.message || 'Invitation envoyée !');
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = err?.data?.message || err?.message || "Erreur lors de l'envoi de l'invitation";
       message.error(msg);
     } finally {
@@ -692,7 +692,7 @@ const ProfilePage = () => {
 
   // ═══ Profile ⋯ menu items ═══
   const profileMoreMenuItems = useMemo(() => {
-    const items: any[] = [];
+    const items: unknown[] = [];
     if (canInviteToColony) {
       items.push({
         key: 'invite-colony',
@@ -705,8 +705,8 @@ const ProfilePage = () => {
     if (friendStatus !== 'blocked') {
       items.push({ key: 'block-user', icon: <StopOutlined />, label: 'Bloquer la personne', danger: true, onClick: handleBlockUser });
     }
-    const viewedOrgId = (profile as any)?.organization?.id;
-    const viewedOrgName = (profile as any)?.organization?.name;
+    const viewedOrgId = (profile as unknown)?.organization?.id;
+    const viewedOrgName = (profile as unknown)?.organization?.name;
     if (viewedOrgId && viewedOrgId !== currentOrganization?.id) {
       items.push({ key: 'block-colony', icon: <StopOutlined />, label: `Bloquer la Colony « ${viewedOrgName} »`, danger: true, onClick: handleBlockColony });
     }
@@ -720,9 +720,9 @@ const ProfilePage = () => {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}><Spin size="large" /></div>;
   }
 
-  const displayRole = isViewingOther ? ((profile as any)?.role || 'user') : (user?.role || 'user');
+  const displayRole = isViewingOther ? ((profile as unknown)?.role || 'user') : (user?.role || 'user');
   const rl = ROLE_MAP[displayRole] || { label: displayRole || 'Utilisateur', color: FB.textSecondary };
-  const displayOrg = isViewingOther ? (profile as any)?.organization : currentOrganization;
+  const displayOrg = isViewingOther ? (profile as unknown)?.organization : currentOrganization;
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'Utilisateur';
 
   // Colony view computed values
@@ -1109,9 +1109,9 @@ const ProfilePage = () => {
                     api={api}
                     onUpdate={() => {
                       api.get('/api/wall/feed?mode=org&visibility=ALL')
-                        .then((r: any) => {
+                        .then((r: unknown) => {
                           const allPosts: WallPostData[] = r?.posts || [];
-                          setColonyPosts(allPosts.filter((p: any) => p.publishAsOrg && p.organization?.id === currentOrganization?.id));
+                          setColonyPosts(allPosts.filter((p: Record<string, unknown>) => p.publishAsOrg && p.organization?.id === currentOrganization?.id));
                         }).catch(() => setColonyPosts([]));
                     }}
                   />
@@ -1236,7 +1236,7 @@ const ProfilePage = () => {
                           title="Cliquer pour changer le logo"
                         >
                           {orgLogo ? (
-                            <img src={orgLogo} alt={org.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                            <img src={orgLogo} alt={org.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
                           ) : (
                             org.name?.[0]?.toUpperCase() || <SwapOutlined />
                           )}
@@ -1387,9 +1387,9 @@ const ProfilePage = () => {
                   onUpdate={() => {
                     setColonyPostsLoading(true);
                     api.get('/api/wall/feed?mode=org&visibility=ALL')
-                      .then((r: any) => {
+                      .then((r: unknown) => {
                         const allPosts: WallPostData[] = r?.posts || [];
-                        setColonyPosts(allPosts.filter((p: any) => p.publishAsOrg && p.organization?.id === currentOrganization?.id));
+                        setColonyPosts(allPosts.filter((p: Record<string, unknown>) => p.publishAsOrg && p.organization?.id === currentOrganization?.id));
                       })
                       .catch(() => setColonyPosts([]))
                       .finally(() => setColonyPostsLoading(false));

@@ -25,7 +25,7 @@ export enum DependencyAction {
 export interface DependencyResult {
     action: DependencyAction;
     targetField: string | string[];
-    value?: any;
+    value?: unknown;
     applied: boolean;
 }
 
@@ -83,7 +83,7 @@ export function NOT(condition: boolean): boolean {
  * @param list - La liste dans laquelle rechercher
  * @returns true si la valeur est dans la liste, false sinon
  */
-export function IN(value: any, list: any[]): boolean {
+export function IN(value: unknown, list: unknown[]): boolean {
     return list.includes(value);
 }
 
@@ -171,7 +171,7 @@ export function SET_OPTIONAL(fieldId: string | string[]): DependencyResult {
  * @param value - La valeur à définir
  * @returns L'objet de résultat de dépendance
  */
-export function SET_VALUE(fieldId: string, value: any): DependencyResult {
+export function SET_VALUE(fieldId: string, value: unknown): DependencyResult {
     return {
         action: DependencyAction.SET_VALUE,
         targetField: fieldId,
@@ -188,8 +188,8 @@ export function SET_VALUE(fieldId: string, value: any): DependencyResult {
  */
 export function applyDependency(
     result: DependencyResult,
-    formValues: Record<string, any>,
-    updateFormField: (fieldId: string, property: string, value: any) => void
+    formValues: Record<string, unknown>,
+    updateFormField: (fieldId: string, property: string, value: unknown) => void
 ): void {
     if (!result.applied) return;
 
@@ -233,8 +233,8 @@ export function applyDependency(
  */
 export function evaluateDependencies(
     dependencies: Array<() => DependencyResult>,
-    formValues: Record<string, any>,
-    updateFormField: (fieldId: string, property: string, value: any) => void
+    formValues: Record<string, unknown>,
+    updateFormField: (fieldId: string, property: string, value: unknown) => void
 ): void {
     dependencies.forEach(dependencyFn => {
         const result = dependencyFn();

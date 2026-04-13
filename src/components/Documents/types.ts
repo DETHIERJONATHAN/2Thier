@@ -9,7 +9,7 @@ export interface ModuleInstance {
   id: string;                    // ID unique de l'instance
   moduleId: string;              // Référence au type de module (ex: 'TITLE', 'IMAGE')
   order: number;                 // Position sur la page
-  config: Record<string, any>;   // Configuration du module
+  config: Record<string, unknown>;   // Configuration du module
   themeId?: string;              // ID du thème appliqué
   // Positionnement
   position?: {
@@ -93,7 +93,7 @@ export type PageAction =
  * Actions disponibles sur les modules
  */
 export type ModuleAction =
-  | { type: 'ADD_MODULE'; payload: { pageId: string; moduleId: string; config?: Record<string, any> } }
+  | { type: 'ADD_MODULE'; payload: { pageId: string; moduleId: string; config?: Record<string, unknown> } }
   | { type: 'DELETE_MODULE'; payload: { pageId: string; instanceId: string } }
   | { type: 'UPDATE_MODULE'; payload: { pageId: string; instanceId: string; updates: Partial<ModuleInstance> } }
   | { type: 'REORDER_MODULES'; payload: { pageId: string; modules: ModuleInstance[] } }

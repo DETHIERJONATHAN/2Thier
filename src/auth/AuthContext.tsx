@@ -19,7 +19,7 @@ export interface AuthContextType {
   isSuperAdmin: boolean;
   userRole: RoleName | null;
   selectedOrganization: AuthOrganization | null;
-  login: (email: string, password: string) => Promise<any>;
+  login: (email: string, password: string) => Promise<unknown>;
   logout: () => void;
   isImpersonating: boolean;
   setImpersonation: (user: AuthUser, organization: AuthOrganization) => void;

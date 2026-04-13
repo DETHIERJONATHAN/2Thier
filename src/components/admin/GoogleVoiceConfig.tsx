@@ -66,7 +66,7 @@ const GoogleVoiceConfig: React.FC<GoogleVoiceConfigProps> = ({ onConfigurationCo
           isActive: response.isActive
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors du chargement de la configuration:', error);
       message.error('Erreur lors du chargement de la configuration');
     } finally {
@@ -74,7 +74,7 @@ const GoogleVoiceConfig: React.FC<GoogleVoiceConfigProps> = ({ onConfigurationCo
     }
   };
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: unknown) => {
     try {
       setLoading(true);
       
@@ -94,7 +94,7 @@ const GoogleVoiceConfig: React.FC<GoogleVoiceConfigProps> = ({ onConfigurationCo
       if (onConfigurationComplete) {
         onConfigurationComplete();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de la sauvegarde:', error);
       message.error(
         error.response?.data?.error || 
@@ -118,7 +118,7 @@ const GoogleVoiceConfig: React.FC<GoogleVoiceConfigProps> = ({ onConfigurationCo
       } else {
         message.error(`Échec de la connexion: ${response.message}`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors du test de connexion:', error);
       message.error(
         error.response?.data?.error || 

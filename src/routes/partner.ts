@@ -4,6 +4,7 @@ import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.j
 import { requireRole } from '../middlewares/requireRole.js';
 import { db } from '../lib/database';
 import rateLimit from 'express-rate-limit';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -108,7 +109,7 @@ router.get('/dashboard', requireRole(['admin', 'super_admin']), async (req: Auth
     });
 
   } catch (error) {
-    console.error('❌ [PARTNER] Erreur dashboard:', error);
+    logger.error('❌ [PARTNER] Erreur dashboard:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la récupération du dashboard partenaire' 
@@ -180,7 +181,7 @@ router.get('/earnings', requireRole(['admin', 'super_admin']), async (req: Authe
     });
 
   } catch (error) {
-    console.error('❌ [PARTNER] Erreur earnings:', error);
+    logger.error('❌ [PARTNER] Erreur earnings:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la récupération des revenus' 
@@ -270,7 +271,7 @@ router.get('/leads', requireRole(['admin', 'super_admin']), async (req: Authenti
     });
 
   } catch (error) {
-    console.error('❌ [PARTNER] Erreur récupération leads:', error);
+    logger.error('❌ [PARTNER] Erreur récupération leads:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la récupération des leads partenaire' 
@@ -349,7 +350,7 @@ router.post('/register', requireRole(['admin', 'super_admin']), async (req: Auth
     });
 
   } catch (error) {
-    console.error('❌ [PARTNER] Erreur enregistrement:', error);
+    logger.error('❌ [PARTNER] Erreur enregistrement:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de l\'enregistrement du partenariat' 

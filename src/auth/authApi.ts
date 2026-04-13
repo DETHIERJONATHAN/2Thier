@@ -1,11 +1,11 @@
 // Fonctions d'API pour l'authentification et le chargement du user
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 
-export async function fetchMe(api: any) {
+export async function fetchMe(api: unknown) {
   return api.get('/api/me');
 }
 
-export async function login(api: any, email: string, password: string) {
+export async function login(api: unknown, email: string, password: string) {
   const response = await api.post('/login', { email, password });
   if (!response.success) {
     throw new Error(response.message || 'Erreur de connexion');

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { db } from '../lib/database';
 import { createBusinessAutoPost } from '../services/business-auto-post';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -43,7 +44,7 @@ router.get('/', async (req, res) => {
 
     // Transformer les leads en format client pour l'agenda
     const clients = leads.map(lead => {
-      const data = lead.data as any || {};
+      const data = lead.data as unknown || {};
       return {
         id: lead.id,
         name: data.company || data.name || `Lead ${lead.id.slice(0, 8)}`,
@@ -60,7 +61,7 @@ router.get('/', async (req, res) => {
     res.json(clients);
 
   } catch (error) {
-    console.error('[CLIENTS] Erreur lors de la récupération des clients:', error);
+    logger.error('[CLIENTS] Erreur lors de la récupération des clients:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des clients',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -95,7 +96,7 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Client non trouvé' });
     }
 
-    const data = lead.data as any || {};
+    const data = lead.data as unknown || {};
     const client = {
       id: lead.id,
       name: data.company || data.name || `Lead ${lead.id.slice(0, 8)}`,
@@ -112,7 +113,7 @@ router.get('/:id', async (req, res) => {
     res.json(client);
 
   } catch (error) {
-    console.error('[CLIENTS] Erreur lors de la récupération du client:', error);
+    logger.error('[CLIENTS] Erreur lors de la récupération du client:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération du client',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -170,12 +171,12 @@ router.post('/', async (req, res) => {
       entityId: lead.id,
       entityLabel: company || name || 'Nouveau client',
       clientName: name || company || undefined,
-    }).catch(err => console.error('[CLIENTS] Auto-post error:', err));
+    }).catch(err => logger.error('[CLIENTS] Auto-post error:', err));
 
     res.status(201).json(client);
 
   } catch (error) {
-    console.error('[CLIENTS] Erreur lors de la création du client:', error);
+    logger.error('[CLIENTS] Erreur lors de la création du client:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création du client',
       message: error instanceof Error ? error.message : 'Erreur inconnue'

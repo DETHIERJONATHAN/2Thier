@@ -23,10 +23,10 @@ interface ModuleRendererProps {
    * Format: { lead: {...}, quote: {...}, org: {...}, tbl: {...} }
    */
   documentData?: {
-    lead?: Record<string, any>;
-    quote?: Record<string, any>;
-    org?: Record<string, any>;
-    tbl?: Record<string, any>;
+    lead?: Record<string, unknown>;
+    quote?: Record<string, unknown>;
+    org?: Record<string, unknown>;
+    tbl?: Record<string, unknown>;
   };
 }
 
@@ -40,7 +40,7 @@ const evaluateCondition = (
   if (!documentData) return true; // Sans données, on affiche toujours
   
   // Extraire la valeur du champ
-  let fieldValue: any = null;
+  let fieldValue: unknown = null;
   const fieldRef = rule.fieldRef;
   
   // Format {lead.xxx}, {quote.xxx}, {org.xxx}
@@ -169,7 +169,7 @@ const interpolateVariables = (
     if (data) {
       // Gérer les clés imbriquées (ex: lead.address.street)
       const keys = key.split('.');
-      let value: any = data;
+      let value: unknown = data;
       for (const k of keys) {
         value = value?.[k];
       }
@@ -304,7 +304,7 @@ const ModuleRenderer = ({
               📊 {config.dataBinding}
             </span>
           </span>
-        ) as any;
+        ) as unknown;
       }
     }
     
@@ -539,7 +539,7 @@ const ModuleRenderer = ({
       return lastPart.length > 20 ? `${lastPart.substring(0, 17)}...` : lastPart;
     };
     
-    const asNumberOrNull = (v: any): number | null => {
+    const asNumberOrNull = (v: unknown): number | null => {
       if (typeof v === 'number' && Number.isFinite(v)) return v;
       if (typeof v === 'string' && v.trim() !== '') {
         const n = Number(v);
@@ -550,13 +550,13 @@ const ModuleRenderer = ({
 
     // Convertir pricingLines en format rows pour l'affichage
     const rows = pricingLines.length > 0 
-      ? pricingLines.map((line: any) => {
+      ? pricingLines.map((line: Record<string, unknown>) => {
           // 🆕 Support multi-libellés (labelParts)
           let designation = '';
           let hasLabelParts = false;
           if (line.labelParts && Array.isArray(line.labelParts) && line.labelParts.length > 0) {
             hasLabelParts = true;
-            const parts = line.labelParts.map((p: any) => {
+            const parts = line.labelParts.map((p: Record<string, unknown>) => {
               const prefix = p.prefix || '';
               const src = p.source ? `📊 ${extractTblLabel(p.source)}` : '';
               const suffix = (p.suffix && p.source) ? p.suffix : '';
@@ -594,7 +594,7 @@ const ModuleRenderer = ({
     const hasAnyTotalSource = hasTotalHTVA || hasTotalTVA || hasTotalTVAC || hasRemise;
     
     const pricedLines = rows
-      .map((row: any) => {
+      .map((row: Record<string, unknown>) => {
         const qty = typeof row.quantity === 'number' ? row.quantity : null;
         const unit = typeof row.unitPrice === 'number' ? row.unitPrice : null;
         const lineTotal = qty !== null && unit !== null ? qty * unit : null;
@@ -636,7 +636,7 @@ const ModuleRenderer = ({
                 </td>
               </tr>
             ) : (
-              pricedLines.map((row: any, idx: number) => {
+              pricedLines.map((row: unknown, idx: number) => {
                 const rowStyle: React.CSSProperties = { borderBottom: '1px solid #e8e8e8', backgroundColor: row.style?.backgroundColor || '#fff' };
                 const textStyle: React.CSSProperties = {
                   fontWeight: row.style?.bold ? 'bold' : undefined,
@@ -911,7 +911,7 @@ const ModuleRenderer = ({
       <div style={{ ...themeStyles }}>
         {config.title && <h4 style={{ marginBottom: '16px' }}>{config.title}</h4>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {steps.map((step: any, idx: number) => (
+          {steps.map((step: unknown, idx: number) => (
             <div key={idx} style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
               <div style={{
                 width: '32px',
@@ -970,7 +970,7 @@ const ModuleRenderer = ({
         )}
         {config.showStats && config.stats && (
           <div style={{ display: 'flex', gap: '24px', justifyContent: 'center' }}>
-            {config.stats.map((stat: any, idx: number) => (
+            {config.stats.map((stat: unknown, idx: number) => (
               <div key={idx} style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '32px', fontWeight: 700, color: globalTheme.primaryColor }}>
                   {stat.value}
@@ -992,7 +992,7 @@ const ModuleRenderer = ({
       <div style={{ ...themeStyles }}>
         {config.title && <h4 style={{ marginBottom: '16px' }}>{config.title}</h4>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {items.map((item: any, idx: number) => (
+          {items.map((item: unknown, idx: number) => (
             <div key={idx} style={{ 
               padding: '16px',
               backgroundColor: '#f9f9f9',

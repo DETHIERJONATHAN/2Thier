@@ -197,7 +197,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
   // ✅ Auto-génération du PDF si manquant (1 seule fois)
   useEffect(() => {
     if (!lead || !leadId) return;
-    const hasPdf = typeof lead.data === 'object' && lead.data && (lead.data as any).formPdfUrl;
+    const hasPdf = typeof lead.data === 'object' && lead.data && (lead.data as unknown).formPdfUrl;
     if (!hasPdf && !formPdfAutoRequested.current) {
       formPdfAutoRequested.current = true;
       handleRegenerateFormPdf();
@@ -692,11 +692,11 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                     title="📋 Récapitulatif du Formulaire" 
                     type="inner"
                     extra={
-                      (lead?.data && typeof lead.data === 'object' && (lead.data as any).formPdfUrl) ? (
+                      (lead?.data && typeof lead.data === 'object' && (lead.data as unknown).formPdfUrl) ? (
                         <Button 
                           type="primary" 
                           size="small"
-                          onClick={() => window.open((lead.data as any).formPdfUrl, '_blank')}
+                          onClick={() => window.open((lead.data as unknown).formPdfUrl, '_blank')}
                           icon={<DownloadOutlined />}
                         >
                           Télécharger PDF
@@ -715,7 +715,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                   >
                     <div className="space-y-2 text-sm">
                       <p>
-                        <strong>Formulaire:</strong> {(lead?.data && typeof lead.data === 'object' ? (lead.data as any).formName : undefined) || 'Formulaire en ligne'}
+                        <strong>Formulaire:</strong> {(lead?.data && typeof lead.data === 'object' ? (lead.data as unknown).formName : undefined) || 'Formulaire en ligne'}
                       </p>
                       <p>
                         <strong>Soumis le:</strong> {lead?.createdAt ? new Date(lead.createdAt).toLocaleString('fr-FR') : 'N/A'}
@@ -723,11 +723,11 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                       <p className="text-gray-600">
                         PDF contenant toutes les questions et réponses du formulaire
                       </p>
-                      {(lead?.data && typeof lead.data === 'object' && (lead.data as any).formPdfUrl) ? (
+                      {(lead?.data && typeof lead.data === 'object' && (lead.data as unknown).formPdfUrl) ? (
                         <Button 
                           type="default"
                           block
-                          onClick={() => window.open((lead.data as any).formPdfUrl, '_blank')}
+                          onClick={() => window.open((lead.data as unknown).formPdfUrl, '_blank')}
                           icon={<EyeOutlined />}
                         >
                           Voir le PDF

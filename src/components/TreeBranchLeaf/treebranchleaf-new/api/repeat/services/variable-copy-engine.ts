@@ -113,15 +113,15 @@ export interface CopyVariableOptions {
   // 🚀 PERF: Pre-loaded data to avoid per-variable DB queries
   // ═══════════════════════════════════════════════════════════════════════
   /** Pre-loaded original variable record (skips findUnique) */
-  preloadedOriginalVar?: any;
+  preloadedOriginalVar?: unknown;
   /** Pre-loaded owner node record (skips findUnique for originalOwnerNode) */
-  preloadedOwnerNode?: any;
+  preloadedOwnerNode?: unknown;
   /** Pre-loaded duplicated owner node record (skips findUnique for duplicatedOwnerNode) */
-  preloadedDuplicatedOwnerNode?: any;
+  preloadedDuplicatedOwnerNode?: unknown;
   /** Pre-loaded display node record (skips findFirst + findMany searches) */
-  preloadedDisplayNode?: any | null;
+  preloadedDisplayNode?: unknown | null;
   /** Pre-loaded formulas for the source node (skips findMany) */
-  preloadedFormulas?: any[];
+  preloadedFormulas?: unknown[];
   /** Set of existing node IDs for quick existence checks */
   existingNodeIds?: Set<string>;
   /** Set of existing variable IDs for collision checks */
@@ -129,7 +129,7 @@ export interface CopyVariableOptions {
   /** Set of existing variable exposedKeys for collision checks */
   existingVariableKeys?: Set<string>;
   /** Pre-loaded map of variable by nodeId for reuse checks (skips findUnique per variable) */
-  preloadedVarsByNodeId?: Map<string, any>;
+  preloadedVarsByNodeId?: Map<string, unknown>;
 }
 
 
@@ -947,7 +947,7 @@ export async function copyVariableWithCapacities(
             treeId: originalOwnerNode.treeId,
             parentId: resolvedParentId,
             type: 'leaf_field' as const,
-            subType: inheritedSubType as any, // 🎯 FIX: Utiliser le subType hérité (ex: 'display')
+            subType: inheritedSubType as unknown, // 🎯 FIX: Utiliser le subType hérité (ex: 'display')
             label: displayLabel,
             description: null as string | null,
             value: null as string | null,
@@ -955,16 +955,16 @@ export async function copyVariableWithCapacities(
             isRequired: false,
             isVisible: true,
             isActive: true,
-            isMultiple: false as any,
-            fieldConfig: null as any,
-            conditionConfig: null as any,
-            formulaConfig: null as any,
-            tableConfig: null as any,
-            apiConfig: null as any,
-            linkConfig: null as any,
-            defaultValue: null as any,
-            calculatedValue: null as any,
-            metadata: metadataForDisplay as any,
+            isMultiple: false as unknown,
+            fieldConfig: null as unknown,
+            conditionConfig: null as unknown,
+            formulaConfig: null as unknown,
+            tableConfig: null as unknown,
+            apiConfig: null as unknown,
+            linkConfig: null as unknown,
+            defaultValue: null as unknown,
+            calculatedValue: null as unknown,
+            metadata: metadataForDisplay as unknown,
             subtab: formatSubTabColumn(inheritedSubTab ?? ownerSubTabRaw),
             subtabs: resolvedSubTabsJson,
             createdAt: now,
@@ -985,17 +985,17 @@ export async function copyVariableWithCapacities(
             hasTable: actuallyOwnsTable ? (tableSourceNode.hasTable ?? true) : false,
             table_name: actuallyOwnsTable ? tableSourceNode.table_name : null,
             table_activeId: actuallyOwnsTable && tableSourceNode.table_activeId ? appendSuffix(String(tableSourceNode.table_activeId)) : null,
-            table_instances: actuallyOwnsTable ? cloneAndSuffixInstances(tableSourceNode.table_instances) as any : null,
-            table_columns: actuallyOwnsTable ? tableSourceNode.table_columns as any : null,
-            table_data: actuallyOwnsTable ? tableSourceNode.table_data as any : null,
-            table_importSource: actuallyOwnsTable ? tableSourceNode.table_importSource as any : null,
+            table_instances: actuallyOwnsTable ? cloneAndSuffixInstances(tableSourceNode.table_instances) as unknown : null,
+            table_columns: actuallyOwnsTable ? tableSourceNode.table_columns as unknown : null,
+            table_data: actuallyOwnsTable ? tableSourceNode.table_data as unknown : null,
+            table_importSource: actuallyOwnsTable ? tableSourceNode.table_importSource as unknown : null,
             table_isImported: actuallyOwnsTable ? (tableSourceNode.table_isImported ?? false) : false,
-            table_meta: actuallyOwnsTable ? tableSourceNode.table_meta as any : null,
-            table_rows: actuallyOwnsTable ? tableSourceNode.table_rows as any : null,
-            table_type: actuallyOwnsTable ? tableSourceNode.table_type as any : null,
+            table_meta: actuallyOwnsTable ? tableSourceNode.table_meta as unknown : null,
+            table_rows: actuallyOwnsTable ? tableSourceNode.table_rows as unknown : null,
+            table_type: actuallyOwnsTable ? tableSourceNode.table_type as unknown : null,
             linkedTableIds: actuallyOwnsTable && Array.isArray(tableSourceNode.linkedTableIds)
               ? tableSourceNode.linkedTableIds.map(id => appendSuffix(String(id)))
-              : [] as any,
+              : [] as unknown,
             // 🔧 FIX 24/12/2025: Explicitement mettre à null/[] les IDs de capacités non pertinentes
             // pour éviter qu'un champ simple hérite des formules/conditions du nœud source
             formula_activeId: shouldCopyFormulaCapability && tableSourceNode.formula_activeId 
@@ -1004,8 +1004,8 @@ export async function copyVariableWithCapacities(
             condition_activeId: capacityType === 'condition' && tableSourceNode.condition_activeId 
               ? appendSuffix(String(tableSourceNode.condition_activeId)) 
               : null,
-            linkedFormulaIds: [] as any,  // Sera rempli après si capacityType === 'formula'
-            linkedConditionIds: [] as any,  // Sera rempli après si capacityType === 'condition'
+            linkedFormulaIds: [] as unknown,  // Sera rempli après si capacityType === 'formula'
+            linkedConditionIds: [] as unknown,  // Sera rempli après si capacityType === 'condition'
             // 🔧 FIX 07/01/2026: Pour les composites (qui référencent d'autres variables via linkedVariableIds),
             // on doit copier les linkedVariableIds du nœud ORIGINAL en les suffixant,
             // pas seulement mettre [newVarId]. Exemple: Orientation-inclinaison-1 doit référencer
@@ -1016,7 +1016,7 @@ export async function copyVariableWithCapacities(
             data_activeId: tableSourceNode.data_activeId ? appendSuffix(String(tableSourceNode.data_activeId)) : null,
             data_displayFormat: tableSourceNode.data_displayFormat,
             data_exposedKey: tableSourceNode.data_exposedKey,
-            data_instances: cloneAndSuffixInstances(tableSourceNode.data_instances) as any,
+            data_instances: cloneAndSuffixInstances(tableSourceNode.data_instances) as unknown,
             data_precision: tableSourceNode.data_precision,
             data_unit: tableSourceNode.data_unit,
             data_visibleToUser: tableSourceNode.data_visibleToUser ?? false,
@@ -1024,16 +1024,16 @@ export async function copyVariableWithCapacities(
             appearance_variant: tableSourceNode.appearance_variant,
             appearance_width: tableSourceNode.appearance_width ?? '100%',
             appearance_displayIcon: tableSourceNode.appearance_displayIcon,
-            fieldType: (tableSourceNode.fieldType as any) ?? 'TEXT',
-            fieldSubType: tableSourceNode.fieldSubType as any,
-            field_label: displayLabel as any,
+            fieldType: (tableSourceNode.fieldType as unknown) ?? 'TEXT',
+            fieldSubType: tableSourceNode.fieldSubType as unknown,
+            field_label: displayLabel as unknown,
           };
 
           // PERF: Use upsert instead of findUnique + create/update (saves 1 query per variable)
           await prisma.treeBranchLeafNode.upsert({
             where: { id: displayNodeId },
             update: { ...displayNodeData, updatedAt: now },
-            create: displayNodeData as any
+            create: displayNodeData as unknown
           });
           // Update existingNodeIds to prevent stale collision checks
           if (existingNodeIds) existingNodeIds.add(displayNodeId);
@@ -1127,7 +1127,7 @@ export async function copyVariableWithCapacities(
             }
 
             // Mettre à jour le nœud avec hasFormula/hasCondition et linkedIds
-            const updateData: Record<string, any> = {};
+            const updateData: Record<string, unknown> = {};
             if (copiedFormulaIds.length > 0) {
               updateData.hasFormula = true;
               updateData.linkedFormulaIds = copiedFormulaIds;
@@ -1314,14 +1314,14 @@ export async function copyVariableWithCapacities(
                         hasAPI: child.hasAPI ?? false,
                         hasLink: child.hasLink ?? false,
                         hasMarkers: child.hasMarkers ?? false,
-                        metadata: childMeta as any,
+                        metadata: childMeta as unknown,
                         calculatedValue: null as string | null,
                         fieldType: child.fieldType,
-                        fieldSubType: child.fieldSubType as any,
-                        field_label: forceSingleSuffix(child.label) as any,
-                        subtab: child.subtab as any,
-                        subtabs: child.subtabs as any,
-                        formula_tokens: child.formula_tokens as any,
+                        fieldSubType: child.fieldSubType as unknown,
+                        field_label: forceSingleSuffix(child.label) as unknown,
+                        subtab: child.subtab as unknown,
+                        subtabs: child.subtabs as unknown,
+                        formula_tokens: child.formula_tokens as unknown,
                         data_displayFormat: child.data_displayFormat,
                         data_exposedKey: child.data_exposedKey,
                         data_precision: child.data_precision,
@@ -1340,7 +1340,7 @@ export async function copyVariableWithCapacities(
                     await prisma.treeBranchLeafNode.upsert({
                       where: { id: childCopyId },
                       update: { parentId: copyParentId, updatedAt: now },
-                      create: childNodeData as any
+                      create: childNodeData as unknown
                     });
                     if (existingNodeIds) existingNodeIds.add(childCopyId);
                     childDisplayNodeIds.push(childCopyId);
@@ -1504,7 +1504,7 @@ export async function copyVariableWithCapacities(
                             isReadonly: childVar.isReadonly,
                             defaultValue: childVar.defaultValue,
                             fixedValue: childVar.fixedValue,
-                            metadata: childVar.metadata as any,
+                            metadata: childVar.metadata as unknown,
                             updatedAt: now,
                           }
                         });
@@ -1525,7 +1525,7 @@ export async function copyVariableWithCapacities(
                             data_unit: childVar.unit,
                             data_visibleToUser: childVar.visibleToUser,
                             linkedVariableIds: [newChildVarId],
-                            metadata: childMetaUpdate as any,
+                            metadata: childMetaUpdate as unknown,
                           }
                         });
                       }
@@ -1603,7 +1603,7 @@ export async function copyVariableWithCapacities(
     // ⚠️ CRITICAL: Ne réutiliser QUE si la variable a le BON suffixe !
     // Sinon, créer une nouvelle variable avec le suffixe correct.
     let _reusingExistingVariable = false;
-    let _existingVariableForReuse: any = null;
+    let _existingVariableForReuse: unknown = null;
     
     try {
       // PERF: Use pre-loaded map if available (saves 1 findUnique per variable)
@@ -1631,7 +1631,7 @@ export async function copyVariableWithCapacities(
                 data_unit: existingForNode.unit,
                 data_visibleToUser: existingForNode.visibleToUser,
                 label: normalizedExistingName || undefined,
-                field_label: (normalizedExistingName as any) || undefined
+                field_label: (normalizedExistingName as unknown) || undefined
               }
             });
             const isCopiedNode = finalNodeId.includes('-') && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-.+$/i.test(finalNodeId);
@@ -1659,7 +1659,7 @@ export async function copyVariableWithCapacities(
     }
 
     // Utiliser la variable réutilisée ou en créer une nouvelle
-    let newVariable: any;
+    let newVariable: unknown;
     
     if (_reusingExistingVariable && _existingVariableForReuse) {
       newVariable = _existingVariableForReuse;
@@ -1797,7 +1797,7 @@ export async function copyVariableWithCapacities(
               : null,
             sourceRef: newSourceRef,
             sourceType: originalVar.sourceType,
-            metadata: originalVar.metadata as any,
+            metadata: originalVar.metadata as unknown,
             updatedAt: new Date()
           },
           create: {
@@ -1817,7 +1817,7 @@ export async function copyVariableWithCapacities(
               : null,
             sourceRef: newSourceRef,
             sourceType: originalVar.sourceType,
-            metadata: originalVar.metadata as any,
+            metadata: originalVar.metadata as unknown,
             createdAt: new Date(),
             updatedAt: new Date()
           }
@@ -1826,7 +1826,7 @@ export async function copyVariableWithCapacities(
         newVarId = newVariable.id;
         // PERF R13: Update preloadedVarsByNodeId so parallel copies see this variable as existing
         if (preloadedVarsByNodeId) preloadedVarsByNodeId.set(finalNodeId, newVariable);
-      } catch (createError: any) {
+      } catch (createError: unknown) {
         // PERF R12: Handle P2002 unique constraint on id or nodeId (race condition from parallel copies)
         if (createError?.code === 'P2002') {
           const target = createError?.meta?.target;
@@ -1898,7 +1898,7 @@ export async function copyVariableWithCapacities(
           data_unit: newVariable.unit,
           data_visibleToUser: newVariable.visibleToUser,
           label: normalizedNodeLabel || undefined,
-          field_label: (normalizedNodeLabel as any) || undefined
+          field_label: (normalizedNodeLabel as unknown) || undefined
         }
       });
     } catch (e) {
@@ -2196,7 +2196,7 @@ export async function createDisplayNodeForExistingVariable(
     treeId: owner.treeId,
     parentId: displayParentId,
     type: 'leaf_field' as const,
-    subType: null as any,
+    subType: null as unknown,
     label: v.displayName || 'Donnée',
     description: null as string | null,
     value: null as string | null,
@@ -2204,16 +2204,16 @@ export async function createDisplayNodeForExistingVariable(
     isRequired: false,
     isVisible: true,
     isActive: true,
-    isMultiple: false as any,
-    fieldConfig: null as any,
-    conditionConfig: null as any,
-    formulaConfig: null as any,
-    tableConfig: null as any,
-    apiConfig: null as any,
-    linkConfig: null as any,
-    defaultValue: null as any,
-    calculatedValue: null as any,
-    metadata: { fromVariableId: variableId } as any,
+    isMultiple: false as unknown,
+    fieldConfig: null as unknown,
+    conditionConfig: null as unknown,
+    formulaConfig: null as unknown,
+    tableConfig: null as unknown,
+    apiConfig: null as unknown,
+    linkConfig: null as unknown,
+    defaultValue: null as unknown,
+    calculatedValue: null as unknown,
+    metadata: { fromVariableId: variableId } as unknown,
     // 🔑 IMPORTANT: Copier le subtab pour que la copie soit dans le bon sous-onglet
     subtab: owner.subtab,
     subtabs: owner.subtabs,
@@ -2230,25 +2230,25 @@ export async function createDisplayNodeForExistingVariable(
     hasTable: variableHasTableCapacity ? (owner.hasTable ?? false) : false,
     table_name: variableHasTableCapacity ? owner.table_name : null,
     table_activeId: variableHasTableCapacity ? owner.table_activeId : null,
-    table_instances: variableHasTableCapacity ? (owner.table_instances as any) : null,
-    linkedTableIds: variableHasTableCapacity && Array.isArray(owner.linkedTableIds) ? owner.linkedTableIds : [] as any,
-    linkedConditionIds: [] as any,
-    linkedFormulaIds: [] as any,
-    linkedVariableIds: [variableId] as any,
-    appearance_size: owner?.appearance_size ?? 'md' as any,
-    appearance_variant: owner?.appearance_variant ?? null as any,
-    appearance_width: owner?.appearance_width ?? '100%' as any,
-    appearance_displayIcon: owner?.appearance_displayIcon ?? null as any,
-    fieldType: 'TEXT' as any,
-    fieldSubType: null as any,
-    field_label: v.displayName as any,
+    table_instances: variableHasTableCapacity ? (owner.table_instances as unknown) : null,
+    linkedTableIds: variableHasTableCapacity && Array.isArray(owner.linkedTableIds) ? owner.linkedTableIds : [] as unknown,
+    linkedConditionIds: [] as unknown,
+    linkedFormulaIds: [] as unknown,
+    linkedVariableIds: [variableId] as unknown,
+    appearance_size: owner?.appearance_size ?? 'md' as unknown,
+    appearance_variant: owner?.appearance_variant ?? null as unknown,
+    appearance_width: owner?.appearance_width ?? '100%' as unknown,
+    appearance_displayIcon: owner?.appearance_displayIcon ?? null as unknown,
+    fieldType: 'TEXT' as unknown,
+    fieldSubType: null as unknown,
+    field_label: v.displayName as unknown,
   };
 
   const existing = await prisma.treeBranchLeafNode.findUnique({ where: { id: displayNodeId } });
   if (existing) {
     await prisma.treeBranchLeafNode.update({ where: { id: displayNodeId }, data: { ...baseData, createdAt: existing.createdAt, updatedAt: now } });
   } else {
-    await prisma.treeBranchLeafNode.create({ data: baseData as any });
+    await prisma.treeBranchLeafNode.create({ data: baseData as unknown });
   }
 
   await prisma.treeBranchLeafNode.update({

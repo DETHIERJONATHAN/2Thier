@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authMiddleware } from '../middlewares/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -36,7 +37,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 
     res.json({ favorites: moduleKeys });
   } catch (error) {
-    console.error('[UserFavorites] ❌ Erreur GET /favorites:', error);
+    logger.error('[UserFavorites] ❌ Erreur GET /favorites:', error);
     res.status(500).json({
       error: 'Erreur lors de la récupération des favoris',
       details: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -90,7 +91,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 
     res.status(201).json({ favorite: favorite.moduleKey });
   } catch (error) {
-    console.error('[UserFavorites] ❌ Erreur POST /favorites:', error);
+    logger.error('[UserFavorites] ❌ Erreur POST /favorites:', error);
     res.status(500).json({
       error: 'Erreur lors de l\'ajout du favori',
       details: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -133,7 +134,7 @@ router.delete('/:moduleKey', authMiddleware, async (req: Request, res: Response)
 
     res.json({ message: 'Favori supprimé avec succès' });
   } catch (error) {
-    console.error('[UserFavorites] ❌ Erreur DELETE /favorites/:moduleKey:', error);
+    logger.error('[UserFavorites] ❌ Erreur DELETE /favorites/:moduleKey:', error);
     res.status(500).json({
       error: 'Erreur lors de la suppression du favori',
       details: error instanceof Error ? error.message : 'Erreur inconnue',

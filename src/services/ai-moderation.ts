@@ -38,7 +38,7 @@ export interface ModerationResult {
 
 interface ModerationSettings {
   moderationMode: string;   // 'disabled' | 'ai_auto' | 'ai_flag' | 'manual'
-  aiBannedCategories: any;  // JSON array of banned categories
+  aiBannedCategories: unknown;  // JSON array of banned categories
 }
 
 // ═══════════════════════════════════════════════════════

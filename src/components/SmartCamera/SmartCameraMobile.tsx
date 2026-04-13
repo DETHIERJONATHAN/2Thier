@@ -157,7 +157,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
           // Activer l'autofocus continu si supporté
           advanced: [{
             focusMode: 'continuous'
-          }] as any
+          }] as unknown
         },
         audio: false
       });
@@ -212,7 +212,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       // NOTE: Le stream sera attaché au video element via useEffect ci-dessous
       
       console.log('📹 [SmartCamera] Caméra démarrée avec succès');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('📹 [SmartCamera] Erreur caméra:', err);
       
       // 🔄 Fallback si exact: 'environment' échoue (certains navigateurs)
@@ -429,7 +429,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
             overallScore: Math.min(100, Math.round(finalSharpness * 5)),
             resolution: `${canvas.width}x${canvas.height}`,
             sizeKB
-          } as any,
+          } as unknown,
           // 📸 NOUVEAU: Capacités de la caméra pour calcul de focale précis
           cameraCapabilities
         }

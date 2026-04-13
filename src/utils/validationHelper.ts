@@ -47,9 +47,9 @@ export function getAPIHeaders(): Record<string, string> {
  */
 export function applyValidation(
     type: string,
-    value: any,
-    params?: Record<string, any>,
-    formValues?: Record<string, any>
+    value: unknown,
+    params?: Record<string, unknown>,
+    formValues?: Record<string, unknown>
 ): boolean {
     // Éviter les erreurs sur les valeurs nulles ou undefined si non requis
     if ((value === null || value === undefined || value === '') && type !== 'required') {
@@ -271,7 +271,7 @@ function getValueByPath(source: Record<string, unknown>, path: string): unknown 
 export function generateErrorMessage(
     type: string,
     fieldName: string,
-    params?: Record<string, any>
+    params?: Record<string, unknown>
 ): string {
     const fieldLabel = fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
     

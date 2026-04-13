@@ -11,9 +11,9 @@ export interface OptionalAuthRequest extends Request {
     firstName: string;
     lastName: string;
     isAuthenticated: boolean;
-    organizations: any[];
-    roles: any[];
-    permissions: any[];
+    organizations: unknown[];
+    roles: unknown[];
+    permissions: unknown[];
   };
 }
 

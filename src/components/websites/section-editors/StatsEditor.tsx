@@ -11,8 +11,8 @@ import { GridLayoutEditor } from '../GridLayoutEditor';
 import { SectionHeaderEditor } from '../SectionHeaderEditor';
 
 interface StatsEditorProps {
-  section: any;
-  onSave: (content: any) => void;
+  section: unknown;
+  onSave: (content: unknown) => void;
   onCancel: () => void;
 }
 
@@ -57,13 +57,13 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onSave, onCan
     setStats(stats.filter((_, i) => i !== index));
   };
 
-  const handleStatChange = (index: number, field: string, value: any) => {
+  const handleStatChange = (index: number, field: string, value: unknown) => {
     const newStats = [...stats];
     newStats[index][field] = value;
     setStats(newStats);
   };
 
-  const handleSubmit = (values: any) => {
+  const handleSubmit = (values: unknown) => {
     onSave({
       name: values.name,
       content: {

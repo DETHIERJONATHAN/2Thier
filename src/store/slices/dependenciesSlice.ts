@@ -4,15 +4,15 @@ import { fetchWithAuth } from './api';
 
 export interface DependenciesSlice {
   // Actions pour les dépendances
-  createDependency: (fieldId: string, dependencyData: any) => Promise<any>;
-  updateDependency: (dependencyId: string, data: any) => Promise<void>;
+  createDependency: (fieldId: string, dependencyData: unknown) => Promise<unknown>;
+  updateDependency: (dependencyId: string, data: unknown) => Promise<void>;
   deleteDependency: (dependencyId: string) => Promise<void>;
   getFieldDependencies: (fieldId: string) => any[] | undefined;
   reorderDependencies: (fieldId: string, oldIndex: number, newIndex: number) => Promise<void>;
 }
 
 // Fonction utilitaire pour déplacer un élément dans un tableau
-const arrayMove = (array: any[], fromIndex: number, toIndex: number) => {
+const arrayMove = (array: unknown[], fromIndex: number, toIndex: number) => {
   const result = [...array];
   const [removed] = result.splice(fromIndex, 1);
   result.splice(toIndex, 0, removed);
@@ -72,7 +72,7 @@ export const createDependenciesSlice: StateCreator<
       const newDependency = field?.dependencies?.[field.dependencies.length - 1];
       
       return newDependency || null;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[CRMStore][createDependency] Error:', err);
       throw err;
     }
@@ -84,7 +84,7 @@ export const createDependenciesSlice: StateCreator<
     
     // Trouver le field qui contient cette dépendance
     let fieldId: string | undefined;
-    let originalDependency: any = undefined;
+    let originalDependency: unknown = undefined;
     
     stateBeforeUpdate.blocks.forEach(block => {
       block.sections.forEach(section => {
@@ -165,7 +165,7 @@ export const createDependenciesSlice: StateCreator<
       });
       
       console.log(`[CRMStore][updateDependency] Dependency updated successfully`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[CRMStore][updateDependency] Error:', err);
       // Rollback en cas d'erreur
       set({ blocks: stateBeforeUpdate.blocks });
@@ -246,7 +246,7 @@ export const createDependenciesSlice: StateCreator<
       });
       
       console.log(`[CRMStore][deleteDependency] Dependency deleted successfully`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[CRMStore][deleteDependency] Error:', err);
       // Rollback en cas d'erreur
       set({ blocks: stateBeforeUpdate.blocks });
@@ -270,8 +270,8 @@ export const createDependenciesSlice: StateCreator<
   
   reorderDependencies: async (fieldId, oldIndex, newIndex) => {
     console.log(`[CRMStore][reorderDependencies] Reordering dependencies for field ${fieldId} from ${oldIndex} to ${newIndex}`);
-    let fieldToUpdate: any | undefined;
-    let reorderedDependencies: any[] | undefined;
+    let fieldToUpdate: unknown | undefined;
+    let reorderedDependencies: unknown[] | undefined;
     const stateBeforeUpdate = get();
 
     set(state => {
@@ -306,7 +306,7 @@ export const createDependenciesSlice: StateCreator<
         }
         
         console.log(`[CRMStore][reorderDependencies] Dependencies order updated successfully`);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[CRMStore][reorderDependencies] API error:', err);
         // Rollback en cas d'erreur
         set({ blocks: stateBeforeUpdate.blocks });

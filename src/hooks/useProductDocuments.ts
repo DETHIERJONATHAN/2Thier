@@ -76,7 +76,7 @@ export const useProductDocuments = () => {
     try {
       const result = await apiCall();
       return result;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[useProductDocuments] ❌', err);
       setError(err.message || 'Erreur');
       return null;

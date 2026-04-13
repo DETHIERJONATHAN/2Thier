@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { db } from '../lib/database.js';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -51,7 +52,7 @@ router.get('/users-emails', async (req, res) => {
 
     res.json({ success: true, data });
   } catch (error) {
-    console.error('[ADMIN-PASSWORD] Erreur:', error);
+    logger.error('[ADMIN-PASSWORD] Erreur:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -112,7 +113,7 @@ router.post('/update-email-config', async (req, res) => {
     // Mise à jour du champ email dans la DB si nécessaire
     res.json({ success: true, message: 'Configuration email mise à jour' });
   } catch (error) {
-    console.error('[ADMIN-PASSWORD] Erreur update-email-config:', error);
+    logger.error('[ADMIN-PASSWORD] Erreur update-email-config:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });

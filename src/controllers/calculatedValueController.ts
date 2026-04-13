@@ -340,7 +340,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
 
     const requiresFreshCalculation = (() => {
       if (!nodeMetadata) return false;
-      const metaAny = nodeMetadata as any;
+      const metaAny = nodeMetadata as unknown;
       return Boolean(
         metaAny?.mustRecalculate ||
           metaAny?.requiresFreshCalculation ||
@@ -543,11 +543,11 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
     // Détecter table lookup de plusieurs façons:
     // 1. Via lookup.enabled (ancien format)
     const hasLookupEnabled = isTBLField && 
-      (nodeMetadata as any)?.lookup?.enabled === true && 
-      (nodeMetadata as any)?.lookup?.tableReference;
+      (nodeMetadata as unknown)?.lookup?.enabled === true && 
+      (nodeMetadata as unknown)?.lookup?.tableReference;
     
     // 2. Via capabilities.datas[].config.sourceRef commençant par @table. (nouveau format)
-    const datasArray = (nodeMetadata as any)?.capabilities?.datas as Array<{ config?: { sourceRef?: string } }> | undefined;
+    const datasArray = (nodeMetadata as unknown)?.capabilities?.datas as Array<{ config?: { sourceRef?: string } }> | undefined;
     const hasTableInDatas = Array.isArray(datasArray) && datasArray.some(
       d => d?.config?.sourceRef?.startsWith('@table.')
     );
@@ -593,7 +593,7 @@ router.get('/:nodeId/calculated-value', async (req: Request, res: Response) => {
             )?.id;
 
         if (resolvedSubmissionId) {
-          const metaAny = (nodeMetadata as any) || {};
+          const metaAny = (nodeMetadata as unknown) || {};
           const looksLikeDuplicatedCopy = Boolean(
             metaAny?.duplicatedFromRepeater || metaAny?.autoCreatedDisplayNode || metaAny?.copiedFromNodeId
           );

@@ -177,7 +177,7 @@ const SiteVitrine2Thier: React.FC = () => {
   ];
 
   // Handler formulaire contact
-  const handleSubmit = (values: any) => {
+  const handleSubmit = (values: unknown) => {
     console.log('Formulaire soumis:', values);
     // TODO: Envoyer vers API CRM
   };

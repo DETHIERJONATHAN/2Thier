@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken, isAdmin } from '../middleware/auth';
 import { z } from 'zod';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -43,7 +44,7 @@ router.get('/', authenticateToken, async (req, res) => {
       data: statuses
     });
   } catch (error) {
-    console.error('[ChantierStatuses] Erreur GET /:', error);
+    logger.error('[ChantierStatuses] Erreur GET /:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -120,7 +121,7 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
       message: 'Statut de chantier créé avec succès'
     });
   } catch (error) {
-    console.error('[ChantierStatuses] Erreur POST /:', error);
+    logger.error('[ChantierStatuses] Erreur POST /:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -196,7 +197,7 @@ router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
       message: 'Statut mis à jour avec succès'
     });
   } catch (error) {
-    console.error('[ChantierStatuses] Erreur PUT /:id:', error);
+    logger.error('[ChantierStatuses] Erreur PUT /:id:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -250,7 +251,7 @@ router.delete('/:id', authenticateToken, isAdmin, async (req, res) => {
       message: 'Statut supprimé avec succès'
     });
   } catch (error) {
-    console.error('[ChantierStatuses] Erreur DELETE /:id:', error);
+    logger.error('[ChantierStatuses] Erreur DELETE /:id:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -295,7 +296,7 @@ router.post('/reorder', authenticateToken, isAdmin, async (req, res) => {
       message: 'Ordre mis à jour avec succès'
     });
   } catch (error) {
-    console.error('[ChantierStatuses] Erreur POST /reorder:', error);
+    logger.error('[ChantierStatuses] Erreur POST /reorder:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -361,7 +362,7 @@ router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
       message: `${created.length} statuts par défaut créés`
     });
   } catch (error) {
-    console.error('[ChantierStatuses] Erreur POST /seed:', error);
+    logger.error('[ChantierStatuses] Erreur POST /seed:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'

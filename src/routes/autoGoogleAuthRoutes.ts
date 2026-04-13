@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { googleOAuthService } from '../google-auth/core/GoogleOAuthCore.js';
 import { db } from '../lib/database.js';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -58,7 +59,7 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
     });
 
   } catch (error) {
-    console.error('[AutoGoogleAuth] Erreur status:', error);
+    logger.error('[AutoGoogleAuth] Erreur status:', error);
     return res.json({
       success: true,
       data: {
@@ -134,7 +135,7 @@ router.post('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =
     });
 
   } catch (error) {
-    console.error('[AutoGoogleAuth] Erreur lors de la connexion automatique:', error);
+    logger.error('[AutoGoogleAuth] Erreur lors de la connexion automatique:', error);
     res.status(500).json({ success: false, error: 'Erreur interne du serveur lors de la connexion Google.' });
   }
 });
@@ -154,7 +155,7 @@ router.post('/trigger-logout', authMiddleware, async (req: AuthenticatedRequest,
     // Ancien comportement (désactivé): await googleOAuthService.disconnectUser(userId);
     return res.status(200).json({ success: true, message: 'Aucune déconnexion Google effectuée (politique persistante).' });
   } catch (error) {
-    console.error('[AutoGoogleAuth] Erreur inattendue trigger-logout (no-op):', error);
+    logger.error('[AutoGoogleAuth] Erreur inattendue trigger-logout (no-op):', error);
     return res.status(200).json({ success: true, message: 'Aucune déconnexion Google effectuée (no-op avec erreur interne ignorée).' });
   }
 });

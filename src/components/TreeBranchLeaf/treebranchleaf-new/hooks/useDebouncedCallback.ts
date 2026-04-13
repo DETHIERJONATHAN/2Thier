@@ -10,7 +10,7 @@ import { useCallback, useRef, useEffect, useMemo } from 'react';
  * - debouncedFn.cancel(): annuler le timer en cours (utile avant suppression)
  * - debouncedFn.flush(): exécuter immédiatement si un timer est en cours
  */
-export function useDebouncedCallback<T extends (...args: any[]) => void>(cb: T, delay = 400) {
+export function useDebouncedCallback<T extends (...args: unknown[]) => void>(cb: T, delay = 400) {
   const timer = useRef<number | null>(null);
   const callbackRef = useRef(cb);
   const delayRef = useRef(delay);

@@ -65,7 +65,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
       setLoading(true);
       const response = await api.api.get('/google-voice/users');
       setUsers(response.users || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors du chargement des utilisateurs:', error);
       message.error('Erreur lors du chargement des utilisateurs');
     } finally {
@@ -73,7 +73,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
     }
   };
 
-  const handleInitializeUser = async (values: any) => {
+  const handleInitializeUser = async (values: unknown) => {
     try {
       setLoading(true);
       
@@ -90,7 +90,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
       if (onUserCreated) {
         onUserCreated();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de l\'initialisation:', error);
       message.error(
         error.response?.data?.error || 
@@ -101,7 +101,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
     }
   };
 
-  const handleUpdateSettings = async (values: any) => {
+  const handleUpdateSettings = async (values: unknown) => {
     if (!selectedUser) return;
     
     try {
@@ -119,7 +119,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
       message.success(`Paramètres mis à jour pour ${selectedUser.displayName}`);
       setSettingsModalVisible(false);
       await loadUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de la mise à jour:', error);
       message.error(
         error.response?.data?.error || 
@@ -139,7 +139,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
 
       message.success(`Mode Ne pas déranger ${enabled ? 'activé' : 'désactivé'} pour ${user.displayName}`);
       await loadUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de la modification du mode Ne pas déranger:', error);
       message.error('Erreur lors de la modification du mode Ne pas déranger');
     }
@@ -168,7 +168,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
           });
           
           message.success(`Appel initié de ${user.phoneNumber} vers ${toNumber}`);
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error('Erreur lors de l\'appel:', error);
           message.error('Erreur lors de l\'initiation de l\'appel');
         }
@@ -205,7 +205,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
           });
           
           message.success(`SMS envoyé de ${user.phoneNumber} vers ${toNumber}`);
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error('Erreur lors de l\'envoi SMS:', error);
           message.error('Erreur lors de l\'envoi du SMS');
         }
@@ -252,7 +252,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
     {
       title: 'Paramètres Voice',
       key: 'voiceSettings',
-      render: (_: any, record: GoogleVoiceUser) => (
+      render: (_: unknown, record: GoogleVoiceUser) => (
         <Space direction="vertical" size="small">
           <Tag color={record.voiceSettings?.doNotDisturb ? 'red' : 'green'}>
             {record.voiceSettings?.doNotDisturb ? 'Ne pas déranger' : 'Disponible'}
@@ -269,7 +269,7 @@ const GoogleVoiceUserManager: React.FC<GoogleVoiceUserManagerProps> = ({ onUserC
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, record: GoogleVoiceUser) => (
+      render: (_: unknown, record: GoogleVoiceUser) => (
         <Space>
           <Tooltip title="Passer un appel">
             <Button 

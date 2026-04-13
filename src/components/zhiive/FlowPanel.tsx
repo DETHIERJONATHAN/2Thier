@@ -48,8 +48,8 @@ interface QuestData {
 }
 
 interface FlowPanelProps {
-  api: any;
-  currentUser?: any;
+  api: unknown;
+  currentUser?: unknown;
 }
 
 const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {

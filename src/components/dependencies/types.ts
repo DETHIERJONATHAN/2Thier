@@ -39,7 +39,7 @@ export interface Dependency {
   _testResult?: { status: string; message: string; success?: boolean };
   // Structure avancée pour les dépendances avec séquence
   sequence?: {
-    conditions: any[][];
+    conditions: unknown[][];
     action: DependencyAction;
     targetFieldId: string;
   };

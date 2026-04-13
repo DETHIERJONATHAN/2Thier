@@ -71,7 +71,7 @@ const StyleEditorModal = ({ open, onClose, onSave, initialStyle, fieldLabel, fie
     }
   }, [initialStyle, form]);
 
-  const handleValuesChange = (_: any, allValues: any) => {
+  const handleValuesChange = (_: unknown, allValues: unknown) => {
     const style: FieldStyle = {
       ...allValues,
       color: allValues.color?.toHexString?.() || allValues.color,

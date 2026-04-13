@@ -311,10 +311,10 @@ export default function PartnerBillingPage() {
   const handleDownloadInvoice = async (invoiceId: string) => {
     try {
       const response = await api.get(`/api/partner/invoices/${invoiceId}/download`, {
-        responseType: 'blob' as any
+        responseType: 'blob' as unknown
       });
       
-      const url = window.URL.createObjectURL(new Blob([response as any]));
+      const url = window.URL.createObjectURL(new Blob([response as unknown]));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `facture-${invoiceId}.pdf`);

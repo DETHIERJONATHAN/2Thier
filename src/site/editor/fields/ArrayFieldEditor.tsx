@@ -73,16 +73,16 @@ interface ArrayFieldEditorProps {
   maxItems?: number;
   
   /** Valeur actuelle (array) */
-  value?: any[];
+  value?: unknown[];
   
   /** Callback onChange */
-  onChange?: (value: any[]) => void;
+  onChange?: (value: unknown[]) => void;
   
   /** Contexte AI */
-  aiContext?: any;
+  aiContext?: unknown;
   
   /** 🔥 NOUVEAU : Toutes les valeurs du formulaire (pour les conditions) */
-  formValues?: any;
+  formValues?: unknown;
   
   /** 🔥 CRITIQUE : Chemin du champ dans le formulaire (ex: ['items']) */
   name?: (string | number)[];
@@ -94,13 +94,13 @@ interface ArrayFieldEditorProps {
 interface SortableItemProps {
   id: string;
   index: number;
-  item: any;
+  item: unknown;
   itemType?: Record<string, FieldDefinition>;
-  onUpdate: (index: number, newValue: any) => void;
+  onUpdate: (index: number, newValue: unknown) => void;
   onDelete: (index: number) => void;
   onDuplicate: (index: number) => void;
-  aiContext?: any;
-  formValues?: any;
+  aiContext?: unknown;
+  formValues?: unknown;
   /** 🔥 CRITIQUE : Chemin parent dans le formulaire */
   parentName?: (string | number)[];
 }
@@ -272,10 +272,10 @@ export const ArrayFieldEditor: React.FC<ArrayFieldEditorProps> = (props) => {
   /**
    * 🔧 Helper: Deep clone pour éviter les références partagées
    */
-  const deepClone = (obj: any): any => {
+  const deepClone = (obj: unknown): any => {
     if (obj === null || typeof obj !== 'object') return obj;
     if (Array.isArray(obj)) return obj.map(item => deepClone(item));
-    const cloned: any = {};
+    const cloned: unknown = {};
     for (const key in obj) {
       if (obj.hasOwnProperty(key)) {
         cloned[key] = deepClone(obj[key]);
@@ -292,7 +292,7 @@ export const ArrayFieldEditor: React.FC<ArrayFieldEditorProps> = (props) => {
     
     // Créer un item vide avec les valeurs par défaut
     // 🔥 CRITICAL: Deep clone pour éviter que tous les items partagent les mêmes objets
-    const newItem: any = {};
+    const newItem: unknown = {};
     if (itemType) {
       Object.entries(itemType).forEach(([key, fieldDef]) => {
         newItem[key] = deepClone(fieldDef.default) || '';
@@ -331,7 +331,7 @@ export const ArrayFieldEditor: React.FC<ArrayFieldEditorProps> = (props) => {
   /**
    * ✏️ Mettre à jour un item
    */
-  const handleUpdate = (index: number, newValue: any) => {
+  const handleUpdate = (index: number, newValue: unknown) => {
     const newItems = [...items];
     newItems[index] = newValue;
     onChange?.(newItems);

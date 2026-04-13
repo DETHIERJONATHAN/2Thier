@@ -28,7 +28,7 @@ interface Section {
   id: number;
   type: string;
   name: string;
-  content: any;
+  content: unknown;
   isActive: boolean;
   backgroundColor?: string;
   textColor?: string;

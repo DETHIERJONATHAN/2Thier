@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { db } from '../../lib/database';
 import bcrypt from 'bcryptjs';
 import { JWT_SECRET } from '../../config';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 
@@ -208,14 +209,14 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
           /P1001|P1000|P1017|ECONNREFUSED|Connection refused|Can't reach database server/i.test(message);
 
         if (isDbUnavailable) {
-          console.error('[AUTH] DB indisponible pendant authMiddleware:', error);
+          logger.error('[AUTH] DB indisponible pendant authMiddleware:', error);
           return res.status(503).json({
             error: 'Service indisponible',
             message: 'Base de données indisponible. Réessayez dans quelques secondes.'
           });
         }
 
-        console.error('[AUTH] Erreur de vérification du token:', error);
+        logger.error('[AUTH] Erreur de vérification du token:', error);
         return res.status(401).json({ error: 'Token d\'authentification invalide' });
     }
 };
@@ -238,7 +239,7 @@ export const login = async (req: AuthenticatedRequest, res: Response) => {
 
     // Assurer que le rôle existe avant de générer le token
     if (!user.role) {
-      console.error(`[Login] ERREUR: Le rôle de l'utilisateur ${user.email} est manquant.`);
+      logger.error(`[Login] ERREUR: Le rôle de l'utilisateur ${user.email} est manquant.`);
       return res.status(500).json({ error: 'Erreur de configuration du compte : rôle manquant.' });
     }
     
@@ -264,7 +265,7 @@ export const login = async (req: AuthenticatedRequest, res: Response) => {
     res.json({ token, user: userWithoutPassword });
 
   } catch (e) {
-    console.error('[Login] Erreur lors de la connexion:', e);
+    logger.error('[Login] Erreur lors de la connexion:', e);
     res.status(500).json({ error: 'Erreur interne' });
   }
 };

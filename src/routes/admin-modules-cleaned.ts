@@ -2,6 +2,7 @@ import { Router, Request, Response, type RequestHandler } from 'express';
 import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -84,7 +85,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     });
 
   } catch (error) {
-    console.error('[ADMIN-MODULES-V1] Erreur GET:', error);
+    logger.error('[ADMIN-MODULES-V1] Erreur GET:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la récupération des modules',

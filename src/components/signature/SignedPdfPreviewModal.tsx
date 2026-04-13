@@ -57,7 +57,7 @@ const SignedPdfPreviewModal: React.FC<SignedPdfPreviewModalProps> = ({
         const url = URL.createObjectURL(blob);
         setBlobUrl(url);
         if (json.filename) setFilename(json.filename);
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Retry sur erreur réseau (connexion coupée par le proxy)
         if (retriesLeft > 0 && (err.name === 'TypeError' || err.message?.includes('fetch'))) {
           await new Promise(r => setTimeout(r, 800));

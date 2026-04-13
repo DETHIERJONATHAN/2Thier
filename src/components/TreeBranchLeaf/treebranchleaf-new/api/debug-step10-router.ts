@@ -31,7 +31,7 @@ router.get('/debug/test-step10', async (req, res) => {
       return res.status(404).json({ error: `Table ${copiedTableId} not found` });
     }
 
-    const lookupConfig = (copiedTable.meta as any)?.lookup;
+    const lookupConfig = (copiedTable.meta as unknown)?.lookup;
     
 
     if (!lookupConfig?.selectors) {
@@ -72,7 +72,7 @@ router.get('/debug/test-step10', async (req, res) => {
         where: { id: selectorId },
         data: {
           table_activeId: copiedTableId as string,
-          table_instances: selectorTableInstances as any,
+          table_instances: selectorTableInstances as unknown,
           hasTable: true
         }
       });

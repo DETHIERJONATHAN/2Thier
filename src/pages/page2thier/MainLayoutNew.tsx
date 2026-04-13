@@ -2,6 +2,7 @@ import { SF } from '../../components/zhiive/ZhiiveTheme';
 import React, { useCallback, useMemo, useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { Layout, Dropdown, Avatar, Spin } from 'antd';
 import NotificationsBell from '../../components/NotificationsBell';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
 const MessengerChat = lazy(() => import('../../components/MessengerChat'));
 const WebBrowserPanel = lazy(() => import('../../components/WebBrowserPanel'));
 import type { MenuProps } from 'antd';
@@ -82,11 +83,11 @@ const WaxMapSvg = () => (
   </svg>
 );
 
-const ClapperboardIcon = (props: any) => <Icon component={ClapperboardSvg} {...props} />;
-const WallIcon = (props: any) => <Icon component={WallSvg} {...props} />;
-const FlowWaveIcon = (props: any) => <Icon component={FlowWaveSvg} {...props} />;
-const UniverseIcon = (props: any) => <Icon component={UniverseSvg} {...props} />;
-const WaxMapIcon = (props: any) => <Icon component={WaxMapSvg} {...props} />;
+const ClapperboardIcon = (props: unknown) => <Icon component={ClapperboardSvg} {...props} />;
+const WallIcon = (props: unknown) => <Icon component={WallSvg} {...props} />;
+const FlowWaveIcon = (props: unknown) => <Icon component={FlowWaveSvg} {...props} />;
+const UniverseIcon = (props: unknown) => <Icon component={UniverseSvg} {...props} />;
+const WaxMapIcon = (props: unknown) => <Icon component={WaxMapSvg} {...props} />;
 
 // ── Friends icon: camera with user inside ──
 const FriendsIcon: React.FC<{ style?: React.CSSProperties }> = ({ style }) => (
@@ -154,7 +155,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
         const res = await api.get(`/api/modules/swipe-tabs?organizationId=${orgId}`);
         if (cancelled || !res?.success || !res.data) return;
         const LABEL_FIX: Record<string, string> = { explore: 'Friends', flow: 'Nectar', universe: 'Nectar' };
-        const tabs: TabConfig[] = res.data.map((t: any) => ({
+        const tabs: TabConfig[] = res.data.map((t: Record<string, unknown>) => ({
           id: t.id === 'flow' || t.id === 'universe' ? 'nectar' : t.id,
           label: LABEL_FIX[t.id] || t.label,
           icon: TAB_ICON_MAP[t.id === 'flow' || t.id === 'universe' ? 'nectar' : t.icon] || BarChartOutlined,
@@ -240,7 +241,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
       setSearchParams({}, { replace: true });
     } else {
       // Open the app in the center column
-      setCenterApp(tabId as any);
+      setCenterApp(tabId as unknown);
       if (activeModule) setSearchParams({}, { replace: true });
     }
   }, [isDashboard, navigate, setCenterApp, setSearchParams, activeModule, isMobile, scrollMobileToPanel, orderedTabs, centerApp]);
@@ -392,11 +393,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const identity = useActiveIdentity();
 
   const userInitial = useMemo(() => {
-    const source = user?.firstName || (user as any)?.firstname || user?.email || currentOrganization?.name || 'C';
+    const source = user?.firstName || (user as unknown)?.firstname || user?.email || currentOrganization?.name || 'C';
     return (source?.charAt?.(0) || 'C').toUpperCase();
-  }, [user?.firstName, (user as any)?.firstname, user?.email, currentOrganization?.name]);
+  }, [user?.firstName, (user as unknown)?.firstname, user?.email, currentOrganization?.name]);
 
-  const orgLogo = (currentOrganization as any)?.logoUrl || null;
+  const orgLogo = (currentOrganization as unknown)?.logoUrl || null;
   const orgInitial = useMemo(() => (currentOrganization?.name?.charAt(0) || 'O').toUpperCase(), [currentOrganization?.name]);
 
   // 🐝 Avatar du header piloté par le système d'identité centralisé
@@ -490,6 +491,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   return (
     <Layout className="min-h-screen">
       <Header 
+        role="banner"
+        aria-label="Zhiive navigation"
         style={{ 
           background: 'linear-gradient(135deg, #0B0E2A 0%, #1a1e4e 50%, #0B0E2A 100%)', 
           height: `${headerHeight}px`,
@@ -564,7 +567,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         </div>
       </Header>
 
-      <Content style={{ 
+      <Content id="main-content" role="main" style={{ 
         backgroundColor: 'white',
         height: '100vh',
         paddingTop: `${headerHeight}px`,
@@ -573,7 +576,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         display: 'flex',
         flexDirection: 'column' as const,
       }}>
+        <ErrorBoundary>
         {children}
+        </ErrorBoundary>
       </Content>
       <MessengerChatGated />
 

@@ -98,7 +98,7 @@ export const GridLayoutEditor: React.FC<GridLayoutEditorProps> = ({
     onChange(newLayout);
   };
 
-  const updateLayout = (key: string, val: any) => {
+  const updateLayout = (key: string, val: unknown) => {
     const keys = key.split('.');
     const newLayout = { ...layout };
     

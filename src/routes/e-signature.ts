@@ -24,6 +24,7 @@ import type { TblPdfData, TblPdfSection, TblPdfField, TblPdfSignatureInfo } from
 import { getPostalService } from '../services/PostalEmailService';
 import { generateClientPdfBuffer } from './documents';
 import { notify } from '../services/NotificationHelper';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -39,7 +40,7 @@ function hashOtp(otp: string): string {
   return crypto.createHash('sha256').update(otp).digest('hex');
 }
 
-function addAuditEntry(existing: any[] | null, action: string, details: Record<string, any>, req: Request): any[] {
+function addAuditEntry(existing: unknown[] | null, action: string, details: Record<string, unknown>, req: Request): unknown[] {
   const trail = Array.isArray(existing) ? [...existing] : [];
   trail.push({
     action,
@@ -227,7 +228,7 @@ async function buildTblPdfData(submissionId: string, organizationId: string): Pr
       email: lead.email,
       phone: lead.phone,
       company: lead.company,
-      fullAddress: (lead.data as any)?.address || null,
+      fullAddress: (lead.data as unknown)?.address || null,
     } : null,
     sections,
     createdAt: submission.createdAt,
@@ -245,7 +246,7 @@ async function buildTblPdfData(submissionId: string, organizationId: string): Pr
  * POST /api/e-signature/tbl/:submissionId/pdf
  * Génère et télécharge le PDF d'un devis TBL
  */
-router.post('/tbl/:submissionId/pdf', authenticateToken, async (req: any, res: Response) => {
+router.post('/tbl/:submissionId/pdf', authenticateToken, async (req: unknown, res: Response) => {
   try {
     const { submissionId } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
@@ -277,7 +278,7 @@ router.post('/tbl/:submissionId/pdf', authenticateToken, async (req: any, res: R
     res.setHeader('Content-Length', buffer.length);
     return res.send(buffer);
   } catch (error) {
-    console.error('[E-Signature] Erreur génération PDF:', error);
+    logger.error('[E-Signature] Erreur génération PDF:', error);
     return res.status(500).json({ success: false, message: 'Erreur génération PDF', error: String(error) });
   }
 });
@@ -286,7 +287,7 @@ router.post('/tbl/:submissionId/pdf', authenticateToken, async (req: any, res: R
  * GET /api/e-signature/tbl/:submissionId/pdf/preview
  * Prévisualisation du PDF (inline, pas download)
  */
-router.get('/tbl/:submissionId/pdf/preview', authenticateToken, async (req: any, res: Response) => {
+router.get('/tbl/:submissionId/pdf/preview', authenticateToken, async (req: unknown, res: Response) => {
   try {
     const { submissionId } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
@@ -300,7 +301,7 @@ router.get('/tbl/:submissionId/pdf/preview', authenticateToken, async (req: any,
     res.setHeader('Content-Length', buffer.length);
     return res.send(buffer);
   } catch (error) {
-    console.error('[E-Signature] Erreur prévisualisation PDF:', error);
+    logger.error('[E-Signature] Erreur prévisualisation PDF:', error);
     return res.status(500).json({ success: false, message: 'Erreur prévisualisation PDF', error: String(error) });
   }
 });
@@ -327,7 +328,7 @@ const initiateSchema = z.object({
   expiresInHours: z.number().int().min(1).max(720).default(72), // 3 jours par défaut
 });
 
-router.post('/initiate', authenticateToken, async (req: any, res: Response) => {
+router.post('/initiate', authenticateToken, async (req: unknown, res: Response) => {
   try {
     const organizationId = req.headers['x-organization-id'] as string;
     const userId = req.user?.id || req.user?.userId;
@@ -380,7 +381,7 @@ router.post('/initiate', authenticateToken, async (req: any, res: Response) => {
       expiresAt,
     });
   } catch (error) {
-    console.error('[E-Signature] Erreur initiation:', error);
+    logger.error('[E-Signature] Erreur initiation:', error);
     return res.status(500).json({ success: false, message: 'Erreur initiation signature' });
   }
 });
@@ -389,7 +390,7 @@ router.post('/initiate', authenticateToken, async (req: any, res: Response) => {
  * POST /api/e-signature/:id/send-otp
  * Envoyer un code OTP par email au signataire
  */
-router.post('/:id/send-otp', authenticateToken, async (req: any, res: Response) => {
+router.post('/:id/send-otp', authenticateToken, async (req: unknown, res: Response) => {
   try {
     const { id } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
@@ -440,7 +441,7 @@ router.post('/:id/send-otp', authenticateToken, async (req: any, res: Response) 
       });
       emailSent = true;
     } catch (emailErr) {
-      console.error('[E-Signature] Erreur envoi email OTP:', emailErr);
+      logger.error('[E-Signature] Erreur envoi email OTP:', emailErr);
       // En mode développement : fallback — on log le code OTP et on continue
       if (process.env.NODE_ENV !== 'production') {
       } else {
@@ -456,7 +457,7 @@ router.post('/:id/send-otp', authenticateToken, async (req: any, res: Response) 
         otpSentAt: new Date(),
         otpAttempts: 0,
         status: 'OTP_SENT',
-        auditTrail: addAuditEntry(signature.auditTrail as any[], 'OTP_SENT', {
+        auditTrail: addAuditEntry(signature.auditTrail as unknown[], 'OTP_SENT', {
           method: 'EMAIL',
           to: signature.signerEmail,
         }, req),
@@ -465,7 +466,7 @@ router.post('/:id/send-otp', authenticateToken, async (req: any, res: Response) 
 
     return res.json({ success: true, message: emailSent ? 'Code de vérification envoyé par email' : `[DEV] Code OTP affiché dans les logs serveur` });
   } catch (error) {
-    console.error('[E-Signature] Erreur envoi OTP:', error);
+    logger.error('[E-Signature] Erreur envoi OTP:', error);
     return res.status(500).json({ success: false, message: 'Erreur envoi OTP' });
   }
 });
@@ -498,7 +499,7 @@ router.post('/:id/verify-otp', async (req: Request, res: Response) => {
       await db.electronicSignature.update({
         where: { id },
         data: {
-          auditTrail: addAuditEntry(signature.auditTrail as any[], 'OTP_EXPIRED', {}, req),
+          auditTrail: addAuditEntry(signature.auditTrail as unknown[], 'OTP_EXPIRED', {}, req),
         },
       });
       return res.status(410).json({ success: false, message: 'Code expiré. Demandez un nouveau code.' });
@@ -510,7 +511,7 @@ router.post('/:id/verify-otp', async (req: Request, res: Response) => {
         where: { id },
         data: {
           status: 'EXPIRED',
-          auditTrail: addAuditEntry(signature.auditTrail as any[], 'OTP_MAX_ATTEMPTS', { attempts: signature.otpAttempts }, req),
+          auditTrail: addAuditEntry(signature.auditTrail as unknown[], 'OTP_MAX_ATTEMPTS', { attempts: signature.otpAttempts }, req),
         },
       });
       return res.status(429).json({ success: false, message: 'Trop de tentatives. La demande de signature est annulée.' });
@@ -523,7 +524,7 @@ router.post('/:id/verify-otp', async (req: Request, res: Response) => {
         where: { id },
         data: {
           otpAttempts: signature.otpAttempts + 1,
-          auditTrail: addAuditEntry(signature.auditTrail as any[], 'OTP_FAILED', { attempt: signature.otpAttempts + 1 }, req),
+          auditTrail: addAuditEntry(signature.auditTrail as unknown[], 'OTP_FAILED', { attempt: signature.otpAttempts + 1 }, req),
         },
       });
       return res.status(400).json({ 
@@ -539,13 +540,13 @@ router.post('/:id/verify-otp', async (req: Request, res: Response) => {
       data: {
         otpVerifiedAt: new Date(),
         status: 'OTP_VERIFIED',
-        auditTrail: addAuditEntry(signature.auditTrail as any[], 'OTP_VERIFIED', {}, req),
+        auditTrail: addAuditEntry(signature.auditTrail as unknown[], 'OTP_VERIFIED', {}, req),
       },
     });
 
     return res.json({ success: true, message: 'Identité vérifiée' });
   } catch (error) {
-    console.error('[E-Signature] Erreur vérification OTP:', error);
+    logger.error('[E-Signature] Erreur vérification OTP:', error);
     return res.status(500).json({ success: false, message: 'Erreur vérification OTP' });
   }
 });
@@ -635,7 +636,7 @@ router.post('/:id/sign', async (req: Request, res: Response) => {
         // Pour l'instant on stocke juste le hash — le PDF sera régénéré à la demande
         signedPdfUrl = `/api/e-signature/${id}/download-signed-pdf`;
       } catch (pdfErr) {
-        console.error('[E-Signature] Erreur génération PDF signé (non bloquant):', pdfErr);
+        logger.error('[E-Signature] Erreur génération PDF signé (non bloquant):', pdfErr);
       }
     }
 
@@ -658,7 +659,7 @@ router.post('/:id/sign', async (req: Request, res: Response) => {
         signatureData: data.signatureData,
         signatureHash,
         documentHash,
-        documentSnapshot: documentSnapshot as any,
+        documentSnapshot: documentSnapshot as unknown,
         legalAccepted: true,
         legalAcceptedAt: new Date(),
         ipAddress: ip,
@@ -667,7 +668,7 @@ router.post('/:id/sign', async (req: Request, res: Response) => {
         signedAt: new Date(),
         signedPdfUrl,
         signedPdfHash: documentHash,
-        auditTrail: addAuditEntry(signature.auditTrail as any[], 'SIGNED', {
+        auditTrail: addAuditEntry(signature.auditTrail as unknown[], 'SIGNED', {
           signatureHash,
           documentHash,
           legalAccepted: true,
@@ -691,7 +692,7 @@ router.post('/:id/sign', async (req: Request, res: Response) => {
         entityId: id,
         entityLabel: `Document signé par ${signature.signerName}`,
         clientName: signature.signerName || undefined,
-      }).catch(err => console.error('[E-Signature] Auto-post error:', err));
+      }).catch(err => logger.error('[E-Signature] Auto-post error:', err));
     }
 
     return res.json({
@@ -703,7 +704,7 @@ router.post('/:id/sign', async (req: Request, res: Response) => {
       signedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[E-Signature] Erreur signature:', error);
+    logger.error('[E-Signature] Erreur signature:', error);
     return res.status(500).json({ success: false, message: 'Erreur lors de la signature' });
   }
 });
@@ -741,7 +742,7 @@ router.get('/:id/download-signed-pdf', async (req: Request, res: Response) => {
     }
 
     // Récupérer toutes les signatures pour ce document
-    const whereClause: any = { status: 'SIGNED' };
+    const whereClause: unknown = { status: 'SIGNED' };
     if (signature.documentId) whereClause.documentId = signature.documentId;
     else if (signature.submissionId) whereClause.submissionId = signature.submissionId;
     else whereClause.id = id;
@@ -786,7 +787,7 @@ router.get('/:id/download-signed-pdf', async (req: Request, res: Response) => {
     
     return sendPdf(buffer, tblFilename, { 'X-PDF-Hash': hash, 'X-Signature-Count': allSignatures.length.toString() });
   } catch (error) {
-    console.error('[E-Signature] Erreur download PDF signé:', error);
+    logger.error('[E-Signature] Erreur download PDF signé:', error);
     return res.status(500).json({ success: false, message: 'Erreur téléchargement PDF signé' });
   }
 });
@@ -795,7 +796,7 @@ router.get('/:id/download-signed-pdf', async (req: Request, res: Response) => {
  * GET /api/e-signature/submission/:submissionId/status
  * Récupérer le statut de toutes les signatures pour un devis
  */
-router.get('/submission/:submissionId/status', authenticateToken, async (req: any, res: Response) => {
+router.get('/submission/:submissionId/status', authenticateToken, async (req: unknown, res: Response) => {
   try {
     const { submissionId } = req.params;
     const organizationId = req.headers['x-organization-id'] as string;
@@ -826,7 +827,7 @@ router.get('/submission/:submissionId/status', authenticateToken, async (req: an
       totalPending: signatures.filter(s => !['SIGNED', 'EXPIRED', 'REVOKED'].includes(s.status)).length,
     });
   } catch (error) {
-    console.error('[E-Signature] Erreur statut signatures:', error);
+    logger.error('[E-Signature] Erreur statut signatures:', error);
     return res.status(500).json({ success: false, message: 'Erreur récupération statut' });
   }
 });
@@ -835,7 +836,7 @@ router.get('/submission/:submissionId/status', authenticateToken, async (req: an
  * GET /api/e-signature/:id/audit-trail
  * Récupérer la piste d'audit complète d'une signature
  */
-router.get('/:id/audit-trail', authenticateToken, async (req: any, res: Response) => {
+router.get('/:id/audit-trail', authenticateToken, async (req: unknown, res: Response) => {
   try {
     const { id } = req.params;
     
@@ -869,7 +870,7 @@ router.get('/:id/audit-trail', authenticateToken, async (req: any, res: Response
 
     return res.json({ success: true, ...signature });
   } catch (error) {
-    console.error('[E-Signature] Erreur audit trail:', error);
+    logger.error('[E-Signature] Erreur audit trail:', error);
     return res.status(500).json({ success: false, message: 'Erreur récupération audit trail' });
   }
 });
@@ -882,7 +883,7 @@ const revokeSchema = z.object({
   reason: z.string().min(1, 'Raison de révocation requise'),
 });
 
-router.post('/:id/revoke', authenticateToken, async (req: any, res: Response) => {
+router.post('/:id/revoke', authenticateToken, async (req: unknown, res: Response) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id || req.user?.userId;
@@ -903,7 +904,7 @@ router.post('/:id/revoke', authenticateToken, async (req: any, res: Response) =>
         status: 'REVOKED',
         revokedAt: new Date(),
         revokedReason: validation.data.reason,
-        auditTrail: addAuditEntry(signature.auditTrail as any[], 'REVOKED', {
+        auditTrail: addAuditEntry(signature.auditTrail as unknown[], 'REVOKED', {
           revokedBy: userId,
           reason: validation.data.reason,
         }, req),
@@ -912,7 +913,7 @@ router.post('/:id/revoke', authenticateToken, async (req: any, res: Response) =>
 
     return res.json({ success: true, message: 'Signature révoquée' });
   } catch (error) {
-    console.error('[E-Signature] Erreur révocation:', error);
+    logger.error('[E-Signature] Erreur révocation:', error);
     return res.status(500).json({ success: false, message: 'Erreur révocation' });
   }
 });
@@ -966,7 +967,7 @@ router.get('/sign/:token', async (req: Request, res: Response) => {
       submissionId: signature.submissionId,
     });
   } catch (error) {
-    console.error('[E-Signature] Erreur accès token:', error);
+    logger.error('[E-Signature] Erreur accès token:', error);
     return res.status(500).json({ success: false, message: 'Erreur accès' });
   }
 });
@@ -1014,7 +1015,7 @@ router.post('/sign/:token/send-otp', async (req: Request, res: Response) => {
         `,
       });
     } catch (emailErr) {
-      console.error('[E-Signature] Erreur envoi OTP (token):', emailErr);
+      logger.error('[E-Signature] Erreur envoi OTP (token):', emailErr);
       return res.status(500).json({ success: false, message: 'Erreur envoi email' });
     }
 
@@ -1025,7 +1026,7 @@ router.post('/sign/:token/send-otp', async (req: Request, res: Response) => {
         otpSentAt: new Date(),
         otpAttempts: 0,
         status: 'OTP_SENT',
-        auditTrail: addAuditEntry(signature.auditTrail as any[], 'OTP_SENT_VIA_TOKEN', {
+        auditTrail: addAuditEntry(signature.auditTrail as unknown[], 'OTP_SENT_VIA_TOKEN', {
           method: 'EMAIL',
           to: signature.signerEmail,
         }, req),
@@ -1034,7 +1035,7 @@ router.post('/sign/:token/send-otp', async (req: Request, res: Response) => {
 
     return res.json({ success: true, message: 'Code envoyé' });
   } catch (error) {
-    console.error('[E-Signature] Erreur send-otp token:', error);
+    logger.error('[E-Signature] Erreur send-otp token:', error);
     return res.status(500).json({ success: false, message: 'Erreur' });
   }
 });
@@ -1079,13 +1080,13 @@ router.post('/sign/:token/verify-otp', async (req: Request, res: Response) => {
       data: {
         otpVerifiedAt: new Date(),
         status: 'OTP_VERIFIED',
-        auditTrail: addAuditEntry(signature.auditTrail as any[], 'OTP_VERIFIED_VIA_TOKEN', {}, req),
+        auditTrail: addAuditEntry(signature.auditTrail as unknown[], 'OTP_VERIFIED_VIA_TOKEN', {}, req),
       },
     });
 
     return res.json({ success: true, signatureId: signature.id });
   } catch (error) {
-    console.error('[E-Signature] Erreur verify-otp token:', error);
+    logger.error('[E-Signature] Erreur verify-otp token:', error);
     return res.status(500).json({ success: false, message: 'Erreur' });
   }
 });
@@ -1136,7 +1137,7 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
         });
         documentHash = crypto.createHash('sha256').update(buffer).digest('hex');
       } catch (pdfErr) {
-        console.error('[E-Signature] Erreur hash PDF client (non bloquant):', pdfErr);
+        logger.error('[E-Signature] Erreur hash PDF client (non bloquant):', pdfErr);
       }
     } else if (signature.submissionId) {
       // Fallback : TBL PDF interne
@@ -1166,7 +1167,7 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
         const pdfResult = await generateTblPdfWithHash(pdfData);
         documentHash = pdfResult.hash;
       } catch (pdfErr) {
-        console.error('[E-Signature] Erreur PDF (non bloquant):', pdfErr);
+        logger.error('[E-Signature] Erreur PDF (non bloquant):', pdfErr);
       }
     }
 
@@ -1179,7 +1180,7 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
         documentSnapshot: {
           signedAt: new Date().toISOString(),
           ip, userAgent, signatureHash, documentHash,
-        } as any,
+        } as unknown,
         legalAccepted: true,
         legalAcceptedAt: new Date(),
         ipAddress: ip,
@@ -1188,7 +1189,7 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
         signedAt: new Date(),
         signedPdfUrl: `/api/e-signature/${signature.id}/download-signed-pdf`,
         signedPdfHash: documentHash,
-        auditTrail: addAuditEntry(signature.auditTrail as any[], isEmailLink ? 'SIGNED_VIA_EMAIL_LINK' : 'SIGNED_VIA_TOKEN', {
+        auditTrail: addAuditEntry(signature.auditTrail as unknown[], isEmailLink ? 'SIGNED_VIA_EMAIL_LINK' : 'SIGNED_VIA_TOKEN', {
           signatureHash, documentHash, method: isEmailLink ? 'EMAIL_LINK' : 'OTP',
         }, req),
       },
@@ -1221,7 +1222,7 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
               pdfFilename = `devis-signe-${signature.submissionId.substring(0, 8)}.pdf`;
             }
           } catch (pdfErr) {
-            console.warn('[E-Signature] ⚠️ Erreur génération PDF pour email:', pdfErr);
+            logger.warn('[E-Signature] ⚠️ Erreur génération PDF pour email:', pdfErr);
           }
 
           // PDF généré pour l'email
@@ -1265,7 +1266,7 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
                 attachments: attachments.map(a => ({ name: a.filename, contentType: a.mimeType, data: a.content.toString('base64') })),
               });
             } catch (clientEmailErr) {
-              console.warn('[E-Signature] ⚠️ Échec email client:', clientEmailErr);
+              logger.warn('[E-Signature] ⚠️ Échec email client:', clientEmailErr);
             }
           }
 
@@ -1301,11 +1302,11 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
                 });
               }
             } catch (adminEmailErr) {
-              console.warn('[E-Signature] ⚠️ Échec email commercial:', adminEmailErr);
+              logger.warn('[E-Signature] ⚠️ Échec email commercial:', adminEmailErr);
             }
           }
         } catch (notifErr) {
-          console.warn('[E-Signature] ⚠️ Échec envoi emails (non bloquant):', notifErr);
+          logger.warn('[E-Signature] ⚠️ Échec envoi emails (non bloquant):', notifErr);
         }
       })();
     }
@@ -1329,7 +1330,7 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
           });
           if (!genDoc) return;
 
-          const snapshot = (genDoc.dataSnapshot as any) || {};
+          const snapshot = (genDoc.dataSnapshot as unknown) || {};
           const selectedProducts = snapshot.selectedProducts as Array<{value: string, label: string, icon?: string, color?: string}> | undefined;
 
           if (!selectedProducts || selectedProducts.length === 0) {
@@ -1350,7 +1351,7 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
             if (lead) {
               clientName = lead.company || [lead.firstName, lead.lastName].filter(Boolean).join(' ') || clientName;
               commercialId = lead.assignedToId || signature.createdBy;
-              const leadData = (lead.data as any) || {};
+              const leadData = (lead.data as unknown) || {};
               const parts: string[] = [];
               const street = leadData.street || leadData.address || '';
               const number = leadData.number || '';
@@ -1389,7 +1390,7 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
           await db.generatedDocument.update({
             where: { id: signature.documentId! },
             data: { status: 'SIGNED', signedAt: new Date(), updatedAt: new Date() }
-          }).catch(err => console.warn('[E-Signature] ⚠️ Erreur update doc SIGNED:', err));
+          }).catch(err => logger.warn('[E-Signature] ⚠️ Erreur update doc SIGNED:', err));
 
           // Créer un chantier par produit
           for (const product of selectedProducts) {
@@ -1417,11 +1418,11 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
                 }
               });
             } catch (chantierErr) {
-              console.warn(`[E-Signature] ⚠️ Erreur création chantier "${product.label}":`, chantierErr);
+              logger.warn(`[E-Signature] ⚠️ Erreur création chantier "${product.label}":`, chantierErr);
             }
           }
         } catch (err) {
-          console.warn('[E-Signature] ⚠️ Erreur auto-création chantiers (non bloquant):', err);
+          logger.warn('[E-Signature] ⚠️ Erreur auto-création chantiers (non bloquant):', err);
         }
       })();
     }
@@ -1435,7 +1436,7 @@ router.post('/sign/:token/submit', async (req: Request, res: Response) => {
       signedPdfUrl: `/api/e-signature/${signature.id}/download-signed-pdf`,
     });
   } catch (error) {
-    console.error('[E-Signature] Erreur submit token:', error);
+    logger.error('[E-Signature] Erreur submit token:', error);
     return res.status(500).json({ success: false, message: 'Erreur' });
   }
 });

@@ -4,6 +4,7 @@ import { impersonationMiddleware } from '../middlewares/impersonation';
 import { requireRole } from '../middlewares/requireRole';
 import { db } from '../lib/database';
 import { v4 as uuidv4 } from 'uuid';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 // Le routeur est créé avec mergeParams pour accéder aux paramètres de la route parente (ex: :fieldId)
@@ -14,7 +15,7 @@ router.use((req: Request, _res: Response, next: NextFunction) => {
   next();
 });
 
-router.use(authMiddleware as any, impersonationMiddleware as any);
+router.use(authMiddleware as unknown, impersonationMiddleware as unknown);
 
 // --- CRUD FieldFormula ---
 
@@ -44,7 +45,7 @@ router.get('/all', requireRole(['admin', 'super_admin']), async (_req, res) => {
     
     res.json(formattedFormulas);
   } catch (error) {
-    console.error('Erreur lors de la récupération des formules:', error);
+    logger.error('Erreur lors de la récupération des formules:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des formules' });
   }
 });
@@ -64,7 +65,7 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: Request & { p
       sequence: f.sequence ? JSON.parse(f.sequence as string) : [],
     }));
     res.json(processedFormulas);
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -82,7 +83,7 @@ router.post('/', requireRole(['admin', 'super_admin']), async (req: Request & { 
     // Utiliser fieldId des params ou du body
     const effectiveFieldId = fieldId || bodyFieldId;
 
-    console.log("Creating formula for field:", effectiveFieldId);
+    logger.info("Creating formula for field:", effectiveFieldId);
     
     // Si toujours pas de fieldId, renvoyer une formule mockée
     if (!effectiveFieldId) {
@@ -109,7 +110,7 @@ router.post('/', requireRole(['admin', 'super_admin']), async (req: Request & { 
         });
         order = lastFormula && typeof lastFormula.order === 'number' ? lastFormula.order + 1 : 0;
       } catch (error) {
-        console.warn("Erreur lors de la recherche du dernier ordre:", error);
+        logger.warn("Erreur lors de la recherche du dernier ordre:", error);
         order = 0;
       }
     }
@@ -143,7 +144,7 @@ router.post('/', requireRole(['admin', 'super_admin']), async (req: Request & { 
       
       res.json(processedFormulas);
     } catch (prismaError) {
-      console.error("Erreur Prisma lors de la création de formule:", prismaError);
+      logger.error("Erreur Prisma lors de la création de formule:", prismaError);
       
       // Si erreur Prisma, retourner une formule mockée
       const mockFormula = {
@@ -158,8 +159,8 @@ router.post('/', requireRole(['admin', 'super_admin']), async (req: Request & { 
       res.json([mockFormula]);
     }
 
-  } catch (err: any) {
-    console.error(`Erreur API POST /api/fields/:fieldId/formulas:`, err);
+  } catch (err: unknown) {
+    logger.error(`Erreur API POST /api/fields/:fieldId/formulas:`, err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -177,7 +178,7 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Req
     // Vérifier si nous avons bien reçu un fieldId
     
     if (!fieldId) {
-      console.error(`[DEBUG_FORMULA_PUT] Erreur: fieldId manquant`);
+      logger.error(`[DEBUG_FORMULA_PUT] Erreur: fieldId manquant`);
       return res.status(400).json({ 
         error: "ID du champ manquant", 
         params: req.params,
@@ -188,7 +189,7 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Req
     const { name, sequence, order } = req.body;
     
     
-    const dataToUpdate: any = {};
+    const dataToUpdate: unknown = {};
     
     if (name !== undefined) {
       dataToUpdate.name = name;
@@ -240,8 +241,8 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Req
       
       return res.json(processedFormulas);
       
-    } catch (err: any) {
-      console.error(`[DEBUG_FORMULA_PUT] Erreur Prisma:`, err);
+    } catch (err: unknown) {
+      logger.error(`[DEBUG_FORMULA_PUT] Erreur Prisma:`, err);
       
       // En mode développement, simuler une réponse réussie même en cas d'erreur
       
@@ -256,8 +257,8 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Req
       }]);
     }
     
-  } catch (err: any) {
-    console.error(`[DEBUG_FORMULA_PUT] Erreur générale:`, err);
+  } catch (err: unknown) {
+    logger.error(`[DEBUG_FORMULA_PUT] Erreur générale:`, err);
     
     // Renvoyer une erreur 500 avec des détails
     return res.status(500).json({ 
@@ -271,7 +272,7 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Req
 
 // DELETE suppression d'une formule
 // La route est maintenant DELETE /:formulaId
-router.delete('/:formulaId', requireRole(['admin', 'super_admin']) as any, async (req: Request, res: Response): Promise<void> => {
+router.delete('/:formulaId', requireRole(['admin', 'super_admin']) as unknown, async (req: Request, res: Response): Promise<void> => {
   const { formulaId, fieldId } = req.params;
   try {
     
@@ -303,8 +304,8 @@ router.delete('/:formulaId', requireRole(['admin', 'super_admin']) as any, async
     }));
     res.status(200).json(processedFormulas);
 
-  } catch (error: any) {
-    console.error(`Erreur lors de la suppression de la formule ${formulaId}:`, error);
+  } catch (error: unknown) {
+    logger.error(`Erreur lors de la suppression de la formule ${formulaId}:`, error);
     if (error.code === 'P2025') { // Code d'erreur Prisma pour "enregistrement non trouvé"
       res.status(404).json({ error: 'Formule non trouvée.' });
     } else {
@@ -314,7 +315,7 @@ router.delete('/:formulaId', requireRole(['admin', 'super_admin']) as any, async
 });
 
 // DELETE pour supprimer un élément spécifique dans la séquence d'une formule
-router.delete('/:formulaId/sequence/:index', requireRole(['admin', 'super_admin']) as any, async (req: Request, res: Response): Promise<void> => {
+router.delete('/:formulaId/sequence/:index', requireRole(['admin', 'super_admin']) as unknown, async (req: Request, res: Response): Promise<void> => {
   const { formulaId, fieldId } = req.params;
   const index = parseInt(req.params.index, 10);
   
@@ -366,8 +367,8 @@ router.delete('/:formulaId/sequence/:index', requireRole(['admin', 'super_admin'
     
     res.status(200).json(processedFormulas);
 
-  } catch (error: any) {
-    console.error(`[AUDIT_API_DELETE_ITEM] Erreur lors de la suppression de l'élément à l'index ${index} de la formule ${formulaId}:`, error);
+  } catch (error: unknown) {
+    logger.error(`[AUDIT_API_DELETE_ITEM] Erreur lors de la suppression de l'élément à l'index ${index} de la formule ${formulaId}:`, error);
     res.status(500).json({ 
       error: "Erreur lors de la suppression de l'élément dans la séquence", 
       details: error.message 
@@ -376,7 +377,7 @@ router.delete('/:formulaId/sequence/:index', requireRole(['admin', 'super_admin'
 });
 
 // POST pour réordonner les formules
-router.post('/reorder', requireRole(['admin', 'super_admin']) as any, async (req: Request & { params: { fieldId?: string } }, res: Response): Promise<void> => {
+router.post('/reorder', requireRole(['admin', 'super_admin']) as unknown, async (req: Request & { params: { fieldId?: string } }, res: Response): Promise<void> => {
   const { fieldId } = req.params;
   const { formulas } = req.body; // Attendre un tableau de formules avec leur nouvel ordre
 
@@ -395,8 +396,8 @@ router.post('/reorder', requireRole(['admin', 'super_admin']) as any, async (req
       )
     );
     res.status(200).json({ success: true });
-  } catch (error: any) {
-    console.error(`Erreur API POST /api/fields/${fieldId}/formulas/reorder:`, error);
+  } catch (error: unknown) {
+    logger.error(`Erreur API POST /api/fields/${fieldId}/formulas/reorder:`, error);
     res.status(500).json({ error: "Erreur lors de la mise à jour de l'ordre des formules.", details: error.message });
   }
 });

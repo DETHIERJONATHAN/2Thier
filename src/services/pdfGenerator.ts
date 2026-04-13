@@ -27,15 +27,15 @@ interface DocumentData {
     address?: string | null;
     company?: string | null;
   } | null;
-  dataSnapshot?: Record<string, any> | null;
+  dataSnapshot?: Record<string, unknown> | null;
 }
 
 interface TemplateSection {
   id: string;
   name: string;
   type: string;
-  content?: any;
-  config?: any;
+  content?: unknown;
+  config?: unknown;
   order: number;
   isActive: boolean;
 }
@@ -45,8 +45,8 @@ interface DocumentTheme {
   secondaryColor?: string;
   fontFamily?: string;
   fontSize?: number;
-  headerConfig?: any;
-  footerConfig?: any;
+  headerConfig?: unknown;
+  footerConfig?: unknown;
 }
 
 // Couleurs par défaut
@@ -80,7 +80,7 @@ const LANGUAGE_LABELS: Record<string, string> = {
  * Générateur de PDF pour les documents CRM
  */
 export class PDFGenerator {
-  private doc: any;
+  private doc: unknown;
   private data: DocumentData;
   private theme: DocumentTheme;
   private pageWidth: number;
@@ -286,7 +286,7 @@ export class PDFGenerator {
     this.currentY += 25;
 
     // Données du formulaire
-    const snapshot = this.data.dataSnapshot as Record<string, any> | null;
+    const snapshot = this.data.dataSnapshot as Record<string, unknown> | null;
     if (snapshot) {
       // Filtrer les données pour exclure les valeurs base64 longues (images)
       const filteredData = this.filterDataForDisplay(snapshot);
@@ -326,8 +326,8 @@ export class PDFGenerator {
   /**
    * Filtre les données pour l'affichage (exclut les images base64, etc.)
    */
-  private filterDataForDisplay(data: Record<string, any>): Record<string, any> {
-    const result: Record<string, any> = {};
+  private filterDataForDisplay(data: Record<string, unknown>): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
     
     for (const [key, value] of Object.entries(data)) {
       // Ignorer les clés techniques
@@ -363,7 +363,7 @@ export class PDFGenerator {
   /**
    * Génère un tableau de données
    */
-  private generateDataTable(data: Record<string, any>, level: number = 0): void {
+  private generateDataTable(data: Record<string, unknown>, level: number = 0): void {
     const indent = level * 20;
     
     for (const [key, value] of Object.entries(data)) {
@@ -432,7 +432,7 @@ export class PDFGenerator {
   /**
    * Formate une valeur pour l'affichage
    */
-  private formatValue(value: any): string {
+  private formatValue(value: unknown): string {
     if (value === null || value === undefined) {
       return '-';
     }

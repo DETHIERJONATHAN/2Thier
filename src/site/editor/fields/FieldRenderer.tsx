@@ -61,19 +61,19 @@ interface FieldRendererProps {
   field: FieldDefinition;
   
   /** Valeur actuelle du champ (peut être une valeur locale ou le form complet) */
-  value: any;
+  value: unknown;
   
   /** Callback onChange pour mettre à jour la valeur */
-  onChange: (value: any) => void;
+  onChange: (value: unknown) => void;
   
   /** Nom du champ Form.Item (path ex: ['logo', 'text']) */
   name?: (string | number)[];
   
   /** Contexte AI (optionnel) */
-  aiContext?: any;
+  aiContext?: unknown;
   
   /** 🔥 NOUVEAU : Toutes les valeurs du formulaire (pour les conditions) */
-  formValues?: any;
+  formValues?: unknown;
 }
 
 /**
@@ -512,7 +512,7 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
                 const arrayValue = arrayFieldName.reduce((obj, key) => obj?.[key], form.getFieldsValue(true));
                 
                 // 🔥 CRITICAL: Créer un onChange qui utilise form.setFieldValue
-                const handleArrayChange = (newValue: any) => {
+                const handleArrayChange = (newValue: unknown) => {
                   form.setFieldValue(arrayFieldName, newValue);
                 };
                 

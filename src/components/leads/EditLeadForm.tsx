@@ -21,7 +21,7 @@ interface LeadFormData {
   website?: string;
   notes?: string;
   nextFollowUpDate?: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
 }
 
 export const EditLeadForm: React.FC<EditLeadFormProps> = ({

@@ -4,15 +4,15 @@ import { fetchWithAuth } from './api';
 
 export interface ValidationSlice {
   // Actions pour les validations
-  createValidation: (fieldId: string, validationData: any) => Promise<any>;
-  updateValidation: (validationId: string, data: any) => Promise<void>;
+  createValidation: (fieldId: string, validationData: unknown) => Promise<unknown>;
+  updateValidation: (validationId: string, data: unknown) => Promise<void>;
   deleteValidation: (validationId: string) => Promise<void>;
   getFieldValidations: (fieldId: string) => any[] | undefined;
   reorderValidations: (fieldId: string, oldIndex: number, newIndex: number) => Promise<void>;
 }
 
 // Fonction utilitaire pour déplacer un élément dans un tableau
-const arrayMove = (array: any[], fromIndex: number, toIndex: number) => {
+const arrayMove = (array: unknown[], fromIndex: number, toIndex: number) => {
   const result = [...array];
   const [removed] = result.splice(fromIndex, 1);
   result.splice(toIndex, 0, removed);
@@ -72,7 +72,7 @@ export const createValidationSlice: StateCreator<
       );
       
       return newValidation || null;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[CRMStore][createValidation] Error:', err);
       throw err;
     }
@@ -84,7 +84,7 @@ export const createValidationSlice: StateCreator<
     
     // Trouver le field qui contient cette validation
     let fieldId: string | undefined;
-    let originalValidation: any = undefined;
+    let originalValidation: unknown = undefined;
     
     stateBeforeUpdate.blocks.forEach(block => {
       block.sections.forEach(section => {
@@ -163,7 +163,7 @@ export const createValidationSlice: StateCreator<
       });
       
       console.log(`[CRMStore][updateValidation] Validation updated successfully`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[CRMStore][updateValidation] Error:', err);
       // Rollback en cas d'erreur
       set({ blocks: stateBeforeUpdate.blocks });
@@ -244,7 +244,7 @@ export const createValidationSlice: StateCreator<
       });
       
       console.log(`[CRMStore][deleteValidation] Validation deleted successfully`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[CRMStore][deleteValidation] Error:', err);
       // Rollback en cas d'erreur
       set({ blocks: stateBeforeUpdate.blocks });
@@ -268,8 +268,8 @@ export const createValidationSlice: StateCreator<
   
   reorderValidations: async (fieldId, oldIndex, newIndex) => {
     console.log(`[CRMStore][reorderValidations] Reordering validations for field ${fieldId} from ${oldIndex} to ${newIndex}`);
-    let fieldToUpdate: any | undefined;
-    let reorderedValidations: any[] | undefined;
+    let fieldToUpdate: unknown | undefined;
+    let reorderedValidations: unknown[] | undefined;
     const stateBeforeUpdate = get();
 
     set(state => {
@@ -304,7 +304,7 @@ export const createValidationSlice: StateCreator<
         }
         
         console.log(`[CRMStore][reorderValidations] Validation order updated successfully`);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[CRMStore][reorderValidations] API error:', err);
         // Rollback en cas d'erreur
         set({ blocks: stateBeforeUpdate.blocks });

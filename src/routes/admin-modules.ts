@@ -3,6 +3,7 @@ import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { requireRole } from '../middlewares/requireRole';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -152,7 +153,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     });
 
   } catch (error) {
-    console.error('[ADMIN-MODULES-V1] Erreur GET:', error);
+    logger.error('[ADMIN-MODULES-V1] Erreur GET:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la récupération des modules',
@@ -194,7 +195,7 @@ router.get('/categories', async (req: Request, res: Response): Promise<void> => 
     });
 
   } catch (error) {
-    console.error('[ADMIN-MODULES] Erreur GET /categories:', error);
+    logger.error('[ADMIN-MODULES] Erreur GET /categories:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la récupération des categories',
@@ -256,7 +257,7 @@ router.post('/categories', requireRole(['admin', 'super_admin']) as unknown as R
       res.status(400).json({ success: false, error: 'organizationId invalide' });
       return;
     }
-    console.error('[ADMIN-MODULES] Erreur POST /categories:', error);
+    logger.error('[ADMIN-MODULES] Erreur POST /categories:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la création de la category',
@@ -289,7 +290,7 @@ router.put('/categories/reorder', requireRole(['admin', 'super_admin']) as unkno
     });
 
   } catch (error) {
-    console.error('[ADMIN-MODULES] Erreur PUT /categories/reorder:', error);
+    logger.error('[ADMIN-MODULES] Erreur PUT /categories/reorder:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la réorganisation des categories',
@@ -334,7 +335,7 @@ router.put('/categories/:id', requireRole(['admin', 'super_admin']) as unknown a
     });
 
   } catch (error) {
-    console.error('[ADMIN-MODULES] Erreur PUT /categories/:id:', error);
+    logger.error('[ADMIN-MODULES] Erreur PUT /categories/:id:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la modification de la category',
@@ -373,7 +374,7 @@ router.delete('/categories/:id', requireRole(['admin', 'super_admin']) as unknow
     });
 
   } catch (error) {
-    console.error('[ADMIN-MODULES] Erreur DELETE /categories/:id:', error);
+    logger.error('[ADMIN-MODULES] Erreur DELETE /categories/:id:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la suppression de la category',
@@ -413,7 +414,7 @@ router.put('/modules/:id', requireRole(['admin', 'super_admin']) as unknown as R
     });
 
   } catch (error) {
-    console.error('[ADMIN-MODULES] Erreur PUT /modules/:id:', error);
+    logger.error('[ADMIN-MODULES] Erreur PUT /modules/:id:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la modification du module',
@@ -435,7 +436,7 @@ router.delete('/modules/:id', requireRole(['admin', 'super_admin']) as unknown a
 
     res.json({ success: true, data: { id } });
   } catch (error) {
-    console.error('[ADMIN-MODULES] Erreur DELETE /modules/:id (alias):', error);
+    logger.error('[ADMIN-MODULES] Erreur DELETE /modules/:id (alias):', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la suppression du module',

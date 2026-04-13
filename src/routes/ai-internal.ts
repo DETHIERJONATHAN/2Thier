@@ -1,10 +1,11 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
-import { db } from '../lib/database';
+import { db, Prisma } from '../lib/database';
 import { authMiddleware, requireSuperAdmin } from '../middlewares/auth';
 import type { AuthenticatedRequest } from '../middlewares/auth';
 import { randomUUID } from 'crypto';
+import { logger } from '../lib/logger';
 
 // NOTE: On utilise authMiddleware + requireSuperAdmin pour protéger strictement.
 const prisma = db;
@@ -35,7 +36,7 @@ async function ensureAiLog() {
           "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         );`);
       } catch (e) {
-        console.warn('[AI-INT] Impossible de garantir AiUsageLog:', (e as Error).message);
+        logger.warn('[AI-INT] Impossible de garantir AiUsageLog:', (e as Error).message);
       }
     })();
   }
@@ -50,7 +51,7 @@ async function logInternal(type: string, meta: Record<string, unknown>, content?
       randomUUID(), type, true, JSON.stringify(meta), content || null
     );
   } catch (e) {
-    console.warn('[AI-INT] logInternal failed:', (e as Error).message);
+    logger.warn('[AI-INT] logInternal failed:', (e as Error).message);
   }
 }
 
@@ -175,8 +176,8 @@ router.get('/memory', async (req, res) => {
     const tag = typeof req.query.tag === 'string' ? req.query.tag.trim().toLowerCase() : '';
     // Simple query
   interface MemoryRow { id: string; createdAt: string; meta: { topic?: string; tags?: string[] } | null; errorMessage?: string | null }
-  const rows = await prisma.$queryRawUnsafe<MemoryRow[]>(
-      `SELECT id, "createdAt", meta, "errorMessage" FROM "AiUsageLog" WHERE type='system_memory' ORDER BY "createdAt" DESC LIMIT ${limit}`
+  const rows = await prisma.$queryRaw<MemoryRow[]>(
+      Prisma.sql`SELECT id, "createdAt", meta, "errorMessage" FROM "AiUsageLog" WHERE type='system_memory' ORDER BY "createdAt" DESC LIMIT ${limit}`
     );
     const filtered = rows.filter(r => {
       const meta = r.meta || {}; const content: string = r.errorMessage || '';

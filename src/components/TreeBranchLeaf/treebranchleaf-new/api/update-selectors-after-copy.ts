@@ -46,7 +46,7 @@ export async function updateSelectorsAfterTableCopy(
         continue;
       }
 
-      const lookupConfig = (table.meta as any)?.lookup;
+      const lookupConfig = (table.meta as unknown)?.lookup;
       if (!lookupConfig?.selectors) {
         continue;
       }
@@ -79,7 +79,7 @@ export async function updateSelectorsAfterTableCopy(
 
       // 5Ã¯Â¸ÂÃ¢Æ’Â£ Mettre ÃƒÂ  jour les selectors copiÃƒÂ©s
       const selectorIds = [copiedRowSelectorId, copiedColSelectorId].filter(Boolean);
-      const selectorTableInstances: Record<string, any> = {};
+      const selectorTableInstances: Record<string, unknown> = {};
       selectorTableInstances[copiedTable.id] = {};
 
       for (const selectorId of selectorIds) {
@@ -88,7 +88,7 @@ export async function updateSelectorsAfterTableCopy(
             where: { id: selectorId },
             data: {
               table_activeId: copiedTable.id,
-              table_instances: selectorTableInstances as any,
+              table_instances: selectorTableInstances as unknown,
               hasTable: true
             }
           });

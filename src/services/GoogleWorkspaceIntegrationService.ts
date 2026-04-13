@@ -65,7 +65,7 @@ export class GoogleWorkspaceIntegrationService {
     lastName: string;
     email: string;
     organizationId?: string;
-  }): Promise<{ success: boolean; workspaceUser?: any; error?: string }> {
+  }): Promise<{ success: boolean; workspaceUser?: unknown; error?: string }> {
     try {
 
       // Vérifier si le service est initialisé
@@ -93,7 +93,7 @@ export class GoogleWorkspaceIntegrationService {
       if (result.success) {
         // Optionnel : Sauvegarder les informations de compte Workspace dans la DB
         await this.saveWorkspaceUserInfo(crmUser.id, {
-          workspaceUserId: (result.user as any)?.id || 'unknown',
+          workspaceUserId: (result.user as unknown)?.id || 'unknown',
           email: crmUser.email,
           tempPassword: tempPassword, // À chiffrer en production
           createdAt: new Date()

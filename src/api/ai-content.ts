@@ -32,7 +32,7 @@ router.post('/generate-service', async (req, res) => {
       success: true,
       content
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur génération service:', error);
     res.status(500).json({
       error: 'Erreur lors de la génération du service',
@@ -66,7 +66,7 @@ router.post('/generate-project', async (req, res) => {
       success: true,
       content
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur génération projet:', error);
     res.status(500).json({
       error: 'Erreur lors de la génération du projet',
@@ -100,7 +100,7 @@ router.post('/generate-testimonial', async (req, res) => {
       success: true,
       content
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur génération témoignage:', error);
     res.status(500).json({
       error: 'Erreur lors de la génération du témoignage',
@@ -135,7 +135,7 @@ router.post('/generate-page', async (req, res) => {
       success: true,
       content
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur génération page:', error);
     res.status(500).json({
       error: 'Erreur lors de la génération de la page',
@@ -171,7 +171,7 @@ router.post('/optimize-seo', async (req, res) => {
       success: true,
       suggestions
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur optimisation SEO:', error);
     res.status(500).json({
       error: 'Erreur lors de l\'optimisation SEO',
@@ -205,7 +205,7 @@ router.post('/generate-multiple-services', async (req, res) => {
       services,
       count: services.length
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur génération multiple services:', error);
     res.status(500).json({
       error: 'Erreur lors de la génération des services',

@@ -13,11 +13,11 @@ import SortableValidationItemForSequence from './SortableValidationItemForSequen
 import { ValidationItem } from './types';
 
 interface ValidationSequenceEditorProps {
-  validation: any;
+  validation: unknown;
   updateSequence: (newSequence: ValidationItem[]) => void;
   sequence: ValidationItem[];
-  availableFields: any[];
-  availableSections: any[];
+  availableFields: unknown[];
+  availableSections: unknown[];
 }
 
 const ValidationSequenceEditor: React.FC<ValidationSequenceEditorProps> = (props) => {

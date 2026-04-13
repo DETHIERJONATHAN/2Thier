@@ -28,7 +28,7 @@ interface Section {
   id: number;
   type: string;
   name: string;
-  content: any;
+  content: unknown;
   backgroundColor?: string;
   textColor?: string;
   isActive: boolean;
@@ -59,7 +59,7 @@ const iconMap: Record<string, React.ReactNode> = {
 };
 
 // Helper pour extraire le texte d'un champ (objet ou string)
-const getText = (field: any, defaultText = ''): string => {
+const getText = (field: unknown, defaultText = ''): string => {
   if (!field) return defaultText;
   if (typeof field === 'string') return field;
   if (typeof field === 'object' && field.text) return field.text;
@@ -172,7 +172,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
               
               {buttons.length > 0 && (
                 <Space size="middle" wrap>
-                  {buttons.map((btn: any, idx: number) => (
+                  {buttons.map((btn: unknown, idx: number) => (
                     <Button 
                       key={idx}
                       type={idx === 0 ? 'primary' : 'default'}
@@ -208,7 +208,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
 
     case 'stats':
       const stats = section.content?.stats || [];
-      const statsIconMap: Record<string, any> = {
+      const statsIconMap: Record<string, unknown> = {
         HomeOutlined: <HomeOutlined />,
         ThunderboltOutlined: <ThunderboltOutlined />,
         StarFilled: <StarFilled />,
@@ -218,7 +218,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
       return (
         <div style={{ background: bgColor || '#f9fafb', padding: '60px 24px' }}>
           <Row gutter={[24, 24]} justify="center" style={{ maxWidth: '1400px', margin: '0 auto' }}>
-            {stats.map((stat: any, index: number) => (
+            {stats.map((stat: unknown, index: number) => (
               <Col xs={12} sm={12} md={6} key={index}>
                 <Card 
                   variant="borderless"
@@ -580,7 +580,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
             <Steps
               direction="vertical"
               current={-1}
-              items={steps.map((step: any, index: number) => ({
+              items={steps.map((step: unknown, index: number) => ({
                 title: (
                   <Title level={4} style={{ margin: 0 }}>
                     {getText(step.title || step, `Étape ${index + 1}`)}
@@ -631,7 +631,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
             </Paragraph>
             {ctaButtons.length > 0 && (
               <Space size="large" wrap>
-                {ctaButtons.map((btn: any, idx: number) => (
+                {ctaButtons.map((btn: unknown, idx: number) => (
                   <Button 
                     key={idx}
                     type={idx === 0 ? 'primary' : 'default'}
@@ -668,14 +668,14 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
         <Footer style={{ background: bgColor || '#1f2937', color: textColor || 'white', padding: '60px 24px 24px' }}>
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
             <Row gutter={[32, 32]}>
-              {columns.map((col: any, idx: number) => (
+              {columns.map((col: unknown, idx: number) => (
                 <Col xs={24} sm={12} md={6} key={idx}>
                   <Title level={col.title?.length > 15 ? 5 : 4} style={{ color: textColor || 'white' }}>
                     {getText(col.title, `Colonne ${idx + 1}`)}
                   </Title>
                   {col.links && (
                     <Space direction="vertical">
-                      {col.links.map((link: any, linkIdx: number) => (
+                      {col.links.map((link: unknown, linkIdx: number) => (
                         <a key={linkIdx} href="#" style={{ color: '#9ca3af' }}>
                           {typeof link === 'string' ? link : getText(link, 'Lien')}
                         </a>

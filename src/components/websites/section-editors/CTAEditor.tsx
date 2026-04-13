@@ -14,8 +14,8 @@ import { SectionHeaderEditor } from '../SectionHeaderEditor';
 const { TextArea } = Input;
 
 interface CTAEditorProps {
-  section: any;
-  onSave: (content: any) => void;
+  section: unknown;
+  onSave: (content: unknown) => void;
   onCancel: () => void;
 }
 
@@ -74,7 +74,7 @@ export const CTAEditor: React.FC<CTAEditorProps> = ({ section, onSave, onCancel 
     setButtons(newButtons);
   };
 
-  const handleSubmit = (values: any) => {
+  const handleSubmit = (values: unknown) => {
     onSave({
       name: values.name,
       content: {
@@ -107,7 +107,7 @@ export const CTAEditor: React.FC<CTAEditorProps> = ({ section, onSave, onCancel 
       }
       return isImage && isLt5M;
     },
-    onChange: (info: any) => {
+    onChange: (info: unknown) => {
       setBackgroundFile(info.fileList);
     },
     maxCount: 1

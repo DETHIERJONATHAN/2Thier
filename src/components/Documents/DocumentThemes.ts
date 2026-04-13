@@ -20,7 +20,7 @@ export interface DocumentTheme {
   logoUrl?: string;
   headerSvg: string; // SVG background pour header
   footerSvg: string; // SVG background pour footer
-  customStyles?: Record<string, any>;
+  customStyles?: Record<string, unknown>;
 }
 
 /**

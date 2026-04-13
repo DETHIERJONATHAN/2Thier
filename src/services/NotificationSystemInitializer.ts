@@ -83,7 +83,7 @@ export class NotificationSystemInitializer {
   /**
    * 🚨 GESTION NOTIFICATIONS URGENTES
    */
-  private handleUrgentNotification(data: any): void {
+  private handleUrgentNotification(data: unknown): void {
     try {
       
       // TODO: Implémenter actions spécifiques selon le type
@@ -105,7 +105,7 @@ export class NotificationSystemInitializer {
   /**
    * 🔔 GESTION NOTIFICATIONS NORMALES
    */
-  private handleRegularNotification(data: any): void {
+  private handleRegularNotification(data: unknown): void {
     try {
       // Logique de routage des notifications normales
       
@@ -117,7 +117,7 @@ export class NotificationSystemInitializer {
   /**
    * 📧 GESTION EMAIL URGENT
    */
-  private handleUrgentEmail(emailData: any): void {
+  private handleUrgentEmail(emailData: unknown): void {
     
     // TODO: Actions spécifiques pour emails urgents
     // - Push notification immédiate
@@ -129,7 +129,7 @@ export class NotificationSystemInitializer {
   /**
    * 📅 GESTION MEETING URGENT
    */
-  private handleUrgentMeeting(meetingData: any): void {
+  private handleUrgentMeeting(meetingData: unknown): void {
     
     // TODO: Actions spécifiques pour meetings urgents
     // - Alerte sonore
@@ -141,7 +141,7 @@ export class NotificationSystemInitializer {
   /**
    * 💥 GESTION ERREURS SYSTÈME
    */
-  private handleSystemError(error: any): void {
+  private handleSystemError(error: unknown): void {
     console.error('💥 [NotificationSystem] ERREUR SYSTÈME:', error);
     
     // TODO: Gestion robuste des erreurs
@@ -154,7 +154,7 @@ export class NotificationSystemInitializer {
   /**
    * 📊 OBTENIR STATISTIQUES SYSTÈME
    */
-  async getSystemStats(): Promise<any> {
+  async getSystemStats(): Promise<unknown> {
     try {
       const universal = UniversalNotificationService.getInstance();
       const universalStatus = universal.getStatus();

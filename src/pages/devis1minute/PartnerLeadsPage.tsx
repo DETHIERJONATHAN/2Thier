@@ -256,11 +256,11 @@ export default function PartnerLeadsPage() {
   const handleExportCSV = async () => {
     try {
       const response = await api.get('/api/partner/leads/export', { 
-        responseType: 'blob' as any // Pour le téléchargement de fichier
+        responseType: 'blob' as unknown // Pour le téléchargement de fichier
       });
       
       // Créer un lien de téléchargement
-      const url = window.URL.createObjectURL(new Blob([response as any]));
+      const url = window.URL.createObjectURL(new Blob([response as unknown]));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `leads-${dayjs().format('YYYY-MM-DD')}.csv`);

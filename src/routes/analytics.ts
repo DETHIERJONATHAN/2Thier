@@ -3,6 +3,7 @@ import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.j
 import { requireRole } from '../middlewares/requireRole.js';
 import { db } from '../lib/database';
 import rateLimit from 'express-rate-limit';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -91,7 +92,7 @@ router.get('/dashboard', requireRole(['admin', 'super_admin']), async (req: Auth
 
     res.json({ success: true, data: metrics });
   } catch (error) {
-    console.error('[ANALYTICS] Erreur métriques dashboard:', error);
+    logger.error('[ANALYTICS] Erreur métriques dashboard:', error);
     res.status(500).json({ success: false, message: 'Erreur génération métriques' });
   }
 });
@@ -130,7 +131,7 @@ router.get('/export', requireRole(['admin', 'super_admin']), async (req: Authent
       res.json({ success: true, data, filename });
     }
   } catch (error) {
-    console.error('[ANALYTICS] Erreur export:', error);
+    logger.error('[ANALYTICS] Erreur export:', error);
     res.status(500).json({ success: false, message: 'Erreur export données' });
   }
 });
@@ -176,7 +177,7 @@ router.get('/audit-trail', requireRole(['admin', 'super_admin']), async (req: Au
       }
     });
   } catch (error) {
-    console.error('[ANALYTICS] Erreur audit trail:', error);
+    logger.error('[ANALYTICS] Erreur audit trail:', error);
     res.status(500).json({ success: false, message: 'Erreur récupération audit' });
   }
 });

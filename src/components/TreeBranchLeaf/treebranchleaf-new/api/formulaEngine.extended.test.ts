@@ -69,7 +69,7 @@ describe('FormulaEngine extended', () => {
 
   it('fonction inconnue signale erreur', async () => {
     const bad = 'foo(1,2)';
-    const tokens = parseExpression(bad, roleMap, {} as any); // roleMap non utilisÃƒÂ©
+    const tokens = parseExpression(bad, roleMap, {} as unknown); // roleMap non utilisÃƒÂ©
     const res = await evaluateTokens(tokens, { resolveVariable: () => 0 });
     expect(res.errors).toContain('unknown_function');
   });

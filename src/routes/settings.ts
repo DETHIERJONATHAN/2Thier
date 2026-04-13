@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticateToken, isAdmin, extractOrganization } from '../middleware/auth';
 import { AuthenticatedRequest } from '../middleware/auth';
 import prisma from '../prisma.js';
+import { logger } from '../lib/logger';
 
 const settingsRouter = Router();
 
@@ -59,7 +60,7 @@ settingsRouter.get('/lead-statuses', async (req: AuthenticatedRequest, res) => {
 
     res.json(leadStatuses);
   } catch (error) {
-    console.error('Erreur lors de la récupération des statuts de lead:', error);
+    logger.error('Erreur lors de la récupération des statuts de lead:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -79,7 +80,7 @@ settingsRouter.post('/lead-statuses/reorder', async (req: AuthenticatedRequest, 
     );
     res.status(204).send();
   } catch (error) {
-    console.error('Erreur lors de la mise à jour de l\'ordre des statuts de lead:', error);
+    logger.error('Erreur lors de la mise à jour de l\'ordre des statuts de lead:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -100,7 +101,7 @@ settingsRouter.post('/lead-statuses', async (req: AuthenticatedRequest, res) => 
     });
     res.status(201).json(newStatus);
   } catch (error) {
-    console.error('Erreur lors de l\'ajout d\'un nouveau statut de lead:', error);
+    logger.error('Erreur lors de l\'ajout d\'un nouveau statut de lead:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -117,7 +118,7 @@ settingsRouter.put('/lead-statuses/:id', async (req: AuthenticatedRequest, res) 
     });
     res.json(updatedStatus);
   } catch (error) {
-    console.error('Erreur lors de la mise à jour du statut de lead:', error);
+    logger.error('Erreur lors de la mise à jour du statut de lead:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -136,7 +137,7 @@ settingsRouter.delete('/lead-statuses/:id', async (req: AuthenticatedRequest, re
     });
     res.status(204).send();
   } catch (error) {
-    console.error('Erreur lors de la suppression du statut de lead:', error);
+    logger.error('Erreur lors de la suppression du statut de lead:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -165,7 +166,7 @@ settingsRouter.get('/call-statuses', async (req: AuthenticatedRequest, res) => {
 
     res.json(callStatuses);
   } catch (error) {
-    console.error('Erreur lors de la récupération des statuts d\'appels:', error);
+    logger.error('Erreur lors de la récupération des statuts d\'appels:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -211,7 +212,7 @@ settingsRouter.post('/call-statuses', async (req: AuthenticatedRequest, res) => 
 
     res.status(201).json(updatedStatuses);
   } catch (error) {
-    console.error('Erreur lors de la sauvegarde des statuts d\'appels:', error);
+    logger.error('Erreur lors de la sauvegarde des statuts d\'appels:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -231,7 +232,7 @@ settingsRouter.post('/call-statuses/reorder', async (req: AuthenticatedRequest, 
     );
     res.status(204).send();
   } catch (error) {
-    console.error('Erreur lors de la mise à jour de l\'ordre des statuts d\'appels:', error);
+    logger.error('Erreur lors de la mise à jour de l\'ordre des statuts d\'appels:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -251,7 +252,7 @@ settingsRouter.put('/call-statuses/reorder', async (req: AuthenticatedRequest, r
     );
     res.status(200).json({ success: true, message: 'Ordre mis à jour avec succès' });
   } catch (error) {
-    console.error('Erreur lors de la mise à jour de l\'ordre des statuts d\'appels:', error);
+    logger.error('Erreur lors de la mise à jour de l\'ordre des statuts d\'appels:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -272,7 +273,7 @@ settingsRouter.post('/call-statuses/add', async (req: AuthenticatedRequest, res)
     });
     res.status(201).json(newStatus);
   } catch (error) {
-    console.error('Erreur lors de l\'ajout d\'un nouveau statut d\'appel:', error);
+    logger.error('Erreur lors de l\'ajout d\'un nouveau statut d\'appel:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -289,7 +290,7 @@ settingsRouter.put('/call-statuses/:id', async (req: AuthenticatedRequest, res) 
     });
     res.json(updatedStatus);
   } catch (error) {
-    console.error('Erreur lors de la mise à jour du statut d\'appel:', error);
+    logger.error('Erreur lors de la mise à jour du statut d\'appel:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -308,7 +309,7 @@ settingsRouter.delete('/call-statuses/:id', async (req: AuthenticatedRequest, re
     });
     res.status(204).send();
   } catch (error) {
-    console.error('Erreur lors de la suppression du statut d\'appel:', error);
+    logger.error('Erreur lors de la suppression du statut d\'appel:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
@@ -463,7 +464,7 @@ settingsRouter.post('/initialize-default-statuses', async (req: AuthenticatedReq
     });
 
   } catch (error) {
-    console.error('❌ Erreur lors de l\'initialisation des statuts:', error);
+    logger.error('❌ Erreur lors de l\'initialisation des statuts:', error);
     res.status(500).json({ 
       error: 'Erreur lors de l\'initialisation des statuts',
       details: error.message 

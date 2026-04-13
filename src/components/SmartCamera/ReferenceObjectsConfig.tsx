@@ -68,7 +68,7 @@ export const ReferenceObjectsConfig: React.FC<Props> = ({ visible, onClose, node
     setObjects(objects.filter((_, i) => i !== index));
   };
 
-  const updateObject = (index: number, field: keyof ReferenceObject, value: any) => {
+  const updateObject = (index: number, field: keyof ReferenceObject, value: unknown) => {
     const newObjects = [...objects];
     newObjects[index] = { ...newObjects[index], [field]: value };
     setObjects(newObjects);

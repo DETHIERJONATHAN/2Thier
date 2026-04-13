@@ -16,7 +16,7 @@ const pickFirst = (value?: string | string[] | null): string | undefined => {
   return Array.isArray(value) ? value[0] : value;
 };
 
-const mapPayloadToConfig = (payload: any): WebsiteFormConfig => {
+const mapPayloadToConfig = (payload: unknown): WebsiteFormConfig => {
   const rawFields = Array.isArray(payload?.fields) ? payload.fields : [];
 
   const fields = rawFields
@@ -96,7 +96,7 @@ export const usePublicFormModal = () => {
           }
         );
 
-        const payload = (response as any)?.data ?? response;
+        const payload = (response as unknown)?.data ?? response;
         if (!payload) {
           throw new Error('Formulaire introuvable');
         }
@@ -116,7 +116,7 @@ export const usePublicFormModal = () => {
   );
 
   const submitForm = useCallback(
-    async (values: Record<string, any>) => {
+    async (values: Record<string, unknown>) => {
       const currentConfig = configRef.current;
       if (!currentConfig) {
         message.error('Formulaire indisponible.');

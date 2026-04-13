@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 describe('displayAlways Feature Test', () => {
   let eventEmitted = false;
-  let emittedNodeData: any = null;
+  let emittedNodeData: unknown = null;
 
   beforeEach(() => {
     // Mock window.dispatchEvent
@@ -19,7 +19,7 @@ describe('displayAlways Feature Test', () => {
     emittedNodeData = null;
 
     const originalDispatchEvent = window.dispatchEvent;
-    window.dispatchEvent = vi.fn((event: any) => {
+    window.dispatchEvent = vi.fn((event: unknown) => {
       if (event.type === 'tbl-node-updated') {
         eventEmitted = true;
         emittedNodeData = event.detail;

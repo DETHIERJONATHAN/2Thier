@@ -321,7 +321,7 @@ Avez-vous quelques minutes pour échanger à ce sujet ?"
     try {
       const leadData = await api.get(`/leads/${leadId}`);
       setLead(leadData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       NotificationManager.error('Erreur lors du chargement du lead');
       navigate('/leads/home');
     } finally {
@@ -495,7 +495,7 @@ Avez-vous quelques minutes pour échanger à ce sujet ?"
         '📅 Proposer un RDV si intéressé'
       ]);
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       setCallInProgress(false);
       setCallStartTime(null);
       NotificationManager.error('Erreur lors du démarrage de l\'appel');

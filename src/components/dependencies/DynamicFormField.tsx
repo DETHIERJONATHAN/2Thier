@@ -8,7 +8,7 @@ interface FormFieldProps {
   description?: string;
   type: string;
   placeholder?: string;
-  defaultValue?: any;
+  defaultValue?: unknown;
   options?: Array<{ label: string; value: string | number }>;
   required?: boolean;
 }

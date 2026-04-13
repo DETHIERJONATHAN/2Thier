@@ -61,10 +61,10 @@ export const FormulaDiagnosticTool: React.FC = () => {
                         <div>
                             <div className="mb-4 p-2 bg-gray-100 rounded">
                                 <span className="font-medium">Résumé: </span>
-                                <span>{testResults.filter((r: any) => r.isValid).length}/{testResults.length} formules validées avec succès</span>
+                                <span>{testResults.filter((r: Record<string, unknown>) => r.isValid).length}/{testResults.length} formules validées avec succès</span>
                             </div>
                             <div className="space-y-2">
-                                {testResults.map((result: any, index: number) => (
+                                {testResults.map((result: unknown, index: number) => (
                                     <div key={index} className={`p-2 border rounded ${result.isValid ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
                                         <div className="flex items-center">
                                             <div className={`w-5 h-5 rounded-full flex items-center justify-center mr-2 ${result.isValid ? 'bg-green-500' : 'bg-red-500'}`}>

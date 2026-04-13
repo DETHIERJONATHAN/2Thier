@@ -2,11 +2,11 @@ import { transformNodesToTBLComplete } from '../useTBLDataPrismaComplete';
 
 describe('subTab transformation', () => {
   it('should propagate metadata.subTab into fields and compute tab.subTabs', () => {
-    const tabNode = { id: 'tab_1', parentId: null, label: 'Projet', type: 'branch', order: 0, metadata: { subTabs: ['Photos', 'Electricité'] } } as any;
-    const field1 = { id: 'f1', parentId: 'tab_1', type: 'leaf_field', label: 'Champ A', metadata: { subTab: 'Photos' }, order: 10 } as any;
-    const field2 = { id: 'f2', parentId: 'tab_1', type: 'leaf_field', label: 'Champ B', metadata: { subTab: 'Electricité' }, order: 20 } as any;
+    const tabNode = { id: 'tab_1', parentId: null, label: 'Projet', type: 'branch', order: 0, metadata: { subTabs: ['Photos', 'Electricité'] } } as unknown;
+    const field1 = { id: 'f1', parentId: 'tab_1', type: 'leaf_field', label: 'Champ A', metadata: { subTab: 'Photos' }, order: 10 } as unknown;
+    const field2 = { id: 'f2', parentId: 'tab_1', type: 'leaf_field', label: 'Champ B', metadata: { subTab: 'Electricité' }, order: 20 } as unknown;
     const nodes = [ tabNode, field1, field2 ];
-    const result = transformNodesToTBLComplete(nodes as any, {});
+    const result = transformNodesToTBLComplete(nodes as unknown, {});
     expect(result.tabs.length).toBeGreaterThan(0);
     const t = result.tabs.find(x => x.id === 'tab_1');
     expect(t).toBeDefined();
@@ -22,11 +22,11 @@ describe('subTab transformation', () => {
   });
 
   it('should not include default "Général" subTab if all fields are assigned', () => {
-    const tabNode = { id: 'tab_2', parentId: null, label: 'Projet 2', type: 'branch', order: 0, metadata: { subTabs: ['A', 'B'] } } as any;
-    const field1 = { id: 'f1', parentId: 'tab_2', type: 'leaf_field', label: 'Champ A', metadata: { subTab: 'A' }, order: 10 } as any;
-    const field2 = { id: 'f2', parentId: 'tab_2', type: 'leaf_field', label: 'Champ B', metadata: { subTab: 'B' }, order: 20 } as any;
+    const tabNode = { id: 'tab_2', parentId: null, label: 'Projet 2', type: 'branch', order: 0, metadata: { subTabs: ['A', 'B'] } } as unknown;
+    const field1 = { id: 'f1', parentId: 'tab_2', type: 'leaf_field', label: 'Champ A', metadata: { subTab: 'A' }, order: 10 } as unknown;
+    const field2 = { id: 'f2', parentId: 'tab_2', type: 'leaf_field', label: 'Champ B', metadata: { subTab: 'B' }, order: 20 } as unknown;
     const nodes = [ tabNode, field1, field2 ];
-    const result = transformNodesToTBLComplete(nodes as any, {});
+    const result = transformNodesToTBLComplete(nodes as unknown, {});
     const t = result.tabs.find(x => x.id === 'tab_2');
     expect(t).toBeDefined();
     const keys = (t!.subTabs || []).map(st => st.key);
@@ -34,13 +34,13 @@ describe('subTab transformation', () => {
   });
 
   it('should ignore displayOnly sections when deciding to show default "Général" subTab', () => {
-    const tabNode = { id: 'tab_3', parentId: null, label: 'Projet 3', type: 'branch', order: 0, metadata: { subTabs: ['A'] } } as any;
-    const displaySection = { id: 'section_display', parentId: 'tab_3', label: 'Aperçu', type: 'section', order: 1, metadata: { displayAlways: true } } as any;
-    const field1 = { id: 'f1', parentId: 'tab_3', type: 'leaf_field', label: 'Champ A', metadata: { subTab: 'A' }, order: 10 } as any;
+    const tabNode = { id: 'tab_3', parentId: null, label: 'Projet 3', type: 'branch', order: 0, metadata: { subTabs: ['A'] } } as unknown;
+    const displaySection = { id: 'section_display', parentId: 'tab_3', label: 'Aperçu', type: 'section', order: 1, metadata: { displayAlways: true } } as unknown;
+    const field1 = { id: 'f1', parentId: 'tab_3', type: 'leaf_field', label: 'Champ A', metadata: { subTab: 'A' }, order: 10 } as unknown;
     // field in displayOnly section but not assigned -> should NOT trigger default
-    const field2 = { id: 'f2', parentId: 'section_display', type: 'leaf_field', label: 'Champ B', metadata: {}, order: 20 } as any;
+    const field2 = { id: 'f2', parentId: 'section_display', type: 'leaf_field', label: 'Champ B', metadata: {}, order: 20 } as unknown;
     const nodes = [ tabNode, displaySection, field1, field2 ];
-    const result = transformNodesToTBLComplete(nodes as any, {});
+    const result = transformNodesToTBLComplete(nodes as unknown, {});
     const t = result.tabs.find(x => x.id === 'tab_3');
     expect(t).toBeDefined();
     const keys = (t!.subTabs || []).map(st => st.key);
@@ -53,11 +53,11 @@ describe('subTab transformation', () => {
   });
 
   it('should assign fields to multiple subTabs when metadata.subTab is an array', () => {
-    const tabNode = { id: 'tab_multi', parentId: null, label: 'Multi', type: 'branch', order: 0, metadata: { subTabs: ['Photo', 'Electricité', 'Chauffage'] } } as any;
-    const multiField = { id: 'f_multi', parentId: 'tab_multi', type: 'leaf_field', label: 'Champ Multi', metadata: { subTab: ['Photo', 'Electricité'] }, order: 5 } as any;
-    const soloField = { id: 'f_single', parentId: 'tab_multi', type: 'leaf_field', label: 'Champ Solo', metadata: { subTab: 'Chauffage' }, order: 10 } as any;
+    const tabNode = { id: 'tab_multi', parentId: null, label: 'Multi', type: 'branch', order: 0, metadata: { subTabs: ['Photo', 'Electricité', 'Chauffage'] } } as unknown;
+    const multiField = { id: 'f_multi', parentId: 'tab_multi', type: 'leaf_field', label: 'Champ Multi', metadata: { subTab: ['Photo', 'Electricité'] }, order: 5 } as unknown;
+    const soloField = { id: 'f_single', parentId: 'tab_multi', type: 'leaf_field', label: 'Champ Solo', metadata: { subTab: 'Chauffage' }, order: 10 } as unknown;
     const nodes = [tabNode, multiField, soloField];
-    const result = transformNodesToTBLComplete(nodes as any, {});
+    const result = transformNodesToTBLComplete(nodes as unknown, {});
     const tab = result.tabs.find(x => x.id === 'tab_multi');
     expect(tab).toBeDefined();
     const tabKeys = (tab!.subTabs || []).map(st => st.key);

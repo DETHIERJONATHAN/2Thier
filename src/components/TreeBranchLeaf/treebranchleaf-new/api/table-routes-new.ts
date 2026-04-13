@@ -269,8 +269,8 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
         type: viewTable.type,
         meta: viewTable.meta,
         sourceTableId: viewTable.sourceTableId,
-        columns: sourceTable.tableColumns.map((c: any) => c.name),
-        rows: sourceTable.tableRows.map((r: any) => {
+        columns: sourceTable.tableColumns.map((c: Record<string, unknown>) => c.name),
+        rows: sourceTable.tableRows.map((r: Record<string, unknown>) => {
           const cells = r.cells;
           if (Array.isArray(cells)) return cells;
           if (typeof cells === 'string') {
@@ -339,7 +339,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
     };
 
     // PrÃƒÂ©parer les colonnes (col peut être null si sparse array côté client)
-    const tableColumnsData = columns.map((col: any, index: number) => {
+    const tableColumnsData = columns.map((col: unknown, index: number) => {
       const colName = typeof col === 'string' ? col : (col && col.name ? col.name : `Colonne ${index + 1}`);
       const colType = typeof col === 'object' && col !== null && col.type ? col.type : 'text';
       const colWidth = typeof col === 'object' && col !== null && col.width ? col.width : null;
@@ -454,7 +454,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
         // Aucun SelectConfig n'existe encore pour ce noeud
         // Si la table a une configuration de lookup, creer les SelectConfigs correspondants
         try {
-          const lookupMeta = (finalMeta as any)?.lookup;
+          const lookupMeta = (finalMeta as unknown)?.lookup;
           
           if (lookupMeta && (lookupMeta.enabled || lookupMeta.rowLookupEnabled || lookupMeta.columnLookupEnabled)) {
             
@@ -470,7 +470,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
                   data: {
                     id: randomUUID(),
                     nodeId: rowSourceField,
-                    options: [] as any,
+                    options: [] as unknown,
                     multiple: false,
                     searchable: true,
                     allowCustom: false,
@@ -508,7 +508,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
                   data: {
                     id: randomUUID(),
                     nodeId: colSourceField,
-                    options: [] as any,
+                    options: [] as unknown,
                     multiple: false,
                     searchable: true,
                     allowCustom: false,
@@ -544,7 +544,7 @@ router.post('/nodes/:nodeId/tables', async (req, res) => {
                 data: {
                   id: randomUUID(),
                   nodeId: nodeId,
-                  options: [] as any,
+                  options: [] as unknown,
                   multiple: false,
                   searchable: true,
                   allowCustom: false,
@@ -797,7 +797,7 @@ router.put('/tables/:id', async (req, res) => {
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: id } });
         
         if (columns.length > 0) {
-          const newColumnsData = columns.map((col: any, index: number) => ({
+          const newColumnsData = columns.map((col: unknown, index: number) => ({
             id: randomUUID(),
             tableId: id,
             columnIndex: index,
@@ -817,7 +817,7 @@ router.put('/tables/:id', async (req, res) => {
         
         if (rows.length > 0) {
           // Batch insert par lots de 1000
-          const allRowsData = rows.map((row: any, index: number) => ({
+          const allRowsData = rows.map((row: unknown, index: number) => ({
             id: randomUUID(),
             tableId: id,
             rowIndex: index,
@@ -1109,7 +1109,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       // 🔎 LOG MANUEL: Confirmation de persistance META
       try {
         const persistedMeta = typeof updatedTable.meta === 'string' ? JSON.parse(updatedTable.meta) : updatedTable.meta;
-        const lookup = (persistedMeta as any)?.lookup || {};
+        const lookup = (persistedMeta as unknown)?.lookup || {};
         const selectors = lookup?.selectors || {};
         // console.log('[MANUAL-SAVE][TABLE META] ✅ Persisté', {
         //   tableId,
@@ -1172,7 +1172,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       });
       // 🔗 Si vue, aussi mettre à jour les counts sur la table source
       if (effectiveDataTableId !== tableId) {
-        const srcUpdate: any = { updatedAt: new Date() };
+        const srcUpdate: unknown = { updatedAt: new Date() };
         if (Array.isArray(columns) && columns.length > 0) srcUpdate.columnCount = columns.length;
         if (Array.isArray(rows) && rows.length > 0) srcUpdate.rowCount = rows.length;
         await tx.treeBranchLeafNodeTable.update({ where: { id: effectiveDataTableId }, data: srcUpdate });
@@ -1185,7 +1185,7 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
       if (Array.isArray(columns) && columns.length > 0) {
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: effectiveDataTableId } });
         
-        const newColumnsData = columns.map((col: any, index: number) => ({
+        const newColumnsData = columns.map((col: unknown, index: number) => ({
           id: randomUUID(),
           tableId: effectiveDataTableId,
           columnIndex: index,
@@ -1205,8 +1205,8 @@ router.put('/nodes/:nodeId/tables/:tableId', async (req, res) => {
         
         // Batch insert par lots de 1000 (avec recombination rows + dataMatrix)
         const hasDataMatrix = Array.isArray(dataMatrix) && dataMatrix.length > 0;
-        const allRowsData = rows.map((rowLabel: any, index: number) => {
-          let cellsValue: any;
+        const allRowsData = rows.map((rowLabel: unknown, index: number) => {
+          let cellsValue: unknown;
           if (hasDataMatrix && Array.isArray(dataMatrix[index])) {
             const label = Array.isArray(rowLabel) ? rowLabel[0] : rowLabel;
             cellsValue = [label, ...dataMatrix[index]];
@@ -1413,7 +1413,7 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
     const viewSourceIds = [...new Set(
       allTables.filter(t => (t as any).sourceTableId).map(t => (t as any).sourceTableId as string)
     )];
-    const sourceTablesMap: Record<string, any> = {};
+    const sourceTablesMap: Record<string, unknown> = {};
     if (viewSourceIds.length > 0) {
       // D'abord chercher dans les tables déjà chargées
       for (const t of allTables) {
@@ -1447,8 +1447,8 @@ router.get('/nodes/:nodeId/tables', async (req, res) => {
         description: table.description,
         type: table.type,
         sourceTableId: srcId || null,
-        columns: resolvedTable.tableColumns.map((c: any) => c.name),
-        rows: resolvedTable.tableRows.map((r: any) => {
+        columns: resolvedTable.tableColumns.map((c: Record<string, unknown>) => c.name),
+        rows: resolvedTable.tableRows.map((r: Record<string, unknown>) => {
           const cells = r.cells;
           if (Array.isArray(cells)) return cells;
           if (typeof cells === 'string') {

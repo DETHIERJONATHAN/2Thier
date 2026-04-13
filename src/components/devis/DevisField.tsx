@@ -178,7 +178,7 @@ export const DevisField: React.FC<DevisFieldProps> = ({
         return (
           <DatePicker
             {...commonProps}
-            value={internalValue as any}
+            value={internalValue as unknown}
             onChange={handleChange}
             style={{ width: '100%', ...dynamicStyle }}
           />
@@ -255,7 +255,7 @@ export const DevisField: React.FC<DevisFieldProps> = ({
               
               {showAdvancedConfig ? (
                 <TableauConfigEditor
-                  value={internalValue as any}
+                  value={internalValue as unknown}
                   onChange={handleChange}
                   config={config.tableau}
                 />

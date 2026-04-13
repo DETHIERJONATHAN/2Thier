@@ -2,6 +2,7 @@ import { Router, Request, Response, type RequestHandler } from 'express';
 import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -44,7 +45,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     
     res.json(sectionsFormat);
   } catch (error) {
-    console.error('[SECTIONS→CATEGORIES] Erreur GET:', error);
+    logger.error('[SECTIONS→CATEGORIES] Erreur GET:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la récupération des sections'
@@ -59,7 +60,7 @@ router.post('/bulk', async (req: Request, res: Response): Promise<void> => {
     
     
     // Convertir sections → Categories pour Prisma
-    const categoriesToCreate = sections.map((section: any) => ({
+    const categoriesToCreate = sections.map((section: Record<string, unknown>) => ({
       name: section.title,
       description: section.description,
       icon: section.iconName,
@@ -94,7 +95,7 @@ router.post('/bulk', async (req: Request, res: Response): Promise<void> => {
     
     res.json(sectionsFormat);
   } catch (error) {
-    console.error('[SECTIONS→CATEGORIES] Erreur POST/bulk:', error);
+    logger.error('[SECTIONS→CATEGORIES] Erreur POST/bulk:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la création des sections'
@@ -138,7 +139,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     
     res.json({ success: true, data: sectionFormat });
   } catch (error) {
-    console.error('[SECTIONS→CATEGORIES] Erreur POST:', error);
+    logger.error('[SECTIONS→CATEGORIES] Erreur POST:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la création de la section'
@@ -154,7 +155,7 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
     
     
     // Convertir les champs sections → Categories si nécessaire
-    const categoryUpdateData: any = {};
+    const categoryUpdateData: unknown = {};
     if (updateData.title) categoryUpdateData.name = updateData.title;
     if (updateData.description !== undefined) categoryUpdateData.description = updateData.description;
     if (updateData.iconName) categoryUpdateData.icon = updateData.iconName;
@@ -184,7 +185,7 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
     
     res.json(sectionFormat);
   } catch (error) {
-    console.error('[SECTIONS→CATEGORIES] Erreur PATCH:', error);
+    logger.error('[SECTIONS→CATEGORIES] Erreur PATCH:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la mise à jour de la section'
@@ -205,7 +206,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
     
     res.json({ success: true });
   } catch (error) {
-    console.error('[SECTIONS→CATEGORIES] Erreur DELETE:', error);
+    logger.error('[SECTIONS→CATEGORIES] Erreur DELETE:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la suppression de la section'

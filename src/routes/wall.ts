@@ -7,6 +7,7 @@ import { uploadExpressFile } from '../lib/storage';
 import { sendPushToUser } from './push';
 import { moderateContent } from '../services/ai-moderation';
 import { REACTION_TYPE_VALUES } from '../constants/reactions';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -67,7 +68,7 @@ router.get('/feed', authenticateToken, async (req: Request, res: Response) => {
     const socialCtx = await getSocialContext(user.id, orgId, isSuperAdmin);
     
     // Client mode keeps its own specific logic
-    let where: any;
+    let where: unknown;
     if (user.role === 'client') {
       where = {
         isPublished: true,
@@ -145,7 +146,7 @@ router.get('/feed', authenticateToken, async (req: Request, res: Response) => {
       nextCursor: posts.length === take ? posts[posts.length - 1].createdAt.toISOString() : null,
     });
   } catch (error) {
-    console.error('[WALL] Erreur feed:', error);
+    logger.error('[WALL] Erreur feed:', error);
     res.status(500).json({ error: 'Erreur lors du chargement du fil' });
   }
 });
@@ -159,7 +160,7 @@ router.get('/my-feed', authenticateToken, async (req: Request, res: Response) =>
     const { cursor, limit = '20', mode } = req.query;
     const take = Math.min(parseInt(limit as string) || 20, 50);
 
-    const where: any = {
+    const where: unknown = {
       isPublished: true,
       authorId: user.id,
     };
@@ -221,7 +222,7 @@ router.get('/my-feed', authenticateToken, async (req: Request, res: Response) =>
       nextCursor: posts.length === take ? posts[posts.length - 1].createdAt.toISOString() : null,
     });
   } catch (error) {
-    console.error('[WALL] Erreur my-feed:', error);
+    logger.error('[WALL] Erreur my-feed:', error);
     res.status(500).json({ error: 'Erreur lors du chargement de votre mur' });
   }
 });
@@ -236,7 +237,7 @@ router.get('/client-feed/:leadId', authenticateToken, async (req: Request, res: 
     const { cursor, limit = '20' } = req.query;
     const take = Math.min(parseInt(limit as string) || 20, 50);
 
-    const where: any = {
+    const where: unknown = {
       isPublished: true,
       targetLeadId: leadId,
       visibility: 'CLIENT',
@@ -283,7 +284,7 @@ router.get('/client-feed/:leadId', authenticateToken, async (req: Request, res: 
       nextCursor: posts.length === take ? posts[posts.length - 1].createdAt.toISOString() : null,
     });
   } catch (error) {
-    console.error('[WALL] Erreur client-feed:', error);
+    logger.error('[WALL] Erreur client-feed:', error);
     res.status(500).json({ error: 'Erreur lors du chargement du mur client' });
   }
 });
@@ -348,7 +349,7 @@ router.post('/posts', authenticateToken, async (req: Request, res: Response) => 
           aiModerated = true;
         }
       } catch (modErr) {
-        console.error('[WALL] AI moderation error (non-blocking):', modErr);
+        logger.error('[WALL] AI moderation error (non-blocking):', modErr);
       }
     }
 
@@ -410,7 +411,7 @@ router.post('/posts', authenticateToken, async (req: Request, res: Response) => 
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Données invalides', details: error.errors });
     }
-    console.error('[WALL] Erreur création post:', error);
+    logger.error('[WALL] Erreur création post:', error);
     res.status(500).json({ error: 'Erreur lors de la création du post' });
   }
 });
@@ -435,7 +436,7 @@ router.delete('/posts/:id', authenticateToken, async (req: Request, res: Respons
 
     res.json({ success: true });
   } catch (error) {
-    console.error('[WALL] Erreur suppression post:', error);
+    logger.error('[WALL] Erreur suppression post:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression' });
   }
 });
@@ -507,7 +508,7 @@ router.post('/posts/:id/reactions', authenticateToken, async (req: Request, res:
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Type de réaction invalide' });
     }
-    console.error('[WALL] Erreur réaction:', error);
+    logger.error('[WALL] Erreur réaction:', error);
     res.status(500).json({ error: 'Erreur lors de la réaction' });
   }
 });
@@ -545,7 +546,7 @@ router.get('/posts/:id/comments', authenticateToken, async (req: Request, res: R
 
     res.json(comments);
   } catch (error) {
-    console.error('[WALL] Erreur commentaires:', error);
+    logger.error('[WALL] Erreur commentaires:', error);
     res.status(500).json({ error: 'Erreur lors du chargement des commentaires' });
   }
 });
@@ -575,7 +576,7 @@ router.post('/posts/:id/comments', authenticateToken, async (req: Request, res: 
 
     // ═══ AI Moderation on comments ═══
     if ((settings as any).moderationMode && (settings as any).moderationMode !== 'disabled') {
-      const modResult = await moderateContent(data.content, settings as any);
+      const modResult = await moderateContent(data.content, settings as unknown);
       if (modResult.flagged && (settings as any).moderationMode === 'ai_auto') {
         return res.status(422).json({
           error: 'Commentaire bloqué par la modération',
@@ -627,7 +628,7 @@ router.post('/posts/:id/comments', authenticateToken, async (req: Request, res: 
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Données invalides', details: error.errors });
     }
-    console.error('[WALL] Erreur commentaire:', error);
+    logger.error('[WALL] Erreur commentaire:', error);
     res.status(500).json({ error: 'Erreur lors de la création du commentaire' });
   }
 });
@@ -657,7 +658,7 @@ router.delete('/comments/:id', authenticateToken, async (req: Request, res: Resp
 
     res.json({ success: true });
   } catch (error) {
-    console.error('[WALL] Erreur suppression commentaire:', error);
+    logger.error('[WALL] Erreur suppression commentaire:', error);
     res.status(500).json({ error: 'Erreur lors de la suppression' });
   }
 });
@@ -694,7 +695,7 @@ router.post('/posts/:id/share', authenticateToken, async (req: Request, res: Res
 
     res.status(201).json(share);
   } catch (error) {
-    console.error('[WALL] Erreur partage:', error);
+    logger.error('[WALL] Erreur partage:', error);
     res.status(500).json({ error: 'Erreur lors du partage' });
   }
 });
@@ -718,7 +719,7 @@ router.get('/posts/:id/reactions', authenticateToken, async (req: Request, res: 
 
     res.json(reactions);
   } catch (error) {
-    console.error('[WALL] Erreur liste réactions:', error);
+    logger.error('[WALL] Erreur liste réactions:', error);
     res.status(500).json({ error: 'Erreur lors du chargement des réactions' });
   }
 });
@@ -742,7 +743,7 @@ router.get('/posts/:id/shares', authenticateToken, async (req: Request, res: Res
 
     res.json(shares);
   } catch (error) {
-    console.error('[WALL] Erreur liste partages:', error);
+    logger.error('[WALL] Erreur liste partages:', error);
     res.status(500).json({ error: 'Erreur lors du chargement des partages' });
   }
 });
@@ -764,7 +765,7 @@ router.get('/stats', authenticateToken, async (req: Request, res: Response) => {
 
     res.json({ totalPosts, totalReactions, totalComments, totalShares });
   } catch (error) {
-    console.error('[WALL] Erreur stats:', error);
+    logger.error('[WALL] Erreur stats:', error);
     res.status(500).json({ error: 'Erreur lors du chargement des stats' });
   }
 });
@@ -817,7 +818,7 @@ router.post('/upload', authenticateToken, async (req: Request, res: Response) =>
 
     res.json({ urls });
   } catch (error) {
-    console.error('[WALL] Erreur upload:', error);
+    logger.error('[WALL] Erreur upload:', error);
     res.status(500).json({ error: 'Erreur upload' });
   }
 });

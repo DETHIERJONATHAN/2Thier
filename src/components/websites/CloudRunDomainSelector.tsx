@@ -23,7 +23,7 @@ interface CloudRunDomainSelectorProps {
     cloudRunServiceName?: string;
     cloudRunRegion?: string;
   };
-  onChange?: (value: any) => void;
+  onChange?: (value: unknown) => void;
   disabled?: boolean;
 }
 

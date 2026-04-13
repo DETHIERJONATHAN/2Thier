@@ -232,7 +232,7 @@ export const getMe = async (req: Request, res: Response) => {
     const organizations = user.UserOrganization.map(uo => ({
       id: uo.Organization.id,
       name: uo.Organization.name,
-      logoUrl: (uo.Organization as any).logoUrl || null,
+      logoUrl: (uo.Organization as unknown).logoUrl || null,
       status: uo.status,
       role: uo.Role.name,
       roleLabel: uo.Role.label,

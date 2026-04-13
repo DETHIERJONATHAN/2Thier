@@ -4,6 +4,7 @@ import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { getGeminiService } from '../services/GoogleGeminiService';
 import { sendPushToUser } from './push';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -36,13 +37,13 @@ router.post('/:id/leave-beacon', async (req: Request, res: Response): Promise<vo
 
     res.json({ success: true });
   } catch (err) {
-    console.error('[CALLS] Beacon leave error:', err);
+    logger.error('[CALLS] Beacon leave error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
 // All routes below require authentication
-router.use(authenticateToken as any);
+router.use(authenticateToken as unknown);
 
 // ═══════════════════════════════════════════════════════════════
 // GET /calls/ice-servers — Return TURN credentials for WebRTC
@@ -54,7 +55,7 @@ router.get('/ice-servers', async (_req: Request, res: Response): Promise<void> =
     const turnUser = process.env.TURN_USERNAME;
     const turnCred = process.env.TURN_CREDENTIAL;
 
-    const iceServers: any[] = [
+    const iceServers: unknown[] = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
     ];
@@ -82,7 +83,7 @@ router.get('/ice-servers', async (_req: Request, res: Response): Promise<void> =
 
     res.json({ iceServers });
   } catch (err) {
-    console.error('[CALLS] Error generating ICE servers:', err);
+    logger.error('[CALLS] Error generating ICE servers:', err);
     res.json({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
   }
 });
@@ -169,12 +170,12 @@ router.post('/start', async (req: Request, res: Response): Promise<void> => {
           { action: 'answer', title: '✅ Répondre' },
           { action: 'reject', title: '❌ Refuser' },
         ],
-      }).catch(err => console.warn('[CALLS] Push notification error:', err));
+      }).catch(err => logger.warn('[CALLS] Push notification error:', err));
     }
 
     res.json({ call, existing: false });
   } catch (err) {
-    console.error('[CALLS] Error starting call:', err);
+    logger.error('[CALLS] Error starting call:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -209,7 +210,7 @@ router.post('/:id/join', async (req: Request, res: Response): Promise<void> => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('[CALLS] Error joining call:', err);
+    logger.error('[CALLS] Error joining call:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -294,7 +295,7 @@ router.post('/:id/leave', async (req: Request, res: Response): Promise<void> => 
       res.json({ success: true, callEnded: false });
     }
   } catch (err) {
-    console.error('[CALLS] Error leaving call:', err);
+    logger.error('[CALLS] Error leaving call:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -331,7 +332,7 @@ router.post('/:id/reject', async (req: Request, res: Response): Promise<void> =>
 
     res.json({ success: true });
   } catch (err) {
-    console.error('[CALLS] Error rejecting call:', err);
+    logger.error('[CALLS] Error rejecting call:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -357,7 +358,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     if (!call) { res.status(404).json({ error: 'Appel non trouvé' }); return; }
     res.json(call);
   } catch (err) {
-    console.error('[CALLS] Error fetching call:', err);
+    logger.error('[CALLS] Error fetching call:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -390,7 +391,7 @@ router.get('/check/incoming', async (req: Request, res: Response): Promise<void>
 
     res.json({ incoming: incoming?.call || null });
   } catch (err) {
-    console.error('[CALLS] Error checking incoming:', err);
+    logger.error('[CALLS] Error checking incoming:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -400,7 +401,7 @@ router.get('/check/incoming', async (req: Request, res: Response): Promise<void>
 // ═══════════════════════════════════════════════════════════════
 
 // Simple in-memory signaling buffer (works for single-server deployment)
-const signalingBuffer = new Map<string, Array<{ from: string; to: string; type: string; data: any; ts: number }>>();
+const signalingBuffer = new Map<string, Array<{ from: string; to: string; type: string; data: unknown; ts: number }>>();
 
 // Cleanup completed calls from signaling buffer periodically (every 60s)
 setInterval(() => {
@@ -506,7 +507,7 @@ Sois concis et professionnel.`;
 
     res.json({ success: true, summary });
   } catch (err) {
-    console.error('[CALLS] Error transcribing:', err);
+    logger.error('[CALLS] Error transcribing:', err);
     res.status(500).json({ error: 'Erreur lors de la transcription' });
   }
 });
@@ -536,7 +537,7 @@ router.get('/history/list', async (req: Request, res: Response): Promise<void> =
 
     res.json(calls);
   } catch (err) {
-    console.error('[CALLS] Error fetching history:', err);
+    logger.error('[CALLS] Error fetching history:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -588,7 +589,7 @@ setInterval(async () => {
       }
     }
   } catch (err) {
-    console.error('[CALLS] Ghost cleanup error:', err);
+    logger.error('[CALLS] Ghost cleanup error:', err);
   }
 }, 60_000);
 

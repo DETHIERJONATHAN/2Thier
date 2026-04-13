@@ -35,8 +35,8 @@ interface HeroButtonConfig {
   emailAddress?: string;
   simulatorSlug?: string;
   href?: string;
-  icon?: any;
-  style?: Record<string, any> | null;
+  icon?: unknown;
+  style?: Record<string, unknown> | null;
 }
 
 interface NormalizedHeroButton {
@@ -45,15 +45,15 @@ interface NormalizedHeroButton {
   target?: string;
   rel?: string;
   actionType: HeroActionType;
-  icon?: any;
-  style?: Record<string, any> | null;
+  icon?: unknown;
+  style?: Record<string, unknown> | null;
   formId?: string;
   anchor?: string;
   simulatorSlug?: string;
 }
 
 interface HeroRendererProps {
-  content: any;
+  content: unknown;
   mode: 'preview' | 'edit';
 }
 
@@ -111,7 +111,7 @@ const determineHeroAction = (button: HeroButtonConfig, legacyHref?: string): Her
   return 'contact-form';
 };
 
-const normalizeHeroButton = (button: any): NormalizedHeroButton | null => {
+const normalizeHeroButton = (button: unknown): NormalizedHeroButton | null => {
   if (!button) return null;
 
   const text = button.text || button.label || '';

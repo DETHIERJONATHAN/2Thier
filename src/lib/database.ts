@@ -188,6 +188,7 @@ export async function connectDatabase(): Promise<void> {
  * 🎯 INSTANCE PRINCIPALE DE LA BASE DE DONNÉES
  * 
  * C'est LA seule instance à utiliser dans toute l'application.
+ * Uses $extends to auto-limit findMany calls without explicit `take`.
  * 
  * @example
  * ```typescript
@@ -201,7 +202,25 @@ export async function connectDatabase(): Promise<void> {
  * await db.$transaction([...]);
  * ```
  */
-export const db = createPrismaInstance();
+
+/** Maximum default take for findMany auto-limit via $extends */
+const MAX_DEFAULT_TAKE = 1000;
+
+const _basePrisma = createPrismaInstance();
+
+// $extends: auto-limit findMany calls that don't specify a `take` param
+export const db = _basePrisma.$extends({
+  query: {
+    $allModels: {
+      async findMany({ args, query }: { args: Record<string, unknown>; query: (args: Record<string, unknown>) => Promise<unknown> }) {
+        if (args.take === undefined) {
+          args.take = MAX_DEFAULT_TAKE;
+        }
+        return query(args);
+      },
+    },
+  },
+}) as unknown as typeof _basePrisma;
 
 /**
  * Alias pour compatibilité avec l'ancien code

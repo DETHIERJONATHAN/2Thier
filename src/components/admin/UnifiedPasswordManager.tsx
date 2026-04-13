@@ -42,7 +42,7 @@ const UnifiedPasswordModal: React.FC<UnifiedPasswordModalProps> = ({ open, onClo
       message.success('Le mot de passe unifié a été configuré avec succès');
       onClose();
       form.resetFields();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err.response?.data?.error || err.message || 'Une erreur est survenue');
     } finally {
       setLoading(false);
@@ -128,7 +128,7 @@ const UnifiedPasswordManager: React.FC = () => {
         setUsers([]);
         message.error("Format de données incorrect reçu du serveur");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Erreur lors du chargement des utilisateurs:", err);
       message.error(
         err.response?.data?.error || err.message || 'Une erreur est survenue lors du chargement des utilisateurs'
@@ -143,7 +143,7 @@ const UnifiedPasswordManager: React.FC = () => {
   }, []);
 
   // Ouvrir le modal pour définir un mot de passe unifié
-  const handleOpenModal = (user: any) => {
+  const handleOpenModal = (user: unknown) => {
     setSelectedUser(user);
     setModalOpen(true);
   };
@@ -161,7 +161,7 @@ const UnifiedPasswordManager: React.FC = () => {
       title: 'Utilisateur',
       dataIndex: 'name',
       key: 'name',
-      render: (_: string, record: any) => (
+      render: (_: string, record: unknown) => (
         <Space>
           <UserOutlined />
           <Text strong>{`${record.firstName || ''} ${record.lastName || ''}`}</Text>
@@ -176,7 +176,7 @@ const UnifiedPasswordManager: React.FC = () => {
     {
       title: 'Mail',
       key: 'mail',
-      render: (record: any) => (
+      render: (record: unknown) => (
         <Tag color={record.hasMailSettings ? 'success' : 'default'} icon={<MailOutlined />}>
           {record.hasMailSettings ? 'Configuré' : 'Non configuré'}
         </Tag>
@@ -185,7 +185,7 @@ const UnifiedPasswordManager: React.FC = () => {
     {
       title: 'Google Voice',
       key: 'googlevoice',
-      render: (record: any) => (
+      render: (record: unknown) => (
         <Tag color={record.hasTelnyxSettings ? 'success' : 'default'} icon={<PhoneOutlined />}>
           {record.hasTelnyxSettings ? 'Configuré' : 'Non configuré'}
         </Tag>
@@ -194,7 +194,7 @@ const UnifiedPasswordManager: React.FC = () => {
     {
       title: 'Statut',
       key: 'status',
-      render: (record: any) => (
+      render: (record: unknown) => (
         <Tag color={record.isUnified ? 'processing' : 'warning'}>
           {record.isUnified ? 'Unifié' : 'Non unifié'}
         </Tag>
@@ -203,7 +203,7 @@ const UnifiedPasswordManager: React.FC = () => {
     {
       title: 'Actions',
       key: 'action',
-      render: (record: any) => (
+      render: (record: unknown) => (
         <Button 
           type="primary" 
           onClick={() => handleOpenModal(record)}

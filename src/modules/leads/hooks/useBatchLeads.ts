@@ -52,7 +52,7 @@ export const useBatchLeads = (): UseBatchLeadsReturn => {
       
       message.success(result.message || `${result.count} lead(s) mis à jour`);
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[BatchLeads] ❌ Erreur updateStatus:', error);
       message.error(error.response?.data?.error || 'Erreur lors de la mise à jour');
       return null;
@@ -82,7 +82,7 @@ export const useBatchLeads = (): UseBatchLeadsReturn => {
       
       message.success(result.message || `${result.count} lead(s) assigné(s)`);
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[BatchLeads] ❌ Erreur assignTo:', error);
       message.error(error.response?.data?.error || 'Erreur lors de l\'assignation');
       return null;
@@ -110,7 +110,7 @@ export const useBatchLeads = (): UseBatchLeadsReturn => {
       
       message.success(result.message || `${result.count} lead(s) supprimé(s)`);
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[BatchLeads] ❌ Erreur deleteMany:', error);
       message.error(error.response?.data?.error || 'Erreur lors de la suppression');
       return null;

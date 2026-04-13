@@ -83,9 +83,20 @@ import {
   timingAttackProtection,
   advancedRateLimit,
   authRateLimit,
+  aiRateLimit,
+  uploadRateLimit,
   anomalyDetection,
-  inputSanitization
+  inputSanitization,
+  sqlInjectionDetection
 } from './security/securityMiddleware';
+
+// 🛡️ Console suppression en production
+if (process.env.NODE_ENV === 'production') {
+  const noop = () => {};
+  console.log = noop;
+  console.debug = noop;
+  console.info = noop;
+}
 
 // 🎯 LOG IMMÉDIAT - Confirme que le fichier est chargé par Node.js
 console.log('🎬 [BOOTSTRAP] api-server-clean.cjs loaded at', new Date().toISOString());
@@ -166,7 +177,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com", "https:"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "maps.googleapis.com", "*.googleapis.com"],
+      scriptSrc: ["'self'", "'nonce-{RANDOM}'", "maps.googleapis.com", "*.googleapis.com"],
       fontSrc: ["'self'", "fonts.gstatic.com", "data:"],
       imgSrc: ["'self'", "data:", "https:", "blob:", "maps.gstatic.com", "*.googleapis.com", "*.ggpht.com"],
       connectSrc: ["'self'", "https:", "wss:", "maps.googleapis.com", "*.googleapis.com"],
@@ -198,6 +209,10 @@ app.use(advancedRateLimit);
 
 // 🛡️ SÉCURITÉ NIVEAU 4 - DÉTECTION D'ANOMALIES
 app.use(anomalyDetection);
+
+// 🛡️ SÉCURITÉ NIVEAU 5 - DÉTECTION SQL INJECTION + INPUT SANITIZATION
+app.use(sqlInjectionDetection);
+app.use(inputSanitization);
 
 // ⚡ Configuration CORS sécurisée (Google Cloud Run + domaines 2thier.be + GitHub Codespaces)
 const FRONTEND_URL = process.env.FRONTEND_URL;
@@ -559,7 +574,7 @@ if (process.env.NODE_ENV === 'production') {
     
     // 🌐 RENDU DES SITES VITRINES OU FALLBACK CRM
     // Cette route attrape TOUT ce qui n'est pas /api/ ou /assets/
-    app.get(/^(?!\/api\/|\/assets\/).*/, (req: any, res, _next) => {
+    app.get(/^(?!\/api\/|\/assets\/).*/, (req: unknown, res, _next) => {
       // � SI UN SITE VITRINE A ÉTÉ DÉTECTÉ, LE RENDRE EN SSR
       if (req.isWebsiteRoute === true && req.websiteData) {
         console.log(`🎨 [WEBSITE-RENDER] Rendu SSR pour: ${req.websiteData.name} (${req.hostname})`);
@@ -781,8 +796,35 @@ async function startServer() {
   }
 }
 
+// �️ GRACEFUL SHUTDOWN — CSRF origin checking is handled by CORS middleware above
+async function gracefulShutdown(signal: string) {
+  console.log(`\n🛑 [SHUTDOWN] Signal ${signal} reçu. Fermeture propre en cours...`);
+  try {
+    if (globalServer) {
+      globalServer.close(() => console.log('✅ [SHUTDOWN] Serveur HTTP fermé (plus de nouvelles connexions)'));
+    }
+    const { db } = await import('./lib/database');
+    await db.$disconnect();
+    console.log('✅ [SHUTDOWN] Connexion base de données fermée');
+    console.log('👋 [SHUTDOWN] Arrêt propre terminé.');
+    process.exit(0);
+  } catch (err) {
+    console.error('❌ [SHUTDOWN] Erreur:', err);
+    process.exit(1);
+  }
+}
+
+let globalServer: ReturnType<typeof import('http').createServer> | null = null;
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('uncaughtException', (err) => {
+  console.error('💥 [UNCAUGHT] Exception non gérée:', err);
+  gracefulShutdown('uncaughtException');
+});
+
 // 🚀 Lancement du serveur
-startServer().catch(err => {
+startServer().then(server => { globalServer = server; }).catch(err => {
   console.error('❌ [FATAL] Impossible de démarrer le serveur:', err);
   process.exit(1);
 });

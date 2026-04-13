@@ -85,7 +85,7 @@ const demoTree = [
 // Composant de démonstration
 const GenealogyExplorerDemo: React.FC<{ fieldId: string }> = ({ fieldId }) => {
   const [activeTab, setActiveTab] = useState('admin');
-  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">

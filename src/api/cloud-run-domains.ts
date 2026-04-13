@@ -53,7 +53,7 @@ router.get('/cloud-run-domains', authenticateToken, async (req: Request, res: Re
       count: mappedDomains.length
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ [CloudRunDomains] Erreur:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des domaines Cloud Run',
@@ -92,7 +92,7 @@ router.post('/cloud-run-domains/verify', authenticateToken, async (req: Request,
       verifiedAt: new Date().toISOString()
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ [CloudRunDomains] Erreur vérification:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la vérification du domaine',

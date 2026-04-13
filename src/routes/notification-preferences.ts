@@ -12,6 +12,7 @@ import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -86,7 +87,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 
     res.json(prefs);
   } catch (error) {
-    console.error('[NOTIF-PREFS] Error fetching:', error);
+    logger.error('[NOTIF-PREFS] Error fetching:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -115,7 +116,7 @@ router.put('/', authenticateToken, async (req: Request, res: Response) => {
 
     res.json(prefs);
   } catch (error) {
-    console.error('[NOTIF-PREFS] Error updating:', error);
+    logger.error('[NOTIF-PREFS] Error updating:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

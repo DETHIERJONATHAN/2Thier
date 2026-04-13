@@ -13,7 +13,7 @@ interface ReceptionData {
   id: string;
   status: string;
   checklist: Array<{ nodeId?: string; label: string; expectedValue?: string; checked: boolean; note?: string }>;
-  workSummary: any;
+  workSummary: unknown;
   satisfactionQuestions: Array<{ id: string; question: string; type: string }>;
   legalText: string;
   clientName: string;
@@ -35,7 +35,7 @@ const ReceptionPage: React.FC = () => {
   // État du formulaire
   const [checklist, setChecklist] = useState<ReceptionData['checklist']>([]);
   const [clientName, setClientName] = useState('');
-  const [satisfactionAnswers, setSatisfactionAnswers] = useState<Array<{ id: string; question: string; answer: any; rating?: number }>>([]);
+  const [satisfactionAnswers, setSatisfactionAnswers] = useState<Array<{ id: string; question: string; answer: unknown; rating?: number }>>([]);
   const [reserves, setReserves] = useState<Array<{ description: string; severity: 'minor' | 'major' | 'critical' }>>([]);
   const [newReserve, setNewReserve] = useState('');
   const [legalAccepted, setLegalAccepted] = useState(false);
@@ -63,7 +63,7 @@ const ReceptionPage: React.FC = () => {
           setChecklist(d.checklist || []);
           setClientName(d.clientName || '');
           setSatisfactionAnswers(
-            (d.satisfactionQuestions || []).map((q: any) => ({
+            (d.satisfactionQuestions || []).map((q: Record<string, unknown>) => ({
               id: q.id,
               question: q.question,
               answer: q.type === 'boolean' ? null : q.type === 'rating' ? 0 : '',

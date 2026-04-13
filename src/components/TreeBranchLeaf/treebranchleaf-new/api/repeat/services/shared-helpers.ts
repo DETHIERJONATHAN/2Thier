@@ -190,7 +190,7 @@ export async function removeFromNodeLinkedField(
   await setNodeLinkedField(client, nodeId, field, next);
 }
 
-export function buildResponseFromColumns(node: any): Record<string, unknown> {
+export function buildResponseFromColumns(node: unknown): Record<string, unknown> {
   type LegacyRepeaterMeta = {
     templateNodeIds?: unknown;
     templateNodeLabels?: unknown;
@@ -275,7 +275,7 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
     helpTooltipType: node.text_helpTooltipType || 'none',
     helpTooltipText: node.text_helpTooltipText || null,
     helpTooltipImage: node.text_helpTooltipImage || null,
-    displayIcon: (storedAppearanceConfig as any)?.displayIcon || (metadataAppearance as any)?.displayIcon
+    displayIcon: (storedAppearanceConfig as unknown)?.displayIcon || (metadataAppearance as unknown)?.displayIcon
   };
 
   const fieldConfig = {
@@ -422,7 +422,7 @@ export function buildResponseFromColumns(node: any): Record<string, unknown> {
   } as Record<string, unknown>;
 
   try {
-    const legacyMetaCaps = (node.metadata && typeof node.metadata === 'object') ? (node.metadata as any).capabilities : undefined;
+    const legacyMetaCaps = (node.metadata && typeof node.metadata === 'object') ? (node.metadata as unknown).capabilities : undefined;
 
     const buildInstances = (raw: unknown): Record<string, unknown> | undefined => {
       if (!raw) return undefined;

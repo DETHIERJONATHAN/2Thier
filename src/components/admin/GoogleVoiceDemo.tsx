@@ -38,7 +38,7 @@ const GoogleVoiceDemo: React.FC = () => {
       } else {
         message.error(`❌ Échec: ${response.message}`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.destroy();
       console.error('Erreur test connexion:', error);
       message.error('❌ Erreur lors du test de connexion');
@@ -47,7 +47,7 @@ const GoogleVoiceDemo: React.FC = () => {
     }
   };
 
-  const handleInitializeUser = async (values: any) => {
+  const handleInitializeUser = async (values: unknown) => {
     try {
       setLoading(true);
       message.loading('Initialisation Google Voice...', 0);
@@ -61,7 +61,7 @@ const GoogleVoiceDemo: React.FC = () => {
       message.success(`✅ Google Voice initialisé pour ${values.userEmail}`);
       message.info(`📞 Numéro attribué: ${response.voiceUser?.phoneNumber || 'En cours...'}`);
       form.resetFields();
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.destroy();
       console.error('Erreur initialisation:', error);
       message.error(`❌ ${error.response?.data?.error || 'Erreur lors de l\'initialisation'}`);
@@ -82,7 +82,7 @@ const GoogleVoiceDemo: React.FC = () => {
       
       message.destroy();
       message.success(`📞 Appel de test initié - ID: ${response.callRecord?.id}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.destroy();
       console.error('Erreur appel:', error);
       message.error('❌ Erreur lors de l\'appel de test');
@@ -104,7 +104,7 @@ const GoogleVoiceDemo: React.FC = () => {
       
       message.destroy();
       message.success(`💬 SMS de test envoyé - ID: ${response.smsMessage?.id}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.destroy();
       console.error('Erreur SMS:', error);
       message.error('❌ Erreur lors du SMS de test');

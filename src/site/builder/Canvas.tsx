@@ -222,7 +222,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   /**
    * 🔄 GESTION DU DRAG END
    */
-  const handleDragEnd = (event: any) => {
+  const handleDragEnd = (event: unknown) => {
     const { active, over } = event;
 
     if (!active || !over || active.id === over.id) {

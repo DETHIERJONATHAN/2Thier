@@ -20,6 +20,7 @@ import { decrypt } from '../utils/crypto';
 import QRCode from 'qrcode';
 import { notify } from '../services/NotificationHelper';
 import { uploadFile } from '../lib/storage';
+import { logger } from '../lib/logger';
 
 /**
  * Envoyer un SMS via Telnyx (usage interne, pas besoin d'auth HTTP)
@@ -35,7 +36,7 @@ async function sendSmsInternal(organizationId: string, to: string, text: string)
       try { apiKey = decrypt(config.encryptedApiKey).trim(); } catch { /* use env */ }
     }
     if (!apiKey) {
-      console.warn('⚠️ [SMS] Pas de clé API Telnyx configurée');
+      logger.warn('⚠️ [SMS] Pas de clé API Telnyx configurée');
       return false;
     }
     apiKey = apiKey.replace(/^Bearer\s+/i, '').trim();
@@ -47,7 +48,7 @@ async function sendSmsInternal(organizationId: string, to: string, text: string)
     
     const fromNumber = phoneNumber?.phoneNumber || process.env.TELNYX_FROM_NUMBER;
     if (!fromNumber) {
-      console.warn('⚠️ [SMS] Pas de numéro Telnyx configuré pour l\'envoi');
+      logger.warn('⚠️ [SMS] Pas de numéro Telnyx configuré pour l\'envoi');
       return false;
     }
 
@@ -67,7 +68,7 @@ async function sendSmsInternal(organizationId: string, to: string, text: string)
 
     return true;
   } catch (error) {
-    console.error('❌ [SMS] Échec envoi:', error instanceof Error ? error.message : error);
+    logger.error('❌ [SMS] Échec envoi:', error instanceof Error ? error.message : error);
     return false;
   }
 }
@@ -118,9 +119,9 @@ router.get('/:slug', async (req: Request, res: Response) => {
     
     // Retourner uniquement les données nécessaires pour le rendu public
     // Organiser les champs en hiérarchie (parents avec childFields)
-    const organizeFieldsHierarchy = (fields: any[]) => {
+    const organizeFieldsHierarchy = (fields: unknown[]) => {
       const fieldMap = new Map();
-      const rootFields: any[] = [];
+      const rootFields: unknown[] = [];
       
       // Créer un map de tous les champs
       fields.forEach(field => {
@@ -145,7 +146,7 @@ router.get('/:slug', async (req: Request, res: Response) => {
       // Trier childFields par order
       rootFields.forEach(field => {
         if (field.childFields) {
-          field.childFields.sort((a: any, b: any) => a.order - b.order);
+          field.childFields.sort((a: unknown, b: unknown) => a.order - b.order);
         }
       });
       
@@ -160,7 +161,7 @@ router.get('/:slug', async (req: Request, res: Response) => {
       settings: form.settings,
       successTitle: form.successTitle,
       successMessage: form.successMessage,
-      submitButtonText: (form.settings as any)?.submitButtonText || 'Envoyer',
+      submitButtonText: (form.settings as unknown)?.submitButtonText || 'Envoyer',
       organizationId: form.organizationId,
       organizationName: form.Organization.name,
       steps: form.steps.map(step => ({
@@ -168,7 +169,7 @@ router.get('/:slug', async (req: Request, res: Response) => {
         order: step.order,
         title: step.title,
         description: step.subtitle,
-        icon: (step.settings as any)?.icon || '',
+        icon: (step.settings as unknown)?.icon || '',
         helpText: step.helpText,
         stepType: step.stepType,
         isRequired: step.isRequired,
@@ -198,7 +199,7 @@ router.get('/:slug', async (req: Request, res: Response) => {
       }))
     });
   } catch (error) {
-    console.error('❌ [PublicForms] Error fetching form:', error);
+    logger.error('❌ [PublicForms] Error fetching form:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération du formulaire',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -273,7 +274,7 @@ router.get('/:slug/questions', async (req: Request, res: Response) => {
       }))
     });
   } catch (error) {
-    console.error('❌ [PublicForms] Error fetching form questions:', error);
+    logger.error('❌ [PublicForms] Error fetching form questions:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération du formulaire',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -361,7 +362,7 @@ router.get('/by-website/:websiteSlug', async (req: Request, res: Response) => {
       }))
     });
   } catch (error) {
-    console.error('❌ [PublicForms] Error fetching form by website:', error);
+    logger.error('❌ [PublicForms] Error fetching form by website:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération du formulaire',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -517,7 +518,7 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
           if (referringUser) {
             assignedToId = referringUser.id;
           } else {
-            console.warn(`⚠️ [PublicForms] Commercial non trouvé pour le slug: ${referredBy}`);
+            logger.warn(`⚠️ [PublicForms] Commercial non trouvé pour le slug: ${referredBy}`);
           }
         }
         
@@ -640,11 +641,11 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
               } else {
               }
             } else {
-              console.warn(`⚠️ [PublicForms] Impossible de créer l'invitation: rôle "${roleName}" ou admin non trouvé`);
+              logger.warn(`⚠️ [PublicForms] Impossible de créer l'invitation: rôle "${roleName}" ou admin non trouvé`);
             }
           }
         } catch (inviteError) {
-          console.error('⚠️ [PublicForms] Auto-invitation failed (non-blocking):', inviteError);
+          logger.error('⚠️ [PublicForms] Auto-invitation failed (non-blocking):', inviteError);
         }
       }
     }
@@ -792,7 +793,7 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
           civility: normalizedContact.civility
         },
         answers: formData || {},
-        questions: ((form as any).questions || []).map((q: any) => ({
+        questions: ((form as any).questions || []).map((q: Record<string, unknown>) => ({
           questionKey: q.questionKey,
           title: q.title,
           subtitle: q.subtitle,
@@ -827,12 +828,12 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
       }
       
     } catch (pdfError) {
-      console.error('⚠️ [PublicForms] PDF generation failed (non-blocking):', pdfError);
+      logger.error('⚠️ [PublicForms] PDF generation failed (non-blocking):', pdfError);
       // Ne pas bloquer la soumission si le PDF échoue
     }
     
     // 9. 📱 SMS de confirmation (pour le formulaire réunion)
-    if (form.settings && typeof form.settings === 'object' && (form.settings as any).smsConfirmation && normalizedContact.phone) {
+    if (form.settings && typeof form.settings === 'object' && (form.settings as unknown).smsConfirmation && normalizedContact.phone) {
       try {
         // Extraire la date de réunion choisie depuis les formData
         const reunionDate = formData?.reunion || formData?.Réunion || 
@@ -853,7 +854,7 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
         
         await sendSmsInternal(form.organizationId, normalizedContact.phone, smsText);
       } catch (smsError) {
-        console.error('⚠️ [PublicForms] SMS confirmation failed (non-blocking):', smsError);
+        logger.error('⚠️ [PublicForms] SMS confirmation failed (non-blocking):', smsError);
       }
     }
     
@@ -883,7 +884,7 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
     });
     
   } catch (error) {
-    console.error('❌ [PublicForms] Error submitting form:', error);
+    logger.error('❌ [PublicForms] Error submitting form:', error);
     
     // Enregistrer l'erreur si possible
     try {
@@ -901,7 +902,7 @@ router.post('/:slug/submit', async (req: Request, res: Response) => {
         });
       }
     } catch (e) {
-      console.error('❌ [PublicForms] Failed to log error submission:', e);
+      logger.error('❌ [PublicForms] Failed to log error submission:', e);
     }
     
     res.status(500).json({ 
@@ -944,7 +945,7 @@ router.post('/:slug/partial', async (req: Request, res: Response) => {
     
     res.json({ success: true, message: 'Progression sauvegardée' });
   } catch (error) {
-    console.error('❌ [PublicForms] Error saving partial:', error);
+    logger.error('❌ [PublicForms] Error saving partial:', error);
     res.status(500).json({ error: 'Erreur' });
   }
 });
@@ -981,7 +982,7 @@ router.get('/:slug/qrcode', async (req: Request, res: Response) => {
     res.setHeader('Content-Disposition', `inline; filename="qr-${slug}.png"`);
     return res.send(buffer);
   } catch (error) {
-    console.error('❌ [PublicForms] QR code error:', error);
+    logger.error('❌ [PublicForms] QR code error:', error);
     res.status(500).json({ error: 'Erreur génération QR code' });
   }
 });

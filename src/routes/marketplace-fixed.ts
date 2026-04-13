@@ -4,6 +4,7 @@ import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.j
 import { requireRole } from '../middlewares/requireRole.js';
 import { prisma } from '../lib/prisma';
 import rateLimit from 'express-rate-limit';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -147,7 +148,7 @@ router.get('/leads', requireRole(['admin', 'super_admin']), async (req: Authenti
     });
 
   } catch (error) {
-    console.error('❌ [MARKETPLACE] Erreur récupération leads:', error);
+    logger.error('❌ [MARKETPLACE] Erreur récupération leads:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la récupération des leads marketplace',
@@ -211,7 +212,7 @@ router.get('/stats', requireRole(['admin', 'super_admin']), async (req: Authenti
     });
 
   } catch (error) {
-    console.error('❌ [MARKETPLACE] Erreur stats:', error);
+    logger.error('❌ [MARKETPLACE] Erreur stats:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la récupération des statistiques',
@@ -239,7 +240,7 @@ router.get('/saved-searches', requireRole(['admin', 'super_admin']), async (req:
     });
 
   } catch (error) {
-    console.error('❌ [MARKETPLACE] Erreur recherches sauvegardées:', error);
+    logger.error('❌ [MARKETPLACE] Erreur recherches sauvegardées:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la récupération des recherches sauvegardées',
@@ -287,7 +288,7 @@ router.post('/purchase/:leadId', requireRole(['admin', 'super_admin']), async (r
     });
 
   } catch (error) {
-    console.error('❌ [MARKETPLACE] Erreur achat lead:', error);
+    logger.error('❌ [MARKETPLACE] Erreur achat lead:', error);
     res.status(500).json({ 
       success: false, 
       message: error instanceof Error ? error.message : 'Erreur lors de l\'achat du lead',

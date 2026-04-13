@@ -105,7 +105,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         }
 
         onSuccess?.(data);
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Erreur upload:', error);
         message.error(error.message || 'Échec de l\'upload');
         onError?.(error);

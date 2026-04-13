@@ -329,7 +329,7 @@ const PeppolSettings: React.FC = () => {
         }
       } else {
         // Cas 409 : enregistré ailleurs
-        const data = (result as any)?.data;
+        const data = (result as unknown)?.data;
         if (data?.registrationStatus === 'MIGRATION_PENDING') {
           setConfig(prev => ({ ...prev, registrationStatus: 'MIGRATION_PENDING' }));
           setRegisteredAt(data.registeredAt || null);
@@ -339,7 +339,7 @@ const PeppolSettings: React.FC = () => {
         }
       }
     } catch (error) {
-      const err = error as any;
+      const err = error as unknown;
       // Intercepter les erreurs 409 du fetch
       if (err?.response?.status === 409 || err?.data?.data?.registrationStatus === 'MIGRATION_PENDING') {
         const data = err?.data?.data || err?.response?.data?.data;

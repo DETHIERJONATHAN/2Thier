@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -105,7 +106,7 @@ router.get('/', async (req, res) => {
     res.json(projects);
 
   } catch (error) {
-    console.error('[PROJECTS] Erreur lors de la récupération des projets:', error);
+    logger.error('[PROJECTS] Erreur lors de la récupération des projets:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des projets',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -176,7 +177,7 @@ router.get('/:id', async (req, res) => {
     res.json(project);
 
   } catch (error) {
-    console.error('[PROJECTS] Erreur lors de la récupération du projet:', error);
+    logger.error('[PROJECTS] Erreur lors de la récupération du projet:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération du projet',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -232,7 +233,7 @@ router.post('/', async (req, res) => {
     res.status(201).json(project);
 
   } catch (error) {
-    console.error('[PROJECTS] Erreur lors de la création du projet:', error);
+    logger.error('[PROJECTS] Erreur lors de la création du projet:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création du projet',
       message: error instanceof Error ? error.message : 'Erreur inconnue'

@@ -37,13 +37,13 @@ const FBToggle = ({ checked, onChange, disabled }: {
 interface IntegrationSetting {
   type: string;
   enabled: boolean;
-  config: any;
+  config: unknown;
 }
 
 // ── Modal sub-component ──
 const IntegrationSettingsModal: FC<{
   isOpen: boolean; onClose: () => void; onSave: (s: IntegrationSetting) => void;
-  integrationType: 'mail' | 'telnyx' | null; initialConfig: any;
+  integrationType: 'mail' | 'telnyx' | null; initialConfig: unknown;
 }> = ({ isOpen, onClose, onSave, integrationType, initialConfig }) => {
   const [mailConfig, setMailConfig] = useState({ host: '', port: 587, login: '', password: '' });
   const [telnyxConfig, setTelnyxConfig] = useState({ apiKey: '' });
@@ -129,7 +129,7 @@ const IntegrationsAdminPage: FC = () => {
     if (!organizationId) return;
     setIsLoading(true);
     try {
-      const result = await api.get('/integrations') as any;
+      const result = await api.get('/integrations') as unknown;
       if (result.success) {
         setIntegrations(result.data || []);
       } else {
@@ -158,7 +158,7 @@ const IntegrationsAdminPage: FC = () => {
         type: settings.type,
         config: settings.config,
         enabled: true,
-      }) as any;
+      }) as unknown;
       if (result.success) {
         antdMessage.success(`Intégration ${settings.type} mise à jour.`);
         fetchIntegrations();
@@ -177,7 +177,7 @@ const IntegrationsAdminPage: FC = () => {
       const result = await api.post('/integrations', {
         type,
         enabled,
-      }) as any;
+      }) as unknown;
       if (result.success) {
         antdMessage.success(`Intégration ${type} ${enabled ? 'activée' : 'désactivée'}.`);
         fetchIntegrations();

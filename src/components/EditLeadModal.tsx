@@ -72,7 +72,7 @@ export default function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated }: 
       } else {
         throw new Error('Erreur lors de la mise à jour');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de la mise à jour du lead:', error);
       NotificationManager.error(error.message || 'Erreur lors de la mise à jour du lead');
     } finally {

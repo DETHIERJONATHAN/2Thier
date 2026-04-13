@@ -95,7 +95,7 @@ interface ImageMeasurementCanvasProps {
   // 🆕 Pour le snap-to-edges IA
   imageBase64?: string;
   mimeType?: string;
-  api?: any; // useAuthenticatedApi instance
+  api?: unknown; // useAuthenticatedApi instance
   // 🆕 HOMOGRAPHIE: Coins fusionnés par l'IA multi-photos
   fusedCorners?: {
     topLeft: { x: number; y: number };
@@ -284,7 +284,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     confidence: number;
     method: string;
     warnings: string[];
-    debug?: any;
+    debug?: unknown;
     depth?: {
       mean_mm: number;
       stdDev_mm: number;
@@ -2815,7 +2815,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
     }
 
     // Sinon, fallback: pan (uniquement si zoomé)
-    handleStagePanStart(e as any);
+    handleStagePanStart(e as unknown);
   }, [pointBeingPlaced, stagePosition.x, stagePosition.y, zoom, workflowStep, selectedTool, drawingZone, isDetectingCorners, startDrawingZone, handleStagePanStart]);
 
   const handleStageTouchMove = useCallback((e: KonvaEventObject<TouchEvent>) => {
@@ -2895,7 +2895,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
       updateDrawingZone(x, y);
     }
 
-    handleStagePanMove(e as any);
+    handleStagePanMove(e as unknown);
   }, [handleStagePanMove, imageDimensions.height, imageDimensions.width, stagePosition.x, stagePosition.y, updateDrawingZone, zoom]);
 
   const handleStageMouseUp = useCallback(() => {
@@ -2974,10 +2974,10 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
         if (target === 'reference') {
           // Reconstituer le rectangle à partir des 4 points snappés
           const snappedPoints = response.points;
-          const minX = Math.min(...snappedPoints.map((p: any) => p.x));
-          const maxX = Math.max(...snappedPoints.map((p: any) => p.x));
-          const minY = Math.min(...snappedPoints.map((p: any) => p.y));
-          const maxY = Math.max(...snappedPoints.map((p: any) => p.y));
+          const minX = Math.min(...snappedPoints.map((p: Record<string, unknown>) => p.x));
+          const maxX = Math.max(...snappedPoints.map((p: Record<string, unknown>) => p.x));
+          const minY = Math.min(...snappedPoints.map((p: Record<string, unknown>) => p.y));
+          const maxY = Math.max(...snappedPoints.map((p: Record<string, unknown>) => p.y));
           
           const newBox = {
             x: (minX / 1000) * imageDimensions.width,
@@ -2992,7 +2992,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
           message.success('🎯 Référence ajustée avec précision par l\'IA !');
         } else {
           // Appliquer les nouveaux points de mesure (base 1000 → pixels display)
-          const snappedMeasurementPoints: MeasurementPoint[] = response.points.map((p: any, i: number) => ({
+          const snappedMeasurementPoints: MeasurementPoint[] = response.points.map((p: unknown, i: number) => ({
             id: points[i]?.id || `point_${i}`,
             x: (p.x / 1000) * imageDimensions.width,
             y: (p.y / 1000) * imageDimensions.height,
@@ -3936,9 +3936,9 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
               handleStageMouseUp();
               handleStagePanEnd();
             }}
-            onTouchStart={handleStageTouchStart as any}
-            onTouchMove={handleStageTouchMove as any}
-            onTouchEnd={handleStageTouchEnd as any}
+            onTouchStart={handleStageTouchStart as unknown}
+            onTouchMove={handleStageTouchMove as unknown}
+            onTouchEnd={handleStageTouchEnd as unknown}
             style={{
               cursor: pointBeingPlaced
                 ? 'crosshair'

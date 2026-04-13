@@ -34,7 +34,7 @@ const BlockedSettings: React.FC = () => {
   const fetchBlocked = useCallback(async () => {
     setLoading(true);
     try {
-      const [usersRes, orgsRes]: any[] = await Promise.all([
+      const [usersRes, orgsRes]: unknown[] = await Promise.all([
         api.get('/api/friends/blocked'),
         api.get('/api/friends/blocked-orgs'),
       ]);

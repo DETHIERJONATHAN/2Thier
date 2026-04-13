@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth.js';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.get('/lead-statuses', async (req, res) => {
     res.json(statuses);
     
   } catch (error) {
-    console.error('[LEAD-STATUSES] Erreur lors de la récupération des statuts:', error);
+    logger.error('[LEAD-STATUSES] Erreur lors de la récupération des statuts:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des statuts',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -80,7 +81,7 @@ router.post('/lead-statuses', async (req, res) => {
     res.status(201).json(newStatus);
     
   } catch (error) {
-    console.error('[LEAD-STATUSES] Erreur lors de la création du statut:', error);
+    logger.error('[LEAD-STATUSES] Erreur lors de la création du statut:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création du statut',
       message: error instanceof Error ? error.message : 'Erreur inconnue'

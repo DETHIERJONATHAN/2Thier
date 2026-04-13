@@ -8,7 +8,7 @@ interface Section {
   key: string;
   type: string;
   name: string;
-  content: any;
+  content: unknown;
   backgroundColor?: string;
   textColor?: string;
   isActive: boolean;
@@ -138,7 +138,7 @@ const SectionRenderer: React.FC<{ section: Section }> = ({ section }) => {
 // ============= COMPOSANTS DE RENDU PAR TYPE =============
 
 interface SectionProps {
-  content: any;
+  content: unknown;
   style: React.CSSProperties;
 }
 
@@ -153,7 +153,7 @@ const HeaderSection: React.FC<SectionProps> = ({ content, style }) => {
         
         {/* Menu */}
         <nav style={{ display: 'flex', gap: '30px' }}>
-          {content.menuItems?.map((item: any, index: number) => (
+          {content.menuItems?.map((item: unknown, index: number) => (
             <a 
               key={index} 
               href={item.url} 
@@ -227,7 +227,7 @@ const HeroSection: React.FC<SectionProps> = ({ content, style }) => {
 
         {/* Boutons */}
         <div style={{ display: 'flex', gap: '15px', justifyContent: content.alignment || 'center' }}>
-          {content.buttons?.map((button: any, index: number) => (
+          {content.buttons?.map((button: unknown, index: number) => (
             <a
               key={index}
               href={button.url}
@@ -260,7 +260,7 @@ const StatsSection: React.FC<SectionProps> = ({ content, style }) => {
         maxWidth: '1200px',
         margin: '0 auto'
       }}>
-        {content.stats?.map((stat: any, index: number) => (
+        {content.stats?.map((stat: unknown, index: number) => (
           <div key={index} style={{ textAlign: 'center' }}>
             {stat.icon && (
               <div style={{ fontSize: '3rem', marginBottom: '15px' }}>{stat.icon}</div>
@@ -301,7 +301,7 @@ const ContentSection: React.FC<SectionProps> = ({ content, style }) => {
         maxWidth: '1200px',
         margin: '0 auto'
       }}>
-        {content.columns?.map((col: any, index: number) => (
+        {content.columns?.map((col: unknown, index: number) => (
           <div key={index} style={{ textAlign: 'center' }}>
             {col.image && (
               <img 
@@ -362,7 +362,7 @@ const CTASection: React.FC<SectionProps> = ({ content, style }) => {
         </p>
 
         <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
-          {content.buttons?.map((button: any, index: number) => (
+          {content.buttons?.map((button: unknown, index: number) => (
             <a
               key={index}
               href={button.url}
@@ -408,11 +408,11 @@ const FooterSection: React.FC<SectionProps> = ({ content, style }) => {
         )}
 
         {/* Groupes de liens */}
-        {content.linkGroups?.map((group: any, index: number) => (
+        {content.linkGroups?.map((group: unknown, index: number) => (
           <div key={index}>
             <h4 style={{ marginBottom: '15px', color: style.color }}>{group.title}</h4>
             <ul style={{ listStyle: 'none', padding: 0 }}>
-              {group.links?.map((link: any, linkIndex: number) => (
+              {group.links?.map((link: unknown, linkIndex: number) => (
                 <li key={linkIndex} style={{ marginBottom: '8px' }}>
                   <a 
                     href={link.url}
@@ -438,7 +438,7 @@ const FooterSection: React.FC<SectionProps> = ({ content, style }) => {
           justifyContent: 'center',
           marginBottom: '30px'
         }}>
-          {content.socialLinks.map((social: any, index: number) => (
+          {content.socialLinks.map((social: unknown, index: number) => (
             <a 
               key={index}
               href={social.url}

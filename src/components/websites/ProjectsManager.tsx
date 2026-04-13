@@ -175,7 +175,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({ websiteId, sit
     }
   };
 
-  const handleDragEnd = async (event: any) => {
+  const handleDragEnd = async (event: unknown) => {
     const { active, over } = event;
 
     if (active.id !== over.id) {
@@ -239,7 +239,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({ websiteId, sit
     }
   };
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: unknown) => {
     try {
       const payload = {
         ...values,
@@ -270,7 +270,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({ websiteId, sit
     }
   };
 
-  const handleAIGenerated = (content: any) => {
+  const handleAIGenerated = (content: unknown) => {
     form.setFieldsValue({
       key: content.key,
       title: content.title,

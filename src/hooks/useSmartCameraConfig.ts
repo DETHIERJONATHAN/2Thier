@@ -67,7 +67,7 @@ export const useSmartCameraConfig = (nodeId: string | undefined) => {
       
       console.log(`📊 [useSmartCameraConfig] Chargement config pour node ${nodeId}`);
       
-      const data = await api.get(`/api/treebranchleaf/nodes/${nodeId}/ia-config`) as any;
+      const data = await api.get(`/api/treebranchleaf/nodes/${nodeId}/ia-config`) as unknown;
       
       // Fusionner avec config par défaut pour garantir toutes les propriétés
       const mergedConfig: SmartCameraConfig = {

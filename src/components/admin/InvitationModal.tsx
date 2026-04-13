@@ -49,7 +49,7 @@ const InvitationModal: React.FC<InvitationModalProps> = ({ visible, onCancel, on
       } else {
         message.error(response.message || "Une erreur est survenue.");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       const status = error?.status;
       const serverMessage = error?.data?.message;
       if (status === 409) {

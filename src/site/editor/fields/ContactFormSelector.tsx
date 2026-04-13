@@ -117,7 +117,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
       );
       const list = Array.isArray(response)
         ? response
-        : Array.isArray((response as any)?.data)
+        : Array.isArray((response as unknown)?.data)
         ? (response as any).data
         : [];
       setForms([...list].sort((a, b) => a.name.localeCompare(b.name)));
@@ -196,7 +196,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
           message.success('Formulaire créé avec succès.');
         }
 
-        const raw = (result as any)?.data ?? result;
+        const raw = (result as unknown)?.data ?? result;
         if (!raw?.id) {
           throw new Error('Réponse inattendue lors de l\'enregistrement du formulaire');
         }
@@ -308,7 +308,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
     try {
       setLoading(true);
       const response = await stableApi.get(`/api/public-forms/${formId}`, { showErrors: true });
-      const formData = (response as any)?.data ?? response;
+      const formData = (response as unknown)?.data ?? response;
       
       if (!formData) {
         throw new Error('Formulaire introuvable');
@@ -366,7 +366,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
     try {
       setLoading(true);
       const response = await stableApi.get(`/api/public-forms/${formId}`, { showErrors: true });
-      const formData = (response as any)?.data ?? response;
+      const formData = (response as unknown)?.data ?? response;
       
       if (!formData) {
         throw new Error('Formulaire introuvable');

@@ -22,7 +22,7 @@ interface GoogleVoiceWidgetProps {
   leadPhone: string;
   leadName: string;
   leadId: string;
-  onCallComplete?: (callData: any) => void;
+  onCallComplete?: (callData: unknown) => void;
 }
 
 interface CallFormData {
@@ -65,7 +65,7 @@ const GoogleVoiceWidget: React.FC<GoogleVoiceWidgetProps> = ({
         });
       }
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de l\'appel:', error);
       message.error('Erreur lors de l\'initiation de l\'appel');
     } finally {
@@ -99,7 +99,7 @@ const GoogleVoiceWidget: React.FC<GoogleVoiceWidgetProps> = ({
         });
       }
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de l\'envoi SMS:', error);
       message.error('Erreur lors de l\'envoi du SMS');
     } finally {

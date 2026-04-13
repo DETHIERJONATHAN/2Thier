@@ -57,7 +57,7 @@ interface OrbitFriend {
 
 type NectarSection = 'spark' | 'battles' | 'quests' | 'pulse' | 'events' | 'capsules' | 'orbit';
 
-interface NectarPanelProps { api: any; currentUser?: any; }
+interface NectarPanelProps { api: unknown; currentUser?: unknown; }
 
 // ── Empty state component ──
 const EmptyState: React.FC<{ icon: string; title: string; subtitle: string }> = ({ icon, title, subtitle }) => (
@@ -157,7 +157,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
       if (eventsRes?.events) {
         setEvents(eventsRes.events);
         const attending = new Set<string>();
-        eventsRes.events.forEach((e: any) => { if (e.isAttending) attending.add(e.id); });
+        eventsRes.events.forEach((e: Record<string, unknown>) => { if (e.isAttending) attending.add(e.id); });
         setRsvpSet(attending);
       }
       if (capsulesRes?.capsules) setCapsules(capsulesRes.capsules);
@@ -432,7 +432,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
           </div>
           <Modal open={sparkModalOpen} onCancel={() => setSparkModalOpen(false)} onOk={handleCreateSpark} confirmLoading={sparkSubmitting} title={t('flow.newSpark')} okText={t('flow.buzzIt')} cancelText={t('common.cancel')}>
             <Input.TextArea value={sparkContent} onChange={e => setSparkContent(e.target.value)} placeholder={t('flow.sparkFullPlaceholder')} maxLength={3000} rows={4} showCount style={{ marginTop: 8 }} />
-            <div style={{ marginTop: 10 }}>{renderVisibilitySelector(sparkVisibility, v => setSparkVisibility(v as any))}</div>
+            <div style={{ marginTop: 10 }}>{renderVisibilitySelector(sparkVisibility, v => setSparkVisibility(v as unknown))}</div>
           </Modal>
           {sparks.length > 0 ? sparks.map(spark => (
             <div key={spark.id} style={{ background: SF.cardBg, borderRadius: SF.radius, padding: 14, marginBottom: 8, boxShadow: SF.shadow }}>
@@ -576,7 +576,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
           </Modal>
           {events.length > 0 ? events.map(event => (
             <div key={event.id} style={{ background: SF.cardBg, borderRadius: SF.radius, overflow: 'hidden', marginBottom: 8, boxShadow: SF.shadow }}>
-              {event.coverImage && <img src={event.coverImage} alt="" style={{ width: '100%', height: 100, objectFit: 'cover' }} />}
+              {event.coverImage && <img src={event.coverImage} alt="" loading="lazy" style={{ width: '100%', height: 100, objectFit: 'cover' }} />}
               <div style={{ padding: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                   <span style={{ fontSize: 20 }}>{getEventTypeEmoji(event.type)}</span>

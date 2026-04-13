@@ -89,14 +89,14 @@ function regenerateInternalIds(conditionSet: unknown, suffix: number | string): 
     let result = JSON.parse(JSON.stringify(conditionSet));
     
     // Parcourir rÃƒÂ©cursivement et renommer les IDs internes
-    const processObject = (obj: any): any => {
+    const processObject = (obj: unknown): any => {
       if (!obj || typeof obj !== 'object') return obj;
       
       if (Array.isArray(obj)) {
         return obj.map(processObject);
       }
       
-      const newObj: any = {};
+      const newObj: unknown = {};
       for (const [key, value] of Object.entries(obj)) {
         if (key === 'id' && typeof value === 'string') {
           // C'est un ID interne (b_xxx, a_xxx, bin_xxx, fb_xxx) OU l'ID principal (cond_xxx)
@@ -383,14 +383,14 @@ function rewriteConditionSet(
       return raw;
     };
 
-    const walk = (obj: any): any => {
+    const walk = (obj: unknown): any => {
       if (!obj || typeof obj !== 'object') return obj;
       if (Array.isArray(obj)) return obj.map(walk);
-      const out: any = Array.isArray(obj) ? [] : { ...obj };
+      const out: unknown = Array.isArray(obj) ? [] : { ...obj };
       for (const key of Object.keys(obj)) {
         const val = obj[key];
         if (key === 'nodeIds' && Array.isArray(val)) {
-          out[key] = val.map((s: any) => (typeof s === 'string' ? mapNodeIdString(s) : s));
+          out[key] = val.map((s: Record<string, unknown>) => (typeof s === 'string' ? mapNodeIdString(s) : s));
         } else if (key === 'when' && val && typeof val === 'object') {
           // when.left.ref / when.right.ref dÃƒÂ©jÃƒÂ  traitÃƒÂ©s via regex, mais on parcourt par sÃƒÂ©curitÃƒÂ©
           out[key] = walk(val);
@@ -409,19 +409,19 @@ function rewriteConditionSet(
       return `${value}-${suffixStr}`;
     };
 
-    const suffixConditionIds = (cs: any): any => {
+    const suffixConditionIds = (cs: unknown): any => {
       if (!cs || typeof cs !== 'object') return cs;
-      const out: any = { ...cs };
+      const out: unknown = { ...cs };
 
       if (out.id) out.id = applySuffixIfNeeded(out.id);
 
       if (Array.isArray(out.branches)) {
-        out.branches = out.branches.map((branch: any) => {
-          const b: any = { ...branch };
+        out.branches = out.branches.map((branch: Record<string, unknown>) => {
+          const b: unknown = { ...branch };
           if (b.id) b.id = applySuffixIfNeeded(b.id);
           if (Array.isArray(b.actions)) {
-            b.actions = b.actions.map((action: any) => {
-              const a: any = { ...action };
+            b.actions = b.actions.map((action: Record<string, unknown>) => {
+              const a: unknown = { ...action };
               if (a.id) a.id = applySuffixIfNeeded(a.id);
               return a;
             });
@@ -431,11 +431,11 @@ function rewriteConditionSet(
       }
 
       if (out.fallback && typeof out.fallback === 'object') {
-        const fb: any = { ...out.fallback };
+        const fb: unknown = { ...out.fallback };
         if (fb.id) fb.id = applySuffixIfNeeded(fb.id);
         if (Array.isArray(fb.actions)) {
-          fb.actions = fb.actions.map((action: any) => {
-            const a: any = { ...action };
+          fb.actions = fb.actions.map((action: Record<string, unknown>) => {
+            const a: unknown = { ...action };
             if (a.id) a.id = applySuffixIfNeeded(a.id);
             return a;
           });
@@ -604,7 +604,7 @@ export async function copyConditionCapacity(
         if (existingForm) {
           // Vérifier si les shared-refs sont suffixés (silencieux - debug uniquement)
           if (Array.isArray(existingForm.tokens)) {
-            const unsuffixedSharedRefs = existingForm.tokens.filter((t: any) =>
+            const unsuffixedSharedRefs = existingForm.tokens.filter((t: Record<string, unknown>) =>
               typeof t === 'string' && t.includes('shared-ref') && !/-\d+$/.test(t)
             );
             // Debug uniquement si nécessaire
@@ -645,7 +645,7 @@ export async function copyConditionCapacity(
               });
               if (copiedForm) {
                 if (Array.isArray(copiedForm.tokens)) {
-                  const unsuffixed = copiedForm.tokens.filter((t: any) =>
+                  const unsuffixed = copiedForm.tokens.filter((t: Record<string, unknown>) =>
                     typeof t === 'string' && t.includes('shared-ref') && !/-\d+$/.test(t)
                   );
                   if (unsuffixed.length > 0) {

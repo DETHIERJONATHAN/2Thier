@@ -77,7 +77,7 @@ const LeadCreatorModal: React.FC<LeadCreatorModalPropsExtended> = ({
       } else {
         throw new Error(response.error || 'Erreur lors de la création du lead');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMessage = err.message || 'Erreur lors de la création du lead';
       message.error(errorMessage);
     } finally {

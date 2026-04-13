@@ -49,7 +49,7 @@ interface Suggestion {
   title: string;
   description: string;
   impact: 'low' | 'medium' | 'high';
-  changes: Record<string, any>;
+  changes: Record<string, unknown>;
   preview?: {
     before: string;
     after: string;
@@ -70,8 +70,8 @@ interface SectionAIOptimizerProps {
   visible: boolean;
   onClose: () => void;
   sectionType: string;
-  currentContent: any;
-  onApplySuggestions: (changes: Record<string, any>) => void;
+  currentContent: unknown;
+  onApplySuggestions: (changes: Record<string, unknown>) => void;
 }
 
 export const SectionAIOptimizer: React.FC<SectionAIOptimizerProps> = ({
@@ -221,7 +221,7 @@ Format de réponse attendu : JSON structuré
     setApplying(true);
     try {
       // Fusionner tous les changements
-      const allChanges: Record<string, any> = {};
+      const allChanges: Record<string, unknown> = {};
       
       analysis?.suggestions
         .filter(s => selectedSuggestions.includes(s.id))

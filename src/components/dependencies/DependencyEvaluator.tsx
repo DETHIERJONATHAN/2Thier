@@ -7,7 +7,7 @@ interface DependencyEvaluatorProps {
 }
 
 const DependencyEvaluator: React.FC<DependencyEvaluatorProps> = ({ dependency }) => {
-  const [testValues, setTestValues] = useState<Record<string, any>>({});
+  const [testValues, setTestValues] = useState<Record<string, unknown>>({});
   const [result, setResult] = useState<{ result: string; details?: any } | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [fieldsInfo, setFieldsInfo] = useState<Array<{ id: string; label: string; type: string }>>([]);
@@ -76,7 +76,7 @@ const DependencyEvaluator: React.FC<DependencyEvaluatorProps> = ({ dependency })
         setFieldsInfo(fieldsData);
         
         // Initialiser les valeurs de test
-        const initialTestValues: Record<string, any> = {};
+        const initialTestValues: Record<string, unknown> = {};
         fieldsData.forEach(field => {
           // Initialiser avec des valeurs par défaut selon le type
           switch (field.type) {
@@ -104,7 +104,7 @@ const DependencyEvaluator: React.FC<DependencyEvaluatorProps> = ({ dependency })
     fetchFields();
   }, [dependency.id, dependency.sequence, dependency.targetFieldId]);
 
-  const handleValueChange = (fieldId: string, value: any) => {
+  const handleValueChange = (fieldId: string, value: unknown) => {
     setTestValues(prev => ({
       ...prev,
       [fieldId]: value

@@ -8,8 +8,11 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { shouldAutoCreateSelectConfig } from '../components/TreeBranchLeaf/treebranchleaf-new/api/shared/select-config-policy';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
+router.use(authenticateToken);
 
 // Type pour le contexte d'authentification
 interface AuthContext {
@@ -35,7 +38,7 @@ function getAuthCtx(req: Request): AuthContext {
 router.get('/trees/:treeId/formulas', async (req, res) => {
   try {
     const { treeId } = req.params;
-    const { organizationId, isSuperAdmin } = getAuthCtx(req as any);
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown);
 
     // Vérifier l'accès au tree
     const treeWhereFilter = isSuperAdmin || !organizationId 
@@ -77,7 +80,7 @@ router.get('/trees/:treeId/formulas', async (req, res) => {
       formulasByNode
     });
   } catch (error) {
-    console.error('[TBL Batch API] Error batch fetching formulas:', error);
+    logger.error('[TBL Batch API] Error batch fetching formulas:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération batch des formules' });
   }
 });
@@ -92,7 +95,7 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
   try {
     const { treeId } = req.params;
     const { leadId, submissionId: qsSubmissionId } = req.query;
-    const { organizationId, isSuperAdmin } = getAuthCtx(req as any);
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown);
 
     // Vérifier l'accès au tree
     const treeWhereFilter = isSuperAdmin || !organizationId 
@@ -180,7 +183,7 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
       valuesByNode
     });
   } catch (error) {
-    console.error('[TBL Batch API] Error batch fetching calculated values:', error);
+    logger.error('[TBL Batch API] Error batch fetching calculated values:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération batch des valeurs calculées' });
   }
 });
@@ -194,7 +197,7 @@ router.get('/trees/:treeId/calculated-values', async (req, res) => {
 router.get('/trees/:treeId/select-configs', async (req, res) => {
   try {
     const { treeId } = req.params;
-    const { organizationId, isSuperAdmin } = getAuthCtx(req as any);
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown);
 
     // Vérifier l'accès au tree
     const treeWhereFilter = isSuperAdmin || !organizationId 
@@ -269,7 +272,7 @@ router.get('/trees/:treeId/select-configs', async (req, res) => {
       configsByNode
     });
   } catch (error) {
-    console.error('[TBL Batch API] Error batch fetching select configs:', error);
+    logger.error('[TBL Batch API] Error batch fetching select configs:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération batch des configs select' });
   }
 });
@@ -444,7 +447,7 @@ router.get('/trees/:treeId/all', async (req: Request, res: Response) => {
       name: error instanceof Error ? error.name : 'Unknown',
       stack: error instanceof Error ? error.stack : undefined
     };
-    console.error('[TBL Batch API] Error super batch fetching:', JSON.stringify(errorDetails, null, 2));
+    logger.error('[TBL Batch API] Error super batch fetching:', JSON.stringify(errorDetails, null, 2));
     res.status(500).json({ 
       error: 'Erreur lors de la récupération batch complète',
       details: errorDetails.message 
@@ -461,7 +464,7 @@ router.get('/trees/:treeId/all', async (req: Request, res: Response) => {
 router.get('/trees/:treeId/node-data', async (req, res) => {
   try {
     const { treeId } = req.params;
-    const { organizationId, isSuperAdmin } = getAuthCtx(req as any);
+    const { organizationId, isSuperAdmin } = getAuthCtx(req as unknown);
 
     // Vérifier l'accès au tree
     const treeWhereFilter = isSuperAdmin || !organizationId 
@@ -547,7 +550,7 @@ router.get('/trees/:treeId/node-data', async (req, res) => {
       dataByNode
     });
   } catch (error) {
-    console.error('[TBL Batch API] Error batch fetching node data:', error);
+    logger.error('[TBL Batch API] Error batch fetching node data:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération batch des données de noeuds' });
   }
 });
@@ -633,7 +636,7 @@ router.get('/trees/:treeId/conditions', async (req: Request, res: Response) => {
       activeConditionByNode
     });
   } catch (error) {
-    console.error('[TBL Batch API] Error batch fetching conditions:', error);
+    logger.error('[TBL Batch API] Error batch fetching conditions:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération batch des conditions' });
   }
 });

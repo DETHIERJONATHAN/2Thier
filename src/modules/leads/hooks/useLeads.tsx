@@ -5,7 +5,7 @@ interface LeadFilters {
   status?: string;
   assignedTo?: string;
   source?: string;
-  dateRange?: any;
+  dateRange?: unknown;
 }
 
 export const useLeads = () => {
@@ -42,7 +42,7 @@ export const useLeads = () => {
     // Recherche intelligente
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      result = result.filter((lead: any) => 
+      result = result.filter((lead: Record<string, unknown>) => 
         lead.firstName?.toLowerCase().includes(term) ||
         lead.lastName?.toLowerCase().includes(term) ||
         lead.company?.toLowerCase().includes(term) ||

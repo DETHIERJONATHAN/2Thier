@@ -11,6 +11,7 @@ import { prisma } from '../lib/prisma';
 import { randomUUID, randomBytes } from 'crypto';
 import { emailService } from '../services/EmailService';
 import { getPostalService } from '../services/PostalEmailService.js';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -182,7 +183,7 @@ router.post("/register", async (req: Request, res: Response) => {
             },
           });
         } catch (emailAccErr) {
-          console.error(`⚠️ [Register] Erreur création EmailAccount:`, emailAccErr);
+          logger.error(`⚠️ [Register] Erreur création EmailAccount:`, emailAccErr);
         }
       }
 
@@ -195,7 +196,7 @@ router.post("/register", async (req: Request, res: Response) => {
         const postal = getPostalService();
         await postal.createMailbox(result.zhiiveEmail, `${firstName} ${lastName || ''}`.trim());
       } catch (postalErr) {
-        console.error(`⚠️ [Register] Erreur provisionnement Postal (non bloquant):`, postalErr);
+        logger.error(`⚠️ [Register] Erreur provisionnement Postal (non bloquant):`, postalErr);
       }
     }
 
@@ -211,7 +212,7 @@ router.post("/register", async (req: Request, res: Response) => {
           data: { email: orgEmail },
         });
       } catch (orgEmailErr) {
-        console.error(`⚠️ [Register] Erreur email organisation (non bloquant):`, orgEmailErr);
+        logger.error(`⚠️ [Register] Erreur email organisation (non bloquant):`, orgEmailErr);
       }
     }
 
@@ -246,7 +247,7 @@ router.post("/register", async (req: Request, res: Response) => {
       });
       emailSent = true;
     } catch (emailError) {
-      console.error(`[Register] ⚠️ Échec envoi email d'activation à ${normalizedEmail}:`, emailError);
+      logger.error(`[Register] ⚠️ Échec envoi email d'activation à ${normalizedEmail}:`, emailError);
     }
 
     // Message de succès adapté
@@ -268,7 +269,7 @@ router.post("/register", async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error("[API][register] Erreur lors de l'inscription:", error);
+    logger.error("[API][register] Erreur lors de l'inscription:", error);
     
     // Gestion spécifique de l'erreur de contrainte d'unicité
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -323,7 +324,7 @@ router.get("/verify-email", async (req: Request, res: Response) => {
 
     res.json({ success: true, message: "Votre compte est activé ! Vous pouvez maintenant vous connecter." });
   } catch (error) {
-    console.error("[API][verify-email] Erreur:", error);
+    logger.error("[API][verify-email] Erreur:", error);
     res.status(500).json({ error: "Erreur lors de la vérification de l'email" });
   }
 });
@@ -395,7 +396,7 @@ router.post("/resend-verification", async (req: Request, res: Response) => {
 
     res.json({ success: true, message: "Si cette adresse est enregistrée, un email d'activation a été envoyé." });
   } catch (error) {
-    console.error("[API][resend-verification] Erreur:", error);
+    logger.error("[API][resend-verification] Erreur:", error);
     res.status(500).json({ error: "Erreur lors de l'envoi de l'email" });
   }
 });
@@ -535,7 +536,7 @@ router.post("/login", async (req: Request, res: Response) => {
         organizations,
     });
   } catch (error) {
-    console.error("[API][login] Erreur lors de la connexion:", error);
+    logger.error("[API][login] Erreur lors de la connexion:", error);
     if (!res.headersSent) {
       res.status(500).json({ error: "Erreur interne du serveur." });
     }
@@ -649,7 +650,7 @@ router.get(
 
         res.json({ currentUser: { ...userInfos, organizations }, isImpersonating: !!req.originalUser });
     } catch (err) {
-        console.error(err);
+        logger.error(err);
         res.status(500).json({ error: "Erreur lors de la récupération de l'utilisateur." });
     }
   }
@@ -668,7 +669,7 @@ router.patch("/me/feed-mode", authMiddleware, async (req: AuthenticatedRequest, 
     });
     res.json({ success: true });
   } catch (err) {
-    console.error("[API] Erreur mise à jour feedMode:", err);
+    logger.error("[API] Erreur mise à jour feedMode:", err);
     res.status(500).json({ error: "Erreur interne du serveur." });
   }
 });
@@ -767,7 +768,7 @@ router.get(
       res.json({ success: true, data: organizations });
 
     } catch (error) {
-      console.error("[API][me/organizations] Erreur:", error);
+      logger.error("[API][me/organizations] Erreur:", error);
       res.status(500).json({ success: false, message: "Erreur interne du serveur." });
     }
   }
@@ -838,7 +839,7 @@ router.get(
         res.status(404).json({ error: "Rôle non trouvé pour l'utilisateur dans cette organisation" });
       }
     } catch (error) {
-      console.error("[API][me/role] Erreur:", error);
+      logger.error("[API][me/role] Erreur:", error);
       res.status(500).json({ error: "Erreur interne du serveur" });
     }
   }

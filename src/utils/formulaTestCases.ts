@@ -241,14 +241,14 @@ export const generateFormulaTestCases = (): Formula[] => {
  * @param prepareFn La fonction de préparation à tester
  */
 export const runFormulaValidationTests = (
-    validateFn: (formula: any, source?: string) => any,
+    validateFn: (formula: unknown, source?: string) => any,
     prepareFn: (formula: Formula, source?: string) => Formula
 ) => {
     const testCases = generateFormulaTestCases();
     const results: Array<{
         caseName: string;
-        validationResult: any;
-        preparationResult: any;
+        validationResult: unknown;
+        preparationResult: unknown;
         isValid: boolean;
     }> = [];
     

@@ -627,7 +627,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
     const formulaRoleCache = new Map<string, string>();
 
     // 🛠️ Helper: Extract string value from token (handles both string and object tokens)
-    const getTokenString = (token: any): string => {
+    const getTokenString = (token: unknown): string => {
       if (typeof token === 'string') {
         return token;
       }
@@ -930,9 +930,9 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
             // Fetch node info to determine if this is a copy of another (copiedFromNodeId)
             let targetNodeIds = [nodeId];
             try {
-              const nodeInfo = await api.get(`/api/treebranchleaf/nodes/${nodeId}`) as any;
+              const nodeInfo = await api.get(`/api/treebranchleaf/nodes/${nodeId}`) as unknown;
               const meta = nodeInfo?.metadata || {};
-              let origId: any = meta?.copiedFromNodeId || meta?.copied_from_node_id || meta?.sourceTemplateId || null;
+              let origId: unknown = meta?.copiedFromNodeId || meta?.copied_from_node_id || meta?.sourceTemplateId || null;
               if (origId && typeof origId === 'string' && origId.trim().startsWith('[')) {
                 try { origId = JSON.parse(origId)[0]; } catch { /* ignore */ }
               }
@@ -954,7 +954,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
                 const resp = await api.post(`/api/tree-nodes/${tid}/store-calculated-value`, {
                   calculatedValue: String(value),
                   calculatedBy: 'formula-panel'
-                }) as any;
+                }) as unknown;
                 console.log('✅ [FormulaPanel] Valeur calculée sauvegardée via store-calculated-value:', tid, resp);
                 // Invalidate local cache for GET endpoints that might be stale
                 try { clearCache(); } catch (e) { /* noop */ }

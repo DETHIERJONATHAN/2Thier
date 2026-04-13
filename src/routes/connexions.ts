@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middlewares/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -21,8 +22,8 @@ router.post('/voice/call', authMiddleware, async (req, res) => {
     
     // Simuler une réponse réussie de l'API
     res.status(200).json({ success: true, message: `Appel vers ${to} initié.` });
-  } catch (error: any) {
-    console.error("Erreur lors de l'initiation de l'appel via Telnyx:", error);
+  } catch (error: unknown) {
+    logger.error("Erreur lors de l'initiation de l'appel via Telnyx:", error);
     res.status(500).json({ error: "Erreur interne du serveur.", details: error.message });
   }
 });
@@ -45,8 +46,8 @@ router.post('/email/send', authMiddleware, async (req, res) => {
 
     // Simuler une réponse réussie
     res.status(200).json({ success: true, message: "E-mail envoyé avec succès." });
-  } catch (error: any) {
-    console.error("Erreur lors de l'envoi de l'e-mail:", error);
+  } catch (error: unknown) {
+    logger.error("Erreur lors de l'envoi de l'e-mail:", error);
     res.status(500).json({ error: "Erreur interne du serveur.", details: error.message });
   }
 });

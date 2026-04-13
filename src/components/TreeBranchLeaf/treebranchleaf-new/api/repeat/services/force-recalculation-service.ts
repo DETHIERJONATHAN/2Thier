@@ -160,7 +160,7 @@ export async function forceAllNodesRecalculationWithOwnData(
   };
 
   try {
-    const whereClause: any = {
+    const whereClause: unknown = {
       AND: [
         { label: { endsWith: '-1' } }
       ]

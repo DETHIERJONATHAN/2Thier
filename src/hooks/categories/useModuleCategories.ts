@@ -14,8 +14,8 @@ export interface ModuleCategory {
   active: boolean;
   organizationId?: string;
   superAdminOnly: boolean;
-  allowedRoles?: any;
-  requiredPermissions?: any;
+  allowedRoles?: unknown;
+  requiredPermissions?: unknown;
   createdAt: string;
   updatedAt: string;
 }
@@ -223,7 +223,7 @@ export const useModuleCategories = () => {
       
       if (response?.success && response.data?.sections) {
         // Extraire tous les modules de toutes les sections
-        const allModules = response.data.sections.flatMap((section: any) => 
+        const allModules = response.data.sections.flatMap((section: unknown) => 
           section.modules || []
         );
         

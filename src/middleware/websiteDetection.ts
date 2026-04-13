@@ -38,8 +38,8 @@ export interface WebsiteRequest extends Request {
     slug: string;
     domain: string;
     name: string;
-    config: any;
-    sections: any[];
+    config: unknown;
+    sections: unknown[];
   };
   isWebsiteRoute?: boolean;
 }

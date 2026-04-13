@@ -3,8 +3,11 @@ import { Router } from 'express';
 import { db } from '../lib/database';
 import { getAuthCtx } from './utils/getAuthCtx';
 import { shouldAutoCreateSelectConfig } from '../components/TreeBranchLeaf/treebranchleaf-new/api/shared/select-config-policy';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
+router.use(authenticateToken);
 
 /**
  * GET /api/treebranchleaf/nodes/:nodeId/select-config
@@ -67,7 +70,7 @@ router.get('/nodes/:nodeId/select-config', async (req, res) => {
         select: { meta: true }
       }) : null;
 
-      const policyCheck = shouldAutoCreateSelectConfig({ node: effectiveNode, tableMeta: tableMeta?.meta as any });
+      const policyCheck = shouldAutoCreateSelectConfig({ node: effectiveNode, tableMeta: tableMeta?.meta as unknown });
 
       if (nodeId.includes('76a40eb1-a3c5-499f-addb-0ce7fdb4b4c9')) {
       }
@@ -94,7 +97,7 @@ router.get('/nodes/:nodeId/select-config', async (req, res) => {
 
   } catch (error) {
     const err = error as Error;
-    console.error(`[API] Erreur sur GET /nodes/:nodeId/select-config:`, err.message);
+    logger.error(`[API] Erreur sur GET /nodes/:nodeId/select-config:`, err.message);
     res.status(500).json({ error: 'Erreur interne du serveur', details: err.message });
   }
 });

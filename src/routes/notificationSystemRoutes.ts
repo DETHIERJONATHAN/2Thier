@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest, requireRole } from '../middlewares/auth.js';
 import UniversalNotificationService from '../services/UniversalNotificationService.js';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -26,7 +27,7 @@ router.get('/status', async (req: AuthenticatedRequest, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ [NotificationSystemAPI] Erreur statut:', error);
+    logger.error('❌ [NotificationSystemAPI] Erreur statut:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la récupération du statut' 
@@ -58,7 +59,7 @@ router.post('/test-email', requireRole(['admin', 'super_admin']), async (req: Au
     });
     
   } catch (error) {
-    console.error('❌ [NotificationSystemAPI] Erreur test email:', error);
+    logger.error('❌ [NotificationSystemAPI] Erreur test email:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la création de la notification test' 
@@ -92,7 +93,7 @@ router.post('/test-lead', requireRole(['admin', 'super_admin']), async (req: Aut
     });
     
   } catch (error) {
-    console.error('❌ [NotificationSystemAPI] Erreur test lead:', error);
+    logger.error('❌ [NotificationSystemAPI] Erreur test lead:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la création de la notification test' 
@@ -123,7 +124,7 @@ router.post('/test-call', requireRole(['admin', 'super_admin']), async (req: Aut
     });
     
   } catch (error) {
-    console.error('❌ [NotificationSystemAPI] Erreur test appel:', error);
+    logger.error('❌ [NotificationSystemAPI] Erreur test appel:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la création de la notification test' 
@@ -149,7 +150,7 @@ router.get('/stats/:organizationId', requireRole(['admin', 'super_admin']), asyn
     });
     
   } catch (error) {
-    console.error('❌ [NotificationSystemAPI] Erreur stats:', error);
+    logger.error('❌ [NotificationSystemAPI] Erreur stats:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors de la récupération des statistiques' 
@@ -176,7 +177,7 @@ router.post('/restart', requireRole(['super_admin']), async (req: AuthenticatedR
     });
     
   } catch (error) {
-    console.error('❌ [NotificationSystemAPI] Erreur redémarrage:', error);
+    logger.error('❌ [NotificationSystemAPI] Erreur redémarrage:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur lors du redémarrage du système' 

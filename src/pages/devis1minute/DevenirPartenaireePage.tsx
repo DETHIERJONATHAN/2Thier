@@ -58,7 +58,7 @@ const DevenirPartenairePage: React.FC = () => {
     { titre: 'Validation', description: 'Vérification et activation' }
   ];
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: unknown) => {
     setLoading(true);
     try {
       // TODO: Intégrer avec l'API

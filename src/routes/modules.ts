@@ -3,6 +3,8 @@ import { db } from '../lib/database';
 import { Module as PrismaModule } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../config';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 // Implémentation MINIMALE restaurée pour éviter les 404 côté frontend
 // et rétablir l'affichage des modules. Conçue pour être sûre et simple.
@@ -10,6 +12,7 @@ import { JWT_SECRET } from '../config';
 
 const prisma = db;
 const router = Router();
+router.use(authenticateToken);
 
 // Utilitaire: dériver une route cohérente à partir d'une clé si route absente.
 // Règles:
@@ -201,14 +204,14 @@ router.get('/', async (req, res) => {
 					}
 				}
 			} catch (permErr) {
-				console.error('[modules] Erreur lors du filtrage par permissions du rôle:', permErr);
+				logger.error('[modules] Erreur lors du filtrage par permissions du rôle:', permErr);
 				// En cas d'erreur, on ne filtre pas (fail-open pour ne pas bloquer l'UI)
 			}
 		}
 
 		res.json({ success: true, data: filtered });
 	} catch (e) {
-		console.error('[modules] GET / erreur', e);
+		logger.error('[modules] GET / erreur', e);
 		res.status(500).json({ success: false, message: 'Erreur récupération modules' });
 	}
 });
@@ -287,7 +290,7 @@ router.get('/swipe-tabs', async (req, res) => {
 
 		res.json({ success: true, data: dedupedTabs });
 	} catch (e) {
-		console.error('[modules] GET /swipe-tabs erreur', e);
+		logger.error('[modules] GET /swipe-tabs erreur', e);
 		res.status(500).json({ success: false, message: 'Erreur récupération swipe tabs' });
 	}
 });
@@ -311,7 +314,7 @@ router.get('/all', async (_req, res) => {
 		const mapped = modules.map(m => mapModule(m, null));
 		res.json({ success: true, data: mapped });
 	} catch (e) {
-		console.error('[modules] GET /all erreur', e);
+		logger.error('[modules] GET /all erreur', e);
 		res.status(500).json({ success: false, message: 'Erreur récupération modules (all)' });
 	}
 });
@@ -331,7 +334,7 @@ router.patch('/status', async (req, res) => {
 		});
 		res.json({ success: true, data: status });
 	} catch (e) {
-		console.error('[modules] PATCH /status erreur', e);
+		logger.error('[modules] PATCH /status erreur', e);
 		res.status(500).json({ success: false, message: 'Erreur mise à jour statut module' });
 	}
 });
@@ -362,7 +365,7 @@ router.post('/', async (req, res) => {
 		res.json({ success: true, data: mapModule(created, null, organizationId) });
 		} catch (e: unknown) {
 			const message = e instanceof Error ? e.message : 'Erreur inconnue';
-			console.error('[modules] POST / erreur', e);
+			logger.error('[modules] POST / erreur', e);
 			res.status(500).json({ success: false, message: 'Erreur création module', detail: message });
 	}
 });
@@ -403,7 +406,7 @@ router.put('/:id', async (req, res) => {
 		});
 		res.json({ success: true, data: mapModule(updated, null) });
 	} catch (e: unknown) {
-		console.error('[modules] PUT /:id erreur', e);
+		logger.error('[modules] PUT /:id erreur', e);
 		if (e?.code === 'P2002') {
 			return res.status(409).json({ success: false, message: 'Conflit d\'unicité (clé ou feature déjà utilisée)' });
 		}
@@ -421,7 +424,7 @@ router.delete('/:id', async (req, res) => {
 		const deleted = await prisma.module.delete({ where: { id } });
 		res.json({ success: true, data: { id: deleted.id } });
 	} catch (e) {
-		console.error('[modules] DELETE /:id erreur', e);
+		logger.error('[modules] DELETE /:id erreur', e);
 		res.status(500).json({ success: false, message: 'Erreur suppression module' });
 	}
 });

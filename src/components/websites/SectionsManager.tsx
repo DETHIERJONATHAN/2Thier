@@ -53,7 +53,7 @@ interface Section {
   key: string;
   type: string;
   name: string;
-  content: any;
+  content: unknown;
   backgroundColor?: string;
   textColor?: string;
   customCss?: string;
@@ -226,7 +226,7 @@ export const SectionsManager: React.FC<SectionsManagerProps> = ({ websiteId, sit
     }
   };
 
-  const handleDragEnd = async (event: any) => {
+  const handleDragEnd = async (event: unknown) => {
     const { active, over } = event;
 
     if (active.id !== over.id) {
@@ -315,7 +315,7 @@ export const SectionsManager: React.FC<SectionsManagerProps> = ({ websiteId, sit
     }
   };
 
-  const handleSave = async (content: any) => {
+  const handleSave = async (content: unknown) => {
     try {
       if (editingSection) {
         // 🔥 FIX: Récupérer la réponse avec les données mergées

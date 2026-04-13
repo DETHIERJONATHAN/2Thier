@@ -3,6 +3,7 @@ import { db } from '../../../lib/database';
 import { authMiddleware } from '../../../middlewares/auth.js';
 import { requireRole } from '../../../middlewares/requireRole.js';
 import * as mockFormulas from '../../../global-mock-formulas.js';
+import { logger } from '../../lib/logger';
 
 // Interface pour les requêtes avec paramètres fusionnés
 interface MergedParamsRequest extends Request {
@@ -20,7 +21,7 @@ const prisma = db;
 const mockEnabled = process.env.NODE_ENV === 'development';
 
 // Appliquer le middleware d'authentification à toutes les routes
-router.use(authMiddleware as any);
+router.use(authMiddleware as unknown);
 
 /**
  * GET toutes les formules d'un champ spécifique
@@ -48,13 +49,13 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: MergedParamsR
             formulas = JSON.parse(JSON.stringify(storeData));
             source = 'principale';
           } else {
-            console.warn(`[API] GET - ⚠️ Store principal existe mais ne contient pas de données valides pour ${fieldId}`);
+            logger.warn(`[API] GET - ⚠️ Store principal existe mais ne contient pas de données valides pour ${fieldId}`);
           }
         } else {
-          console.warn(`[API] GET - ⚠️ Store principal ne contient pas d'entrée pour ${fieldId}`);
+          logger.warn(`[API] GET - ⚠️ Store principal ne contient pas d'entrée pour ${fieldId}`);
         }
       } catch (directError) {
-        console.error('[API] GET - ❌ Erreur lors de l\'accès au store principal:', directError);
+        logger.error('[API] GET - ❌ Erreur lors de l\'accès au store principal:', directError);
       }
       
       // Si store principal vide, essayer le store de secours
@@ -71,7 +72,7 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: MergedParamsR
             }
           }
         } catch (backupError) {
-          console.error('[API] GET - ❌ Erreur lors de l\'accès au store de secours:', backupError);
+          logger.error('[API] GET - ❌ Erreur lors de l\'accès au store de secours:', backupError);
         }
       }
       
@@ -84,7 +85,7 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: MergedParamsR
             source = 'forceRefreshStore';
           }
         } catch (refreshError) {
-          console.error('[API] GET - ❌ Erreur avec forceRefreshStore:', refreshError);
+          logger.error('[API] GET - ❌ Erreur avec forceRefreshStore:', refreshError);
         }
       }
       
@@ -96,7 +97,7 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: MergedParamsR
             formulas = backupData;
           }
         } catch (getError) {
-          console.error('[API] GET - Erreur avec getFormulasForField:', getError);
+          logger.error('[API] GET - Erreur avec getFormulasForField:', getError);
         }
       }
       
@@ -120,8 +121,8 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: MergedParamsR
     }));
     
     res.json(processedFormulas);
-  } catch (err: any) {
-    console.error("Erreur lors de la récupération des formules:", err);
+  } catch (err: unknown) {
+    logger.error("Erreur lors de la récupération des formules:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -160,10 +161,10 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Mer
         });
       }
     } catch (createError) {
-      console.error(`[API] Erreur lors de la vérification/création de la formule:`, createError);
+      logger.error(`[API] Erreur lors de la vérification/création de la formule:`, createError);
     }
 
-    const dataToUpdate: any = {};
+    const dataToUpdate: unknown = {};
 
     if (name !== undefined) {
       dataToUpdate.name = name;
@@ -183,7 +184,7 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Mer
         data: dataToUpdate
       });
     } catch (updateError) {
-      console.error(`[API] Erreur lors de la mise à jour de la formule:`, updateError);
+      logger.error(`[API] Erreur lors de la mise à jour de la formule:`, updateError);
       
       // Si la mise à jour échoue, essayer de créer la formule
       updatedFormula = await prisma.fieldFormula.create({
@@ -211,10 +212,10 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Mer
     
     res.json(processedFormulas);
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     const { formulaId } = req.params;
     const fieldId = req.params.id || '';
-    console.error(`Erreur API PUT /api/fields/.../formulas/${formulaId}:`, err);
+    logger.error(`Erreur API PUT /api/fields/.../formulas/${formulaId}:`, err);
     
     // En mode développement, utiliser le système de mock pour simuler la persistance
     if (mockEnabled) {
@@ -239,7 +240,7 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Mer
           order
         });
       } catch (doubleSaveError) {
-        console.warn(`[API] PUT - Erreur lors de la double sauvegarde:`, doubleSaveError);
+        logger.warn(`[API] PUT - Erreur lors de la double sauvegarde:`, doubleSaveError);
       }
       
       // Système amélioré de récupération des données avec multiples sources
@@ -254,7 +255,7 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Mer
             source = 'principale';
             
             // Vérification que la formule modifiée est bien présente
-            const formulaFound = formulas.some((f: any) => f.id === formulaId);
+            const formulaFound = formulas.some((f: Record<string, unknown>) => f.id === formulaId);
             
             if (formulas.length > 0) {
               return res.json(formulas);
@@ -262,7 +263,7 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Mer
           }
         }
       } catch (directError) {
-        console.error('[API] PUT - ❌ Erreur lors de l\'accès au store principal:', directError);
+        logger.error('[API] PUT - ❌ Erreur lors de l\'accès au store principal:', directError);
       }
       
       // Si store principal vide, essayer le store de secours
@@ -274,7 +275,7 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Mer
             source = 'secours';
             
             // Vérification que la formule modifiée est bien présente
-            const formulaFound = formulas.some((f: any) => f.id === formulaId);
+            const formulaFound = formulas.some((f: Record<string, unknown>) => f.id === formulaId);
             
             // Restaurer le store principal
             global._globalFormulasStore.set(fieldId as string, JSON.parse(JSON.stringify(formulas)));
@@ -285,7 +286,7 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Mer
           }
         }
       } catch (backupError) {
-        console.error('[API] PUT - ❌ Erreur lors de l\'accès au store de secours:', backupError);
+        logger.error('[API] PUT - ❌ Erreur lors de l\'accès au store de secours:', backupError);
       }
       
       // Si récupération directe échouée, utiliser forceRefreshStore
@@ -296,7 +297,7 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Mer
           return res.json(directFormulas);
         }
       } catch (refreshError) {
-        console.error('[API] PUT - Erreur avec forceRefreshStore:', refreshError);
+        logger.error('[API] PUT - Erreur avec forceRefreshStore:', refreshError);
       }
       
       // Dernier recours: getFormulasForField
@@ -307,10 +308,10 @@ router.put('/:formulaId', requireRole(['admin', 'super_admin']), async (req: Mer
           return res.json(allFormulas);
         }
       } catch (getError) {
-        console.error('[API] PUT - Erreur avec getFormulasForField:', getError);
+        logger.error('[API] PUT - Erreur avec getFormulasForField:', getError);
       }
       
-      console.error(`[API] PUT - ÉCHEC CRITIQUE: Toutes les tentatives de récupération ont échoué`);
+      logger.error(`[API] PUT - ÉCHEC CRITIQUE: Toutes les tentatives de récupération ont échoué`);
       return res.json([]);
     }
     

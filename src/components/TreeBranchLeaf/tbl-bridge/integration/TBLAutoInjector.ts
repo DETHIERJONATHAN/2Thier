@@ -22,8 +22,8 @@ interface TBLInjectionConfig {
 
 interface TBLInterceptionPoint {
   name: string;
-  originalMethod: any;
-  interceptedMethod: any;
+  originalMethod: unknown;
+  interceptedMethod: unknown;
   isActive: boolean;
 }
 
@@ -186,7 +186,7 @@ class TBLAutoInjector {
     // Intercepter addEventListener pour capturer les événements TreeBranchLeaf
     const originalAddEventListener = EventTarget.prototype.addEventListener;
 
-    const interceptedAddEventListener = function(this: EventTarget, type: string, listener: any, options?: boolean | AddEventListenerOptions) {
+    const interceptedAddEventListener = function(this: EventTarget, type: string, listener: unknown, options?: boolean | AddEventListenerOptions) {
       // Appel original
       originalAddEventListener.call(this, type, listener, options);
 
@@ -284,18 +284,18 @@ class TBLAutoInjector {
 
   // 🔍 UTILITAIRES
 
-  private getNestedProperty(obj: any, path: string): any {
+  private getNestedProperty(obj: unknown, path: string): any {
     return path.split('.').reduce((current, key) => current?.[key], obj);
   }
 
-  private interceptAPIObject(api: any, path: string): void {
+  private interceptAPIObject(api: unknown, path: string): void {
     const methods = ['create', 'update', 'delete', 'createNode', 'updateNode', 'deleteNode'];
 
     methods.forEach(method => {
       if (typeof api[method] === 'function') {
         const original = api[method];
         
-        api[method] = async (...args: any[]) => {
+        api[method] = async (...args: unknown[]) => {
           const result = await original.apply(api, args);
           
           // Traitement TBL après l'opération
@@ -318,7 +318,7 @@ class TBLAutoInjector {
     });
   }
 
-  private async handleAPIResult(method: string, result: any): Promise<void> {
+  private async handleAPIResult(method: string, result: unknown): Promise<void> {
     if (method.includes('create') && result.id) {
       await this.syncService.syncCreate(result as TreeBranchLeafNode);
     } else if (method.includes('update') && result.id) {
@@ -359,7 +359,7 @@ class TBLAutoInjector {
   private restoreOriginalMethod(name: string, point: TBLInterceptionPoint): void {
     try {
       const pathParts = name.split('.');
-      let obj = window as any;
+      let obj = window as unknown;
 
       // Naviguer jusqu'à l'objet parent
       for (let i = 0; i < pathParts.length - 1; i++) {

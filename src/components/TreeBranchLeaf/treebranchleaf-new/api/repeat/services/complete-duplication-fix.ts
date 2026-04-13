@@ -301,8 +301,8 @@ export async function fixCompleteDuplication(
  */
 async function fixAssociatedLookups(
   prisma: PrismaClient,
-  originalNode: any,
-  copiedNode: any,
+  originalNode: unknown,
+  copiedNode: unknown,
   suffix: string
 ): Promise<void> {
   // Chercher les nÃ…â€œuds de type "Mesure" qui pourraient contenir des lookups
@@ -435,7 +435,7 @@ function adaptReferencesForCopiedNode(data: unknown, suffix: string): unknown {
 function updateFieldConfigReferences(fieldConfig: unknown, suffix: string): unknown {
   if (!fieldConfig || typeof fieldConfig !== 'object') return fieldConfig;
 
-  const config = { ...fieldConfig as Record<string, any> };
+  const config = { ...fieldConfig as Record<string, unknown> };
 
   // Mettre ÃƒÂ  jour les rÃƒÂ©fÃƒÂ©rences vers les tables/lookups
   if (config.lookupTableId) {

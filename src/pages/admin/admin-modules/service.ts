@@ -1,9 +1,9 @@
 import { ApiResponse, ModuleCategory, ModulesResponse, CategoriesResponse, DynamicSection } from './types';
 
 export class AdminModulesService {
-  private api: any;
+  private api: unknown;
 
-  constructor(api: any) {
+  constructor(api: unknown) {
     this.api = api;
   }
 

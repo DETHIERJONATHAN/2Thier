@@ -207,7 +207,7 @@ const ChantierSettingsPage: React.FC<{ onBack?: () => void; onWorkflowSettings?:
       await api.delete(`/api/chantier-statuses/${id}`);
       message.success('Statut supprimé');
       refetch();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur lors de la suppression');
     }
   }, [api, refetch]);

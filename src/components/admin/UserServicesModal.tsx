@@ -63,7 +63,7 @@ const UserServicesModal: React.FC<UserServicesModalProps> = ({ user, visible, on
       } else {
         throw new Error(response.message || 'Erreur inconnue');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error({ content: `Échec de la mise à jour: ${err.message}`, key: service, duration: 4 });
       // On remet le switch à son état précédent en cas d'erreur
       if (service === 'email') setEmailEnabled(!checked);

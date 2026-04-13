@@ -80,7 +80,7 @@ function getStorage(): Storage {
         }).trim();
         storage = new Storage({
           projectId: process.env.GCLOUD_PROJECT || 'thiernew',
-          authClient: new GcloudAuth(token) as any,
+          authClient: new GcloudAuth(token) as unknown,
         });
         console.log('📦 [Storage] ✅ Auth via gcloud access token');
       } catch {
@@ -113,7 +113,7 @@ export async function uploadFile(
   const url = `https://storage.googleapis.com/${GCS_BUCKET}/${key}`;
   console.log(`📦 [Storage] ✅ Upload OK: ${key} (${(buffer.length / 1024).toFixed(1)} KB)`);
   return url;
-  } catch (err: any) {
+  } catch (err: unknown) {
     // If auth error, reset storage to force re-auth on next call
     if (!isProduction && (err?.code === 401 || err?.message?.includes('token') || err?.message?.includes('auth'))) {
       console.warn('📦 [Storage] ⚠️ Auth error detected, resetting storage for re-auth');

@@ -55,11 +55,11 @@ const LeadCallHistory: React.FC<LeadCallHistoryProps> = ({ leadId, leadPhone }) 
       
       // Combiner et trier par date
       const combinedHistory = [
-        ...callsResponse.calls.map((call: any) => ({
+        ...callsResponse.calls.map((call: Record<string, unknown>) => ({
           ...call,
           type: 'call' as const
         })),
-        ...smsResponse.messages.map((sms: any) => ({
+        ...smsResponse.messages.map((sms: Record<string, unknown>) => ({
           ...sms,
           type: 'sms' as const
         }))

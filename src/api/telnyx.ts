@@ -319,7 +319,7 @@ async function getActiveOutboundCallsCount(organizationId: string, windowMinutes
   }).catch(() => 0);
 }
 
-async function getOrganizationIdFromCallPayload(callData: any): Promise<string | null> {
+async function getOrganizationIdFromCallPayload(callData: unknown): Promise<string | null> {
   const connectionId = typeof callData?.connection_id === 'string' ? callData.connection_id : null;
   if (connectionId) {
     const conn = await prisma.telnyxConnection.findUnique({ where: { id: connectionId } }).catch(() => null);
@@ -335,7 +335,7 @@ async function getOrganizationIdFromCallPayload(callData: any): Promise<string |
   return null;
 }
 
-async function getOrganizationIdFromMessagePayload(messageData: any): Promise<string | null> {
+async function getOrganizationIdFromMessagePayload(messageData: unknown): Promise<string | null> {
   const connectionId = typeof messageData?.connection_id === 'string' ? messageData.connection_id : null;
   if (connectionId) {
     const conn = await prisma.telnyxConnection.findUnique({ where: { id: connectionId } }).catch(() => null);
@@ -412,7 +412,7 @@ async function planInboundCascadeLegs(organizationId: string, calledNumber?: str
 
   // === ÉTAPE 3 : Fallback numéro org (PSTN) ===
   const cfg = await prisma.telnyxConfig.findUnique({ where: { organizationId } }).catch(() => null);
-  const fallback = normalizeE164((cfg as any)?.fallbackPstnNumber) || (await getFallbackPstnNumberRaw(organizationId));
+  const fallback = normalizeE164((cfg as unknown)?.fallbackPstnNumber) || (await getFallbackPstnNumberRaw(organizationId));
   if (fallback) {
     // Éviter les doublons si le fallback org = un forwardTo user
     const alreadyInLegs = legs.some(l => l.type === 'pstn' && l.destination === fallback);
@@ -436,7 +436,7 @@ async function transferCallToLeg(params: {
   if (!auth.ok) throw new Error(auth.message);
 
   const commandId = `xfer-${callControlId}-${Date.now()}`;
-  const body: any = {
+  const body: unknown = {
     to: leg.destination,
     timeout_secs: leg.timeout,
     webhook_url: webhookUrl,
@@ -449,7 +449,7 @@ async function transferCallToLeg(params: {
 
   try {
     await axios.post(`${TELNYX_API_URL}/calls/${callControlId}/actions/transfer`, body, { headers: auth.headers });
-  } catch (error: any) {
+  } catch (error: unknown) {
     const status = error?.response?.status;
     const details = error?.response?.data;
     const errors = Array.isArray(details?.errors) ? details.errors : undefined;
@@ -471,7 +471,7 @@ router.get('/diagnostic', async (req: AuthenticatedRequest, res: Response) => {
   if (!organizationId) return res.status(401).json({ ok: false, error: 'Non autorisé' });
 
   const computedWebhookUrl = computeTelnyxWebhookUrlFromRequest(req);
-  const result: any = {
+  const result: unknown = {
     ok: false,
     organizationId,
     computedWebhookUrl,
@@ -479,7 +479,7 @@ router.get('/diagnostic', async (req: AuthenticatedRequest, res: Response) => {
   };
 
   const config = await prisma.telnyxConfig.findUnique({ where: { organizationId } }).catch(() => null);
-  const fallbackPstnNumber = (await getFallbackPstnNumberRaw(organizationId)) || normalizeE164((config as any)?.fallbackPstnNumber);
+  const fallbackPstnNumber = (await getFallbackPstnNumberRaw(organizationId)) || normalizeE164((config as unknown)?.fallbackPstnNumber);
   const storedWebhookUrl = config?.webhookUrl || null;
   const webhookMode = (!storedWebhookUrl || storedWebhookUrl === '__AUTO__') ? 'auto' : 'custom';
   result.config = {
@@ -495,20 +495,17 @@ router.get('/diagnostic', async (req: AuthenticatedRequest, res: Response) => {
   // Vérifier la présence du schéma requis (sans reset): TelnyxConfig/TelnyxSipEndpoint/TelnyxCallLeg
   // (méthode robuste: tente de requêter chaque table, sans dépendre de pg_catalog/to_regclass)
   try {
+    // SECURITY: TELNYX_TABLES whitelist — only allowed table names
     const present: Record<string, boolean> = {
       TelnyxConfig: false,
       TelnyxSipEndpoint: false,
       TelnyxCallLeg: false,
     };
 
-    for (const tableName of Object.keys(present)) {
-      try {
-        await prisma.$queryRawUnsafe(`SELECT 1 FROM "${tableName}" LIMIT 1`);
-        present[tableName] = true;
-      } catch {
-        present[tableName] = false;
-      }
-    }
+    // Each table queried individually via safe tagged template (no dynamic table name)
+    try { await prisma.$queryRaw`SELECT 1 FROM "TelnyxConfig" LIMIT 1`; present.TelnyxConfig = true; } catch { present.TelnyxConfig = false; }
+    try { await prisma.$queryRaw`SELECT 1 FROM "TelnyxSipEndpoint" LIMIT 1`; present.TelnyxSipEndpoint = true; } catch { present.TelnyxSipEndpoint = false; }
+    try { await prisma.$queryRaw`SELECT 1 FROM "TelnyxCallLeg" LIMIT 1`; present.TelnyxCallLeg = true; } catch { present.TelnyxCallLeg = false; }
 
     result.checks.push({
       name: 'db_telnyx_cascade_schema',
@@ -638,7 +635,7 @@ router.get('/diagnostic', async (req: AuthenticatedRequest, res: Response) => {
   } catch (error) {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
-      const data: any = error.response?.data;
+      const data: unknown = error.response?.data;
       const detail = data?.errors?.[0]?.detail || data?.error || data?.message;
       result.checks.push({
         name: 'telnyx_connections',
@@ -662,7 +659,7 @@ router.get('/diagnostic', async (req: AuthenticatedRequest, res: Response) => {
 function respondTelnyxAxiosError(res: Response, error: unknown, fallbackMessage: string) {
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
-    const data: any = error.response?.data;
+    const data: unknown = error.response?.data;
     const detail = data?.errors?.[0]?.detail || data?.error || data?.message;
 
     if (status === 401 || status === 403) {
@@ -685,7 +682,7 @@ function respondTelnyxAxiosError(res: Response, error: unknown, fallbackMessage:
   return res.status(500).json({ error: fallbackMessage });
 }
 
-function pickTelnyxWebhookFields(resource: any): { webhook_event_url: string | null; webhook_event_failover_url: string | null } {
+function pickTelnyxWebhookFields(resource: unknown): { webhook_event_url: string | null; webhook_event_failover_url: string | null } {
   const current = String(resource?.webhook_event_url || '').trim() || null;
   const failover = String(resource?.webhook_event_failover_url || '').trim() || null;
   return { webhook_event_url: current, webhook_event_failover_url: failover };
@@ -695,7 +692,7 @@ function shouldDebugTelnyxWebhooks(): boolean {
   return (process.env.TELNYX_DEBUG_WEBHOOKS || '').trim() === '1';
 }
 
-function telnyxWebhookDebugLog(...args: any[]) {
+function telnyxWebhookDebugLog(...args: unknown[]) {
   if (!shouldDebugTelnyxWebhooks()) return;
   // eslint-disable-next-line no-console
   console.log('🧷 [Telnyx Webhook Debug]', ...args);
@@ -707,7 +704,7 @@ async function patchTelnyxCallControlApplicationWebhook(params: {
   headers: Record<string, string>;
   applicationName?: string;
 }): Promise<
-  | { ok: true; before: any; after: any }
+  | { ok: true; before: unknown; after: any }
   | { ok: false; status?: number | null; detail?: string | null }
 > {
   const { id, desiredWebhookUrl, headers, applicationName } = params;
@@ -715,7 +712,7 @@ async function patchTelnyxCallControlApplicationWebhook(params: {
     const beforeRes = await axios.get(`${TELNYX_API_URL}/call_control_applications/${id}`, { headers });
     const before = beforeRes?.data?.data;
 
-    const baseFields: any = {
+    const baseFields: unknown = {
       webhook_event_url: desiredWebhookUrl,
       webhook_event_failover_url: desiredWebhookUrl,
     };
@@ -740,7 +737,7 @@ async function patchTelnyxCallControlApplicationWebhook(params: {
 
     if (!patched) {
       const status = axios.isAxiosError(lastErr) ? (lastErr.response?.status ?? null) : null;
-      const data: any = axios.isAxiosError(lastErr) ? lastErr.response?.data : null;
+      const data: unknown = axios.isAxiosError(lastErr) ? lastErr.response?.data : null;
       const detail = data?.errors?.[0]?.detail || data?.error || data?.message || null;
       return { ok: false, status, detail };
     }
@@ -750,7 +747,7 @@ async function patchTelnyxCallControlApplicationWebhook(params: {
     return { ok: true, before, after };
   } catch (e) {
     const status = axios.isAxiosError(e) ? (e.response?.status ?? null) : null;
-    const data: any = axios.isAxiosError(e) ? e.response?.data : null;
+    const data: unknown = axios.isAxiosError(e) ? e.response?.data : null;
     const detail = data?.errors?.[0]?.detail || data?.error || data?.message || null;
     return { ok: false, status, detail };
   }
@@ -762,7 +759,7 @@ async function patchTelnyxConnectionWebhook(params: {
   headers: Record<string, string>;
   outboundVoiceProfileId?: string | null;
 }): Promise<
-  | { ok: true; before: any; after: any; skippedOutboundProfile?: boolean }
+  | { ok: true; before: unknown; after: unknown; skippedOutboundProfile?: boolean }
   | { ok: false; status?: number | null; detail?: string | null }
 > {
   const { id, desiredWebhookUrl, headers, outboundVoiceProfileId } = params;
@@ -779,7 +776,7 @@ async function patchTelnyxConnectionWebhook(params: {
       outboundVoiceProfileId && outboundVoiceProfileId.trim() && outboundVoiceProfileId !== currentOutboundProfileId
     );
 
-    const basePayload: Record<string, any> = {
+    const basePayload: Record<string, unknown> = {
       webhook_event_url: desiredWebhookUrl,
       webhook_event_failover_url: desiredWebhookUrl,
     };
@@ -807,7 +804,7 @@ async function patchTelnyxConnectionWebhook(params: {
 
     if (!patched) {
       const status = axios.isAxiosError(lastErr) ? (lastErr.response?.status ?? null) : null;
-      const data: any = axios.isAxiosError(lastErr) ? lastErr.response?.data : null;
+      const data: unknown = axios.isAxiosError(lastErr) ? lastErr.response?.data : null;
       const detail = data?.errors?.[0]?.detail || data?.error || data?.message || null;
       return { ok: false, status, detail };
     }
@@ -817,7 +814,7 @@ async function patchTelnyxConnectionWebhook(params: {
     return { ok: true, before, after, skippedOutboundProfile: !shouldSetOutboundProfile };
   } catch (e) {
     const status = axios.isAxiosError(e) ? (e.response?.status ?? null) : null;
-    const data: any = axios.isAxiosError(e) ? e.response?.data : null;
+    const data: unknown = axios.isAxiosError(e) ? e.response?.data : null;
     const detail = data?.errors?.[0]?.detail || data?.error || data?.message || null;
     return { ok: false, status, detail };
   }
@@ -1287,7 +1284,7 @@ router.post('/calls/hangup-active', async (req: AuthenticatedRequest, res: Respo
         }).catch(() => null);
       } catch (err) {
         const status = axios.isAxiosError(err) ? (err.response?.status ?? null) : null;
-        const data: any = axios.isAxiosError(err) ? err.response?.data : null;
+        const data: unknown = axios.isAxiosError(err) ? err.response?.data : null;
         const detail = data?.errors?.[0]?.detail || data?.error || data?.message || null;
         errors.push({ callId: callControlId, status, detail });
 
@@ -1867,7 +1864,7 @@ router.post('/config', async (req: AuthenticatedRequest, res: Response) => {
     const errorId = crypto.randomUUID();
     console.error(`❌ [Telnyx API] Erreur sauvegarde configuration (errorId=${errorId}):`, error);
 
-    const anyErr: any = error as any;
+    const anyErr: unknown = error as unknown;
     const prismaCode = anyErr?.code as string | undefined;
     const dbCode = anyErr?.meta?.code as string | undefined;
     const msg = String(anyErr?.message || '');
@@ -1949,7 +1946,7 @@ router.post('/provision', async (req: AuthenticatedRequest, res: Response) => {
     if (!config.callControlAppId) warnings.push('CALL_CONTROL_APP_ID_MISSING');
     if (!config.defaultConnectionId) warnings.push('DEFAULT_CONNECTION_MISSING');
 
-    const actions: Array<Record<string, any>> = [];
+    const actions: Array<Record<string, unknown>> = [];
 
     // --- OUTBOUND VOICE PROFILE (sortant) ---
     let desiredOutboundVoiceProfileId: string | null = null;
@@ -1965,7 +1962,7 @@ router.post('/provision', async (req: AuthenticatedRequest, res: Response) => {
       });
 
       const outboundProfiles = Array.isArray(outboundProfilesRes?.data?.data) ? outboundProfilesRes.data.data : [];
-      const enabledProfiles = outboundProfiles.filter((p: any) => p?.enabled !== false);
+      const enabledProfiles = outboundProfiles.filter((p: Record<string, unknown>) => p?.enabled !== false);
 
       if (!desiredOutboundVoiceProfileId) {
         desiredOutboundVoiceProfileId = (enabledProfiles[0]?.id || outboundProfiles[0]?.id || null) as string | null;
@@ -2146,7 +2143,7 @@ router.post('/provision', async (req: AuthenticatedRequest, res: Response) => {
             params: { 'page[size]': 250 },
           });
           const fromApi = Array.isArray(numbersRes?.data?.data)
-            ? numbersRes.data.data.map((n: any) => String(n.phone_number || '')).filter(Boolean)
+            ? numbersRes.data.data.map((n: Record<string, unknown>) => String(n.phone_number || '')).filter(Boolean)
             : [];
           phoneNumbers = fromApi;
         } catch {
@@ -2444,7 +2441,7 @@ router.post('/webhooks', async (req: Request, res: Response) => {
 });
 
 // Handler pour les webhooks d'appel (avec tracking call legs)
-async function handleCallWebhook(eventType: string, callData: any, req?: Request): Promise<void> {
+async function handleCallWebhook(eventType: string, callData: unknown, req?: Request): Promise<void> {
   if (!callData || !callData.call_control_id) {
     return;
   }
@@ -2540,7 +2537,7 @@ async function handleCallWebhook(eventType: string, callData: any, req?: Request
   const mainCallControlId = call.callId;
 
   // Mettre à jour le call selon l'événement
-  const updateData: any = {
+  const updateData: unknown = {
     updatedAt: new Date()
   };
 
@@ -2564,7 +2561,7 @@ async function handleCallWebhook(eventType: string, callData: any, req?: Request
       try {
         const existingLegs = await prisma.telnyxCallLeg.findMany({ where: { callId: call.callId } });
         const cfg = await prisma.telnyxConfig.findUnique({ where: { organizationId: call.organizationId } }).catch(() => null);
-        const webhookUrl = selectTelnyxWebhookUrl((req as any) || ({ headers: {} } as any), cfg?.webhookUrl || '__AUTO__').webhookUrl;
+        const webhookUrl = selectTelnyxWebhookUrl((req as unknown) || ({ headers: {} } as unknown), cfg?.webhookUrl || '__AUTO__').webhookUrl;
 
         if (existingLegs.length === 0) {
           const planned = await planInboundCascadeLegs(call.organizationId, call.toNumber);
@@ -2770,7 +2767,7 @@ async function handleCallWebhook(eventType: string, callData: any, req?: Request
             : (cause === 'busy' ? 'busy' : 'failed');
 
           if (failedDest) {
-            await TelnyxCascadeService.updateCallLegStatus(call.callId, failedDest, failureStatus as any, undefined, new Date());
+            await TelnyxCascadeService.updateCallLegStatus(call.callId, failedDest, failureStatus as unknown, undefined, new Date());
           }
 
           const pending = await prisma.telnyxCallLeg.findMany({
@@ -2782,7 +2779,7 @@ async function handleCallWebhook(eventType: string, callData: any, req?: Request
             const cfg = await prisma.telnyxConfig.findUnique({ where: { organizationId: call.organizationId } }).catch(() => null);
             const webhookUrl = (cfg?.webhookUrl && cfg.webhookUrl !== '__AUTO__')
               ? cfg.webhookUrl
-              : joinUrl(getBackendBaseUrl({ req: req as any }), '/api/telnyx/webhooks');
+              : joinUrl(getBackendBaseUrl({ req: req as unknown }), '/api/telnyx/webhooks');
 
             const next = pending[0];
             // Reconstituer un PlannedLeg minimal pour transfer
@@ -2846,7 +2843,7 @@ async function handleCallWebhook(eventType: string, callData: any, req?: Request
 }
 
 // Handler pour les webhooks de message (inchangé)
-async function handleMessageWebhook(eventType: string, messageData: any): Promise<void> {
+async function handleMessageWebhook(eventType: string, messageData: unknown): Promise<void> {
   if (!messageData) {
     return;
   }
@@ -3104,7 +3101,7 @@ router.put('/sip-endpoints/:id', async (req: AuthenticatedRequest, res: Response
       return res.status(403).json({ error: 'Accès refusé à cette organisation' });
     }
 
-    const updateData: any = {
+    const updateData: unknown = {
       updatedAt: new Date()
     };
 
@@ -3235,7 +3232,7 @@ router.post('/sip-endpoints/:id/test', async (req: AuthenticatedRequest, res: Re
     }
 
     const toSipUri = `sip:${endpoint.sipUsername}@${endpoint.sipDomain}`;
-    const webhookUrl = selectTelnyxWebhookUrl(req as any, cfg?.webhookUrl || '__AUTO__').webhookUrl;
+    const webhookUrl = selectTelnyxWebhookUrl(req as unknown, cfg?.webhookUrl || '__AUTO__').webhookUrl;
 
     const autoHangupSecsRaw = req.body?.autoHangupSecs;
     const autoHangupSecs = (typeof autoHangupSecsRaw === 'number' && Number.isFinite(autoHangupSecsRaw))

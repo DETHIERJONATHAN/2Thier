@@ -9,6 +9,7 @@ import { sendTransitionNotifications } from './chantier-workflow';
 import { uploadExpressFile } from '../lib/storage';
 import { sendPushToUser } from './push';
 import { createBusinessAutoPost } from '../services/business-auto-post';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -62,7 +63,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const user = req.user;
     const isSuperAdmin = user?.role === 'super_admin' || user?.isSuperAdmin === true;
 
-    const where: any = {};
+    const where: unknown = {};
     if (!isSuperAdmin) {
       where.organizationId = organizationId;
 
@@ -175,14 +176,14 @@ router.get('/', authenticateToken, async (req, res) => {
     });
 
     // Calculer le résumé de facturation pour chaque chantier
-    const chantiersWithSummary = chantiers.map((c: any) => {
+    const chantiersWithSummary = chantiers.map((c: Record<string, unknown>) => {
       const invoices = c.ChantierInvoice || [];
       const total = invoices.length;
-      const paid = invoices.filter((i: any) => i.status === 'PAID').length;
-      const sent = invoices.filter((i: any) => i.status === 'SENT').length;
-      const overdue = invoices.filter((i: any) => i.status === 'OVERDUE').length;
-      const totalAmount = invoices.reduce((s: number, i: any) => s + (i.amount || 0), 0);
-      const paidAmount = invoices.filter((i: any) => i.status === 'PAID').reduce((s: number, i: any) => s + (i.amount || 0), 0);
+      const paid = invoices.filter((i: Record<string, unknown>) => i.status === 'PAID').length;
+      const sent = invoices.filter((i: Record<string, unknown>) => i.status === 'SENT').length;
+      const overdue = invoices.filter((i: Record<string, unknown>) => i.status === 'OVERDUE').length;
+      const totalAmount = invoices.reduce((s: number, i: unknown) => s + (i.amount || 0), 0);
+      const paidAmount = invoices.filter((i: Record<string, unknown>) => i.status === 'PAID').reduce((s: number, i: unknown) => s + (i.amount || 0), 0);
       // Supprimer la liste brute des factures (trop lourd pour le Kanban)
       const { ChantierInvoice: _, ...rest } = c;
       return {
@@ -196,7 +197,7 @@ router.get('/', authenticateToken, async (req, res) => {
       data: chantiersWithSummary
     });
   } catch (error) {
-    console.error('[Chantiers] Erreur GET /:', error);
+    logger.error('[Chantiers] Erreur GET /:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -266,7 +267,7 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[Chantiers] Erreur GET /stats/overview:', error);
+    logger.error('[Chantiers] Erreur GET /stats/overview:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -328,7 +329,7 @@ router.get('/by-lead/:leadId', authenticateToken, async (req, res) => {
       data: chantiers
     });
   } catch (error) {
-    console.error('[Chantiers] Erreur GET /by-lead/:leadId:', error);
+    logger.error('[Chantiers] Erreur GET /by-lead/:leadId:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -455,7 +456,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
           const { interpretReference } = await import('../components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.js');
 
           // Helper: chercher totalTVACSource / totalHTVASource dans config ET dans modules imbriqués (MODULAR_PAGE)
-          const findTotalSourceInConfig = (config: any): string | null => {
+          const findTotalSourceInConfig = (config: unknown): string | null => {
             if (config.totalTVACSource) return config.totalTVACSource;
             if (config.totalHTVASource) return config.totalHTVASource;
             if (Array.isArray(config.modules)) {
@@ -469,7 +470,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
           };
 
           for (const section of docTemplate.DocumentTemplate.DocumentSection) {
-            const sConfig = (section.config || {}) as any;
+            const sConfig = (section.config || {}) as unknown;
             const totalSource = findTotalSourceInConfig(sConfig);
             if (totalSource) {
               const evalRef = totalSource.startsWith('node-formula:')
@@ -493,7 +494,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
           }
         }
       } catch (err) {
-        console.warn('[Chantiers] ⚠️ Lazy-compute montant échoué:', (err as Error).message);
+        logger.warn('[Chantiers] ⚠️ Lazy-compute montant échoué:', (err as Error).message);
       }
     }
 
@@ -505,7 +506,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[Chantiers] Erreur GET /:id:', error);
+    logger.error('[Chantiers] Erreur GET /:id:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -639,7 +640,7 @@ router.post('/', authenticateToken, async (req, res) => {
       entityLabel: data.productLabel || 'Nouveau chantier',
       clientName: clientName || undefined,
       amount: data.amount ? Number(data.amount) : undefined,
-    }).catch(err => console.error('[Chantiers] Auto-post error:', err));
+    }).catch(err => logger.error('[Chantiers] Auto-post error:', err));
 
     res.status(201).json({
       success: true,
@@ -647,7 +648,7 @@ router.post('/', authenticateToken, async (req, res) => {
       message: `Chantier "${data.productLabel}" créé avec succès`
     });
   } catch (error) {
-    console.error('[Chantiers] Erreur POST /:', error);
+    logger.error('[Chantiers] Erreur POST /:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -701,7 +702,7 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
         commercialId = lead.assignedToId || user?.id;
 
         // Extraire l'adresse depuis lead.data
-        const leadData = (lead.data as any) || {};
+        const leadData = (lead.data as unknown) || {};
         const addressParts = [];
         const street = leadData.street || leadData.address || '';
         const number = leadData.number || '';
@@ -742,7 +743,7 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
           }
         });
         if (genDoc) {
-          const snapshot = (genDoc.dataSnapshot as any) || {};
+          const snapshot = (genDoc.dataSnapshot as unknown) || {};
           const quote = snapshot.quote || {};
           // Priorité 1 : quote.totalTTC dans le dataSnapshot (si déjà stocké)
           const ttc = quote.totalTTC || snapshot.totalTTC || null;
@@ -758,7 +759,7 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
               const { interpretReference } = await import('../components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.js');
               
               // Helper: chercher totalTVACSource/totalHTVASource dans config ou dans ses modules imbriqués
-              const findTotalSource = (config: any): string | null => {
+              const findTotalSource = (config: unknown): string | null => {
                 if (config.totalTVACSource) return config.totalTVACSource;
                 if (config.totalHTVASource) return config.totalHTVASource;
                 // Chercher dans les modules imbriqués (MODULAR_PAGE)
@@ -773,7 +774,7 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
               };
               
               for (const section of genDoc.DocumentTemplate.DocumentSection) {
-                const sConfig = (section.config || {}) as any;
+                const sConfig = (section.config || {}) as unknown;
                 const totalSource = findTotalSource(sConfig);
                 if (totalSource) {
                   const evalRef = totalSource.startsWith('node-formula:')
@@ -791,7 +792,7 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
                 }
               }
             } catch (formulaErr) {
-              console.warn('[Chantiers] ⚠️ Impossible de résoudre le montant via formules TBL:', (formulaErr as Error).message);
+              logger.warn('[Chantiers] ⚠️ Impossible de résoudre le montant via formules TBL:', (formulaErr as Error).message);
             }
           }
 
@@ -812,7 +813,7 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
           }
         }
       } catch (err) {
-        console.warn('[Chantiers] Impossible de lire le dataSnapshot du GeneratedDocument:', (err as Error).message);
+        logger.warn('[Chantiers] Impossible de lire le dataSnapshot du GeneratedDocument:', (err as Error).message);
       }
     }
 
@@ -866,7 +867,7 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
           updatedAt: new Date()
         }
       }).catch(err => {
-        console.warn('[Chantiers] Impossible de mettre à jour le GeneratedDocument:', err.message);
+        logger.warn('[Chantiers] Impossible de mettre à jour le GeneratedDocument:', err.message);
       });
     }
 
@@ -928,7 +929,7 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
       entityLabel: productLabel || 'Nouveau chantier',
       clientName: clientName || undefined,
       amount: amount ? parseFloat(amount) : undefined,
-    }).catch(err => console.error('[Chantiers] Auto-post error:', err));
+    }).catch(err => logger.error('[Chantiers] Auto-post error:', err));
 
     res.status(201).json({
       success: true,
@@ -936,7 +937,7 @@ router.post('/from-lead-document', authenticateToken, async (req, res) => {
       message: `🏗️ Chantier "${productLabel}" créé à partir du document signé`
     });
   } catch (error) {
-    console.error('[Chantiers] Erreur POST /from-lead-document:', error);
+    logger.error('[Chantiers] Erreur POST /from-lead-document:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -1036,7 +1037,7 @@ router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
       message: 'Chantier mis à jour avec succès'
     });
   } catch (error) {
-    console.error('[Chantiers] Erreur PUT /:id:', error);
+    logger.error('[Chantiers] Erreur PUT /:id:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -1133,7 +1134,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
           }
         }
       } catch (checkErr) {
-        console.error('[Chantiers] Erreur vérif factures requises (non bloquant):', checkErr);
+        logger.error('[Chantiers] Erreur vérif factures requises (non bloquant):', checkErr);
       }
     }
 
@@ -1162,7 +1163,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
         }
       });
     } catch (histErr) {
-      console.error('[Chantiers] Erreur historique (non bloquant):', histErr);
+      logger.error('[Chantiers] Erreur historique (non bloquant):', histErr);
     }
 
     // Envoyer les notifications configurées pour cette transition (réutilise la logique partagée avec emails)
@@ -1183,7 +1184,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
           }
         }
       } catch (notifErr) {
-        console.error('[Chantiers] Erreur notifications (non bloquant):', notifErr);
+        logger.error('[Chantiers] Erreur notifications (non bloquant):', notifErr);
       }
     }
 
@@ -1204,7 +1205,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
         planItems = templates.map(t => ({
           ...t,
           chantierId: id,
-        })) as any;
+        })) as unknown;
       }
 
       if (planItems.length > 0) {
@@ -1214,7 +1215,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
           select: { amount: true, GeneratedDocument: { select: { dataSnapshot: true, paymentAmount: true } } },
         });
         const chantierAmount = chantierFull?.amount
-          || (chantierFull?.GeneratedDocument?.dataSnapshot as any)?.quote?.totalTTC
+          || (chantierFull?.GeneratedDocument?.dataSnapshot as unknown)?.quote?.totalTTC
           || chantierFull?.GeneratedDocument?.paymentAmount
           || null;
 
@@ -1264,7 +1265,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
         }
       }
     } catch (autoInvErr) {
-      console.error('[Chantiers] Erreur auto-création factures (non bloquant):', autoInvErr);
+      logger.error('[Chantiers] Erreur auto-création factures (non bloquant):', autoInvErr);
     }
 
     // 🐝 Auto-post social : chantier terminé (si statut final)
@@ -1276,7 +1277,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
         eventType: 'chantier_completed',
         entityId: id,
         entityLabel: `Chantier ${chantier.ChantierStatus?.name}`,
-      }).catch(err => console.error('[Chantiers] Auto-post error:', err));
+      }).catch(err => logger.error('[Chantiers] Auto-post error:', err));
     }
 
     res.json({
@@ -1285,7 +1286,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
       message: `Statut changé vers "${chantier.ChantierStatus?.name}"`
     });
   } catch (error) {
-    console.error('[Chantiers] Erreur PUT /:id/status:', error);
+    logger.error('[Chantiers] Erreur PUT /:id/status:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -1335,7 +1336,7 @@ router.delete('/:id', authenticateToken, isAdmin, async (req, res) => {
       message: 'Chantier supprimé avec succès'
     });
   } catch (error) {
-    console.error('[Chantiers] Erreur DELETE /:id:', error);
+    logger.error('[Chantiers] Erreur DELETE /:id:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur interne du serveur'
@@ -1436,7 +1437,7 @@ router.get('/rectification-context/:leadId', authenticateToken, async (req, res)
       },
     });
   } catch (error) {
-    console.error('[Chantiers] Erreur GET /rectification-context/:leadId:', error);
+    logger.error('[Chantiers] Erreur GET /rectification-context/:leadId:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1555,7 +1556,7 @@ router.post('/resubmit-to-chantier/:leadId', authenticateToken, async (req, res)
       data: { chantierId: chantier.id, leadStatus: 'won' },
     });
   } catch (error) {
-    console.error('[Chantiers] Erreur POST /resubmit-to-chantier/:leadId:', error);
+    logger.error('[Chantiers] Erreur POST /resubmit-to-chantier/:leadId:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });

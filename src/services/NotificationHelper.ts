@@ -28,7 +28,7 @@ async function createNotification(payload: NotifPayload): Promise<void> {
       data: {
         id: uuidv4(),
         organizationId: payload.organizationId,
-        type: payload.type as any,
+        type: payload.type as unknown,
         data: {
           ...payload.data,
           timestamp: new Date().toISOString(),

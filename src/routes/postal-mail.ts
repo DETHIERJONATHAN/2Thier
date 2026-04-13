@@ -27,6 +27,7 @@ import { db } from '../lib/database.js';
 import { getPostalService } from '../services/PostalEmailService.js';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
+import { logger } from '../lib/logger';
 
 // ─── Vérifie si Postal API REST est configuré ET fonctionnel ──
 // Note: L'API REST nécessite qu'un "Server" soit créé dans l'interface Postal.
@@ -54,11 +55,11 @@ async function isPostalApiConfigured(): Promise<boolean> {
     const contentType = resp.headers.get('content-type') || '';
     postalApiVerified = contentType.includes('application/json');
     if (!postalApiVerified) {
-      console.warn(`⚠️ [POSTAL] API REST non fonctionnelle (${resp.status}, content-type: ${contentType}) — utilisation SMTP direct`);
+      logger.warn(`⚠️ [POSTAL] API REST non fonctionnelle (${resp.status}, content-type: ${contentType}) — utilisation SMTP direct`);
     } else {
     }
   } catch {
-    console.warn('⚠️ [POSTAL] API REST inaccessible — utilisation SMTP direct');
+    logger.warn('⚠️ [POSTAL] API REST inaccessible — utilisation SMTP direct');
     postalApiVerified = false;
   }
   postalApiChecked = true;
@@ -202,7 +203,7 @@ router.post('/send', authMiddleware, async (req: AuthenticatedRequest, res) => {
       messageId,
     });
   } catch (error) {
-    console.error('❌ [POSTAL] Erreur envoi:', error);
+    logger.error('❌ [POSTAL] Erreur envoi:', error);
     res.status(500).json({
       error: "Erreur lors de l'envoi de l'email",
       details: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -232,7 +233,7 @@ router.post('/sync', authMiddleware, async (req: AuthenticatedRequest, res) => {
       emailCount,
     });
   } catch (error) {
-    console.error('❌ [POSTAL] Erreur sync:', error);
+    logger.error('❌ [POSTAL] Erreur sync:', error);
     res.status(500).json({
       error: 'Erreur lors de la synchronisation',
       details: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -271,7 +272,7 @@ router.post('/test', authMiddleware, async (req: AuthenticatedRequest, res) => {
         method = 'SMTP';
       }
     } catch (e) {
-      console.warn(`⚠️ [POSTAL] Test connexion failed:`, e);
+      logger.warn(`⚠️ [POSTAL] Test connexion failed:`, e);
     }
 
 
@@ -283,7 +284,7 @@ router.post('/test', authMiddleware, async (req: AuthenticatedRequest, res) => {
       emailAddress: emailAccount?.emailAddress || null,
     });
   } catch (error) {
-    console.error('❌ [POSTAL] Erreur test:', error);
+    logger.error('❌ [POSTAL] Erreur test:', error);
     res.status(500).json({
       error: 'Erreur lors du test de connexion',
       details: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -383,7 +384,7 @@ router.get('/emails', authMiddleware, async (req: AuthenticatedRequest, res) => 
       page: parseInt(page, 10) || 1,
     });
   } catch (error) {
-    console.error('❌ [POSTAL] Erreur listing emails:', error);
+    logger.error('❌ [POSTAL] Erreur listing emails:', error);
     res.status(500).json({
       error: 'Erreur lors de la récupération des emails',
       details: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -433,7 +434,7 @@ router.get('/emails/:id', authMiddleware, async (req: AuthenticatedRequest, res)
       createdAt: email.createdAt,
     });
   } catch (error) {
-    console.error('❌ [POSTAL] Erreur récupération email:', error);
+    logger.error('❌ [POSTAL] Erreur récupération email:', error);
     res.status(500).json({
       error: "Erreur lors de la récupération de l'email",
       details: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -471,7 +472,7 @@ router.delete('/emails/:id', authMiddleware, async (req: AuthenticatedRequest, r
 
     res.json({ success: true, message: 'Email déplacé dans la corbeille' });
   } catch (error) {
-    console.error('❌ [POSTAL] Erreur suppression email:', error);
+    logger.error('❌ [POSTAL] Erreur suppression email:', error);
     res.status(500).json({
       error: "Erreur lors de la suppression de l'email",
       details: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -508,7 +509,7 @@ router.post('/emails/:id/star', authMiddleware, async (req: AuthenticatedRequest
       message: updated.isStarred ? 'Email ajouté aux favoris' : 'Email retiré des favoris',
     });
   } catch (error) {
-    console.error('❌ [POSTAL] Erreur toggle star:', error);
+    logger.error('❌ [POSTAL] Erreur toggle star:', error);
     res.status(500).json({
       error: 'Erreur lors de la modification du favori',
       details: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -546,7 +547,7 @@ router.post('/emails/:id/read', authMiddleware, async (req: AuthenticatedRequest
       isRead: updated.isRead,
     });
   } catch (error) {
-    console.error('❌ [POSTAL] Erreur toggle read:', error);
+    logger.error('❌ [POSTAL] Erreur toggle read:', error);
     res.status(500).json({
       error: "Erreur lors de la modification de l'état de lecture",
       details: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -585,7 +586,7 @@ router.get('/folders', authMiddleware, async (req: AuthenticatedRequest, res) =>
 
     res.json(folders);
   } catch (error) {
-    console.error('❌ [POSTAL] Erreur listing dossiers:', error);
+    logger.error('❌ [POSTAL] Erreur listing dossiers:', error);
     res.status(500).json({
       error: 'Erreur lors de la récupération des dossiers',
       details: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -620,7 +621,7 @@ router.post('/inbound', async (req, res) => {
       emailId,
     });
   } catch (error) {
-    console.error('❌ [POSTAL] Erreur webhook inbound:', error);
+    logger.error('❌ [POSTAL] Erreur webhook inbound:', error);
     // On retourne 200 quand même pour que Postal ne réessaie pas indéfiniment
     res.status(200).json({
       success: false,

@@ -27,7 +27,7 @@ interface AIAssistButtonProps {
   /** Label du champ pour contextualiser */
   fieldLabel: string;
   /** Valeur actuelle du champ */
-  currentValue?: any;
+  currentValue?: unknown;
   /** Contexte IA (type de section, business, tone, etc.) */
   aiContext: {
     sectionType: string;
@@ -38,7 +38,7 @@ interface AIAssistButtonProps {
     keywords?: string[];
   };
   /** Callback quand le contenu est généré */
-  onGenerated: (content: any) => void;
+  onGenerated: (content: unknown) => void;
 }
 
 const AIAssistButton: React.FC<AIAssistButtonProps> = ({
@@ -91,7 +91,7 @@ const AIAssistButton: React.FC<AIAssistButtonProps> = ({
         throw new Error('Aucune suggestion générée');
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ [AI] Erreur génération:', error);
       
       // Gestion des erreurs spécifiques
@@ -112,7 +112,7 @@ const AIAssistButton: React.FC<AIAssistButtonProps> = ({
   /**
    * ✅ SÉLECTION D'UNE SUGGESTION
    */
-  const handleSelectSuggestion = (content: any) => {
+  const handleSelectSuggestion = (content: unknown) => {
     onGenerated(content);
     setModalVisible(false);
     setSuggestions([]);
@@ -124,7 +124,7 @@ const AIAssistButton: React.FC<AIAssistButtonProps> = ({
   /**
    * 🎨 RENDU DU CONTENU SELON LE TYPE
    */
-  const renderContent = (content: any) => {
+  const renderContent = (content: unknown) => {
     // Si c'est un tableau (features, tags, etc.)
     if (Array.isArray(content)) {
       return (
@@ -217,7 +217,7 @@ const AIAssistButton: React.FC<AIAssistButtonProps> = ({
 
         <List
           dataSource={suggestions}
-          renderItem={(suggestion: any, index: number) => (
+          renderItem={(suggestion: unknown, index: number) => (
             <List.Item
               key={index}
               style={{

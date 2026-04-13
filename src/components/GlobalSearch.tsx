@@ -27,7 +27,7 @@ interface SearchResult {
   avatarUrl?: string;
   firstName?: string;
   imageUrl?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface SearchResponse {
@@ -156,8 +156,8 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
     if (q.length < MIN_WEB_QUERY_LENGTH) { setWebResults([]); return; }
     setWebLoading(true);
     try {
-      const data = await apiStable.get(`/api/search/web?q=${encodeURIComponent(q)}&limit=10`) as { results: any[] };
-      const mapped: SearchResult[] = (data.results || []).map((r: any, i: number) => ({
+      const data = await apiStable.get(`/api/search/web?q=${encodeURIComponent(q)}&limit=10`) as { results: unknown[] };
+      const mapped: SearchResult[] = (data.results || []).map((r: unknown, i: number) => ({
         id: `web-${i}`,
         _type: 'web',
         _label: r.title || r.url,
@@ -197,9 +197,9 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: unknown) => {
       const transcript = Array.from(event.results)
-        .map((r: any) => r[0].transcript)
+        .map((r: Record<string, unknown>) => r[0].transcript)
         .join('');
       setQuery(transcript);
       if (event.results[0]?.isFinal) {

@@ -44,7 +44,7 @@ export default function InscriptionMultiEtapes({ onSwitchToLogin }: { onSwitchTo
         }
       }, 2000);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(err.message || "Une erreur est survenue lors de l'inscription.");
     } finally {
       setLoading(false);

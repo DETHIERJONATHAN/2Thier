@@ -118,10 +118,10 @@ interface FormField {
   helpText?: string;
   isRequired: boolean;
   defaultValue?: string;
-  options?: any;
+  options?: unknown;
   tblNodeId?: number;
   tblNodePath?: string;
-  validationRules?: any;
+  validationRules?: unknown;
 }
 
 interface FormsManagerProps {
@@ -222,7 +222,7 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
     }
   };
 
-  const handleSaveForm = async (values: any) => {
+  const handleSaveForm = async (values: unknown) => {
     try {
       // Extraire le phoneNumber, treeId et requiresCommercialTracking
       const { phoneNumber, treeId, requiresCommercialTracking, ...formValues } = values;
@@ -259,7 +259,7 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
       }
       setFormModalVisible(false);
       fetchForms();
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err.response?.data?.error?.includes('slug')) {
         message.error('Ce slug est déjà utilisé');
       } else {
@@ -335,7 +335,7 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
       key: 'content',
       width: 150,
       align: 'center',
-      render: (_: any, record: WebsiteForm) => {
+      render: (_: unknown, record: WebsiteForm) => {
         const steps = record._count?.steps || 0;
         const questions = record._count?.questions || 0;
         return (
@@ -359,7 +359,7 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
       key: 'submissions',
       width: 120,
       align: 'center',
-      render: (count: any) => (
+      render: (count: unknown) => (
         <Badge count={count?.submissions || 0} showZero style={{ backgroundColor: '#1890ff' }} />
       )
     },
@@ -648,7 +648,7 @@ interface StepsManagerModalProps {
   visible: boolean;
   onClose: () => void;
   form: WebsiteForm | null;
-  api: any;
+  api: unknown;
   onUpdate: () => void;
 }
 
@@ -709,7 +709,7 @@ const StepsManagerModal: React.FC<StepsManagerModalProps> = ({
     setStepModalVisible(true);
   };
 
-  const handleSaveStep = async (values: any) => {
+  const handleSaveStep = async (values: unknown) => {
     if (!websiteForm) return;
     try {
       if (editingStep) {
@@ -939,7 +939,7 @@ interface FieldsManagerModalProps {
   visible: boolean;
   onClose: () => void;
   step: FormStep | null;
-  api: any;
+  api: unknown;
   onUpdate: () => void;
 }
 
@@ -1007,7 +1007,7 @@ const FieldsManagerModal: React.FC<FieldsManagerModalProps> = ({
     setFieldModalVisible(true);
   };
 
-  const handleSaveField = async (values: any) => {
+  const handleSaveField = async (values: unknown) => {
     if (!step) return;
     try {
       // Parser les options si c'est une chaîne JSON

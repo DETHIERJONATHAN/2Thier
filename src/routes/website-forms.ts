@@ -25,6 +25,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authMiddleware, AuthenticatedRequest as AuthReq } from '../middlewares/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -89,7 +90,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     
     res.json(forms);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error fetching forms:', error);
+    logger.error('❌ [WebsiteForms] Error fetching forms:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des formulaires',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -139,7 +140,7 @@ router.get('/by-website/:websiteId', async (req: AuthenticatedRequest, res: Resp
     
     res.json(forms);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error fetching forms by website:', error);
+    logger.error('❌ [WebsiteForms] Error fetching forms by website:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des formulaires',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -232,7 +233,7 @@ router.get('/my-commercial-links', authMiddleware, async (req: AuthenticatedRequ
       forms: formattedForms
     });
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error getting commercial links:', error);
+    logger.error('❌ [WebsiteForms] Error getting commercial links:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des liens commerciaux',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -283,7 +284,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
     
     res.json(form);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error fetching form:', error);
+    logger.error('❌ [WebsiteForms] Error fetching form:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération du formulaire',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -331,7 +332,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     
     res.status(201).json(form);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error creating form:', error);
+    logger.error('❌ [WebsiteForms] Error creating form:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création du formulaire',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -395,7 +396,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
     
     res.json(form);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error updating form:', error);
+    logger.error('❌ [WebsiteForms] Error updating form:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la mise à jour du formulaire',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -428,7 +429,7 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
     
     res.json({ success: true, message: 'Formulaire supprimé' });
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error deleting form:', error);
+    logger.error('❌ [WebsiteForms] Error deleting form:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la suppression du formulaire',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -481,7 +482,7 @@ router.post('/:id/steps', async (req: AuthenticatedRequest, res: Response) => {
     
     res.status(201).json(step);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error creating step:', error);
+    logger.error('❌ [WebsiteForms] Error creating step:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création de l\'étape',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -516,7 +517,7 @@ router.put('/steps/:stepId', async (req: AuthenticatedRequest, res: Response) =>
     
     res.json(step);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error updating step:', error);
+    logger.error('❌ [WebsiteForms] Error updating step:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la mise à jour de l\'étape',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -539,7 +540,7 @@ router.delete('/steps/:stepId', async (req: AuthenticatedRequest, res: Response)
     
     res.json({ success: true, message: 'Étape supprimée' });
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error deleting step:', error);
+    logger.error('❌ [WebsiteForms] Error deleting step:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la suppression de l\'étape',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -569,7 +570,7 @@ router.put('/:id/steps/reorder', async (req: AuthenticatedRequest, res: Response
     
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error reordering steps:', error);
+    logger.error('❌ [WebsiteForms] Error reordering steps:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la réorganisation',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -630,7 +631,7 @@ router.post('/steps/:stepId/fields', async (req: AuthenticatedRequest, res: Resp
     
     res.status(201).json(field);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error creating field:', error);
+    logger.error('❌ [WebsiteForms] Error creating field:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création du champ',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -675,7 +676,7 @@ router.put('/fields/:fieldId', async (req: AuthenticatedRequest, res: Response) 
     
     res.json(field);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error updating field:', error);
+    logger.error('❌ [WebsiteForms] Error updating field:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la mise à jour du champ',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -698,7 +699,7 @@ router.delete('/fields/:fieldId', async (req: AuthenticatedRequest, res: Respons
     
     res.json({ success: true, message: 'Champ supprimé' });
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error deleting field:', error);
+    logger.error('❌ [WebsiteForms] Error deleting field:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la suppression du champ',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -727,7 +728,7 @@ router.put('/steps/:stepId/fields/reorder', async (req: AuthenticatedRequest, re
     
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error reordering fields:', error);
+    logger.error('❌ [WebsiteForms] Error reordering fields:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la réorganisation',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -773,7 +774,7 @@ router.post('/:id/link-website', async (req: AuthenticatedRequest, res: Response
     
     res.status(201).json(link);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error linking:', error);
+    logger.error('❌ [WebsiteForms] Error linking:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la liaison',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -799,7 +800,7 @@ router.delete('/:id/unlink-website/:websiteId', async (req: AuthenticatedRequest
     
     res.json({ success: true, message: 'Liaison supprimée' });
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error unlinking:', error);
+    logger.error('❌ [WebsiteForms] Error unlinking:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la suppression de la liaison',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -848,7 +849,7 @@ router.get('/:id/stats', async (req: AuthenticatedRequest, res: Response) => {
       recentSubmissions: recent
     });
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error fetching stats:', error);
+    logger.error('❌ [WebsiteForms] Error fetching stats:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des statistiques',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -901,7 +902,7 @@ router.get('/:id/submissions', async (req: AuthenticatedRequest, res: Response) 
 
     res.json(mapped);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error fetching submissions:', error);
+    logger.error('❌ [WebsiteForms] Error fetching submissions:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des soumissions' });
   }
 });
@@ -936,7 +937,7 @@ router.get('/:id/questions', async (req: AuthenticatedRequest, res: Response) =>
     
     res.json(questions);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error fetching questions:', error);
+    logger.error('❌ [WebsiteForms] Error fetching questions:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération des questions',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -1006,7 +1007,7 @@ router.post('/:id/questions', async (req: AuthenticatedRequest, res: Response) =
     
     res.status(201).json(question);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error creating question:', error);
+    logger.error('❌ [WebsiteForms] Error creating question:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création de la question',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -1066,7 +1067,7 @@ router.put('/questions/:questionId', async (req: AuthenticatedRequest, res: Resp
     
     res.json(question);
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error updating question:', error);
+    logger.error('❌ [WebsiteForms] Error updating question:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la mise à jour de la question',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -1100,7 +1101,7 @@ router.delete('/questions/:questionId', async (req: AuthenticatedRequest, res: R
     
     res.json({ success: true, message: 'Question supprimée' });
   } catch (error) {
-    console.error('❌ [WebsiteForms] Error deleting question:', error);
+    logger.error('❌ [WebsiteForms] Error deleting question:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la suppression de la question',
       message: error instanceof Error ? error.message : 'Erreur inconnue'

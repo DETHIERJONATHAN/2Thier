@@ -1,9 +1,12 @@
 import express from 'express';
 import { getValidationsByFieldId, createValidation, updateValidation, deleteValidationById } from '../services/validationService.js';
 import { requireRole } from '../middlewares/requireRole.js';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 // Le paramètre mergeParams est crucial pour accéder à `id` depuis le routeur parent (fields.ts)
 const router = express.Router({ mergeParams: true });
+router.use(authenticateToken);
 
 // GET /api/fields/:id/validations
 router.get('/', requireRole(['admin', 'super_admin']), async (req, res) => {
@@ -15,7 +18,7 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req, res) => {
 
     if (!rawId) {
         // En mode fail-soft pour ne pas casser l'UI (retourner liste vide)
-        console.warn("[ValidationsRouter] ID de champ manquant, retour d'une liste vide");
+        logger.warn("[ValidationsRouter] ID de champ manquant, retour d'une liste vide");
         return res.json({ success: true, data: [] });
     }
 
@@ -24,7 +27,7 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req, res) => {
         return res.json({ success: true, data: validations });
     } catch (error) {
         // Ne pas renvoyer 500 pour éviter de bloquer le panneau UI; log et renvoyer une liste vide
-        console.error(`Erreur lors de la récupération des validations pour le champ ${rawId}:`, error);
+        logger.error(`Erreur lors de la récupération des validations pour le champ ${rawId}:`, error);
         return res.json({ success: true, data: [] });
     }
 });
@@ -40,7 +43,7 @@ router.get('/read', async (req, res) => {
         const validations = await getValidationsByFieldId(String(rawId));
         return res.json({ success: true, data: validations });
     } catch (error) {
-        console.error(`[ValidationsRouter] Erreur (read) pour le champ ${rawId}:`, error);
+        logger.error(`[ValidationsRouter] Erreur (read) pour le champ ${rawId}:`, error);
         return res.json({ success: true, data: [] });
     }
 });
@@ -74,7 +77,7 @@ router.post('/', requireRole(['admin', 'super_admin']), async (req, res) => {
         const validation = await createValidation(id, validationData);
         res.status(201).json({ success: true, data: validation });
     } catch (error) {
-        console.error(`Erreur lors de la création d'une validation pour le champ ${id}:`, error);
+        logger.error(`Erreur lors de la création d'une validation pour le champ ${id}:`, error);
         // En mode développement, simuler une réponse réussie même en cas d'erreur
         if (process.env.NODE_ENV === 'development') {
             return res.status(201).json({
@@ -118,7 +121,7 @@ router.delete('/:id', async (req, res) => {
         const deletedValidation = await deleteValidationById(id);
         res.status(200).json({ success: true, data: deletedValidation });
     } catch (error) {
-        console.error(`Erreur lors de la suppression de la validation ${id}:`, error);
+        logger.error(`Erreur lors de la suppression de la validation ${id}:`, error);
         // Simuler une réponse réussie en cas d'erreur pour éviter les problèmes en développement
         res.status(200).json({ 
             success: true, 
@@ -158,7 +161,7 @@ router.patch('/:id', async (req, res) => {
         const updatedValidation = await updateValidation(id, validationData);
         res.status(200).json({ success: true, data: updatedValidation });
     } catch (error) {
-        console.error(`Erreur lors de la mise à jour de la validation ${id}:`, error);
+        logger.error(`Erreur lors de la mise à jour de la validation ${id}:`, error);
         // En mode développement, simuler une réponse réussie même en cas d'erreur
         if (process.env.NODE_ENV === 'development') {
             return res.status(200).json({

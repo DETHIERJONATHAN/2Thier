@@ -6,11 +6,12 @@ import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { uploadFile } from '../lib/storage';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
 // ═══ Helpers ═══
-function getOrgId(req: any): string | null {
+function getOrgId(req: unknown): string | null {
   return (req.headers['x-organization-id'] as string) || null;
 }
 
@@ -223,8 +224,8 @@ router.get('/technicians', authenticateToken, async (req, res) => {
     });
 
     return res.json({ success: true, data: enriched });
-  } catch (error: any) {
-    console.error('[Teams] Erreur liste techniciens:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur liste techniciens:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -268,9 +269,9 @@ router.post('/technicians', authenticateToken, requireChantierAction('team_panel
     });
 
     return res.status(201).json({ success: true, data: tech });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.code === 'P2002') return res.status(409).json({ success: false, message: 'Un technicien avec ces informations existe déjà' });
-    console.error('[Teams] Erreur création technicien:', error);
+    logger.error('[Teams] Erreur création technicien:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -288,8 +289,8 @@ router.put('/technicians/:id', authenticateToken, requireChantierAction('team_pa
     });
 
     return res.json({ success: true, data: tech });
-  } catch (error: any) {
-    console.error('[Teams] Erreur modif technicien:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur modif technicien:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -300,8 +301,8 @@ router.delete('/technicians/:id', authenticateToken, requireChantierAction('team
     const organizationId = getOrgId(req);
     await db.technician.update({ where: { id: req.params.id, organizationId }, data: { isActive: false } });
     return res.json({ success: true, message: 'Technicien désactivé' });
-  } catch (error: any) {
-    console.error('[Teams] Erreur suppression technicien:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur suppression technicien:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -346,8 +347,8 @@ router.post('/technicians/sync', authenticateToken, requireChantierAction('team_
       message: `${newTechs.length} technicien(s) synchronisé(s)`,
       data: { created: newTechs.length, total: userOrgs.length },
     });
-  } catch (error: any) {
-    console.error('[Teams] Erreur sync techniciens:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur sync techniciens:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -377,8 +378,8 @@ router.get('/technicians/org-users', authenticateToken, async (req, res) => {
       .map(uo => ({ ...uo.User, orgRole: uo.Role }));
 
     return res.json({ success: true, data: available });
-  } catch (error: any) {
-    console.error('[Teams] Erreur org-users:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur org-users:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -400,7 +401,7 @@ const unavailabilitySchema = z.object({
 router.get('/unavailabilities', authenticateToken, async (req, res) => {
   try {
     const { technicianId, startDate, endDate } = req.query;
-    const where: any = {};
+    const where: unknown = {};
     if (technicianId) where.technicianId = technicianId;
     if (startDate && endDate) {
       where.startDate = { lte: new Date(endDate as string) };
@@ -414,8 +415,8 @@ router.get('/unavailabilities', authenticateToken, async (req, res) => {
     });
 
     return res.json({ success: true, data: items });
-  } catch (error: any) {
-    console.error('[Teams] Erreur unavailabilities:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur unavailabilities:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -439,8 +440,8 @@ router.post('/unavailabilities', authenticateToken, requireChantierAction('team_
     });
 
     return res.status(201).json({ success: true, data: item });
-  } catch (error: any) {
-    console.error('[Teams] Erreur création unavailability:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur création unavailability:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -450,8 +451,8 @@ router.delete('/unavailabilities/:id', authenticateToken, requireChantierAction(
   try {
     await db.technicianUnavailability.delete({ where: { id: req.params.id } });
     return res.json({ success: true, message: 'Indisponibilité supprimée' });
-  } catch (error: any) {
-    console.error('[Teams] Erreur delete unavailability:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur delete unavailability:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -479,7 +480,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const resolved = await resolveChantierScope(user, organizationId, 'view');
     const allowedTechIds = resolved.technicianIds;
 
-    const where: any = { organizationId };
+    const where: unknown = { organizationId };
     // Si scope restreint, ne montrer que les équipes contenant au moins un tech autorisé
     if (allowedTechIds) {
       where.Members = { some: { technicianId: { in: allowedTechIds } } };
@@ -498,8 +499,8 @@ router.get('/', authenticateToken, async (req, res) => {
     });
 
     return res.json({ success: true, data: teams });
-  } catch (error: any) {
-    console.error('[Teams] Erreur liste:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur liste:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -519,9 +520,9 @@ router.post('/', authenticateToken, requireChantierAction('team_panel'), async (
     });
 
     return res.status(201).json({ success: true, data: team });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.code === 'P2002') return res.status(409).json({ success: false, message: 'Une équipe avec ce nom existe déjà' });
-    console.error('[Teams] Erreur création:', error);
+    logger.error('[Teams] Erreur création:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -540,8 +541,8 @@ router.put('/:id', authenticateToken, requireChantierAction('team_panel'), async
     });
 
     return res.json({ success: true, data: team });
-  } catch (error: any) {
-    console.error('[Teams] Erreur modification:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur modification:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -552,8 +553,8 @@ router.delete('/:id', authenticateToken, requireChantierAction('team_panel'), as
     const organizationId = getOrgId(req);
     await db.team.delete({ where: { id: req.params.id, organizationId } });
     return res.json({ success: true, message: 'Équipe supprimée' });
-  } catch (error: any) {
-    console.error('[Teams] Erreur suppression:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur suppression:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -584,9 +585,9 @@ router.post('/:teamId/members', authenticateToken, requireChantierAction('team_p
     });
 
     return res.status(201).json({ success: true, data: member });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.code === 'P2002') return res.status(409).json({ success: false, message: 'Ce technicien est déjà dans l\'équipe' });
-    console.error('[Teams] Erreur ajout membre:', error);
+    logger.error('[Teams] Erreur ajout membre:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -604,8 +605,8 @@ router.put('/:teamId/members/:memberId', authenticateToken, requireChantierActio
     });
 
     return res.json({ success: true, data: member });
-  } catch (error: any) {
-    console.error('[Teams] Erreur modif membre:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur modif membre:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -615,8 +616,8 @@ router.delete('/:teamId/members/:memberId', authenticateToken, requireChantierAc
   try {
     await db.teamMember.delete({ where: { id: req.params.memberId } });
     return res.json({ success: true, message: 'Membre retiré' });
-  } catch (error: any) {
-    console.error('[Teams] Erreur suppression membre:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur suppression membre:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -643,8 +644,8 @@ router.get('/assignments/by-chantier/:chantierId', authenticateToken, async (req
       orderBy: [{ role: 'asc' }, { assignedAt: 'asc' }],
     });
     return res.json({ success: true, data: assignments });
-  } catch (error: any) {
-    console.error('[Teams] Erreur assignments:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur assignments:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -669,9 +670,9 @@ router.post('/assignments/:chantierId', authenticateToken, requireChantierAction
     });
 
     return res.status(201).json({ success: true, data: assignment });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.code === 'P2002') return res.status(409).json({ success: false, message: 'Ce technicien est déjà assigné à ce chantier' });
-    console.error('[Teams] Erreur assignation:', error);
+    logger.error('[Teams] Erreur assignation:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -715,8 +716,8 @@ router.post('/assignments/:chantierId/team', authenticateToken, requireChantierA
       data: results,
       message: `${results.length} technicien(s) assigné(s) depuis l'équipe`,
     });
-  } catch (error: any) {
-    console.error('[Teams] Erreur assignation équipe:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur assignation équipe:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -726,8 +727,8 @@ router.delete('/assignments/:assignmentId', authenticateToken, requireChantierAc
   try {
     await db.chantierAssignment.delete({ where: { id: req.params.assignmentId } });
     return res.json({ success: true, message: 'Assignation supprimée' });
-  } catch (error: any) {
-    console.error('[Teams] Erreur suppression assignation:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur suppression assignation:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -748,7 +749,7 @@ router.get('/time-entries', authenticateToken, async (req, res) => {
     const user = req.user;
     const resolved = await resolveChantierScope(user, organizationId, 'pointage');
 
-    const where: any = { organizationId };
+    const where: unknown = { organizationId };
     if (chantierId) where.chantierId = chantierId;
     if (technicianId) {
       // Vérifier que le technicien demandé est dans le scope
@@ -777,8 +778,8 @@ router.get('/time-entries', authenticateToken, async (req, res) => {
     });
 
     return res.json({ success: true, data: entries });
-  } catch (error: any) {
-    console.error('[Teams] Erreur liste pointages:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur liste pointages:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -821,7 +822,7 @@ router.post('/time-entries', authenticateToken, requireChantierAction('pointage'
       try {
         clockInPhotoUrl = await savePointagePhoto(photo, 'in');
       } catch (e) {
-        console.error('[Pointage] Erreur sauvegarde photo:', e);
+        logger.error('[Pointage] Erreur sauvegarde photo:', e);
       }
     }
 
@@ -849,7 +850,7 @@ router.post('/time-entries', authenticateToken, requireChantierAction('pointage'
       const dateEnd = new Date(date);
       dateEnd.setHours(23, 59, 59, 999);
 
-      const prevWhere: any = {
+      const prevWhere: unknown = {
         organizationId,
         technicianId,
         date: { gte: dateStart, lte: dateEnd },
@@ -896,8 +897,8 @@ router.post('/time-entries', authenticateToken, requireChantierAction('pointage'
     });
 
     return res.status(201).json({ success: true, data: entry });
-  } catch (error: any) {
-    console.error('[Teams] Erreur création pointage:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur création pointage:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -911,7 +912,7 @@ router.get('/time-entries/summary', authenticateToken, async (req, res) => {
     if (!organizationId) return res.status(400).json({ error: 'Organization ID required' });
     const { startDate, endDate, technicianId } = req.query;
 
-    const where: any = { organizationId, endTime: { not: null } };
+    const where: unknown = { organizationId, endTime: { not: null } };
     if (startDate && endDate) {
       where.date = { gte: new Date(startDate as string), lte: new Date(endDate as string) };
     }
@@ -925,7 +926,7 @@ router.get('/time-entries/summary', authenticateToken, async (req, res) => {
     });
 
     // Grouper par technicien
-    const summaryMap = new Map<string, { technician: any; totalMinutes: number; totalEntries: number; byType: Record<string, number> }>();
+    const summaryMap = new Map<string, { technician: unknown; totalMinutes: number; totalEntries: number; byType: Record<string, number> }>();
     for (const e of entries) {
       const key = e.technicianId;
       if (!summaryMap.has(key)) {
@@ -944,8 +945,8 @@ router.get('/time-entries/summary', authenticateToken, async (req, res) => {
     }));
 
     return res.json({ success: true, data: summary });
-  } catch (error: any) {
-    console.error('[Teams] Erreur résumé pointages:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur résumé pointages:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -988,8 +989,8 @@ router.put('/time-entries/:id', authenticateToken, requireChantierAction('pointa
     });
 
     return res.json({ success: true, data: entry });
-  } catch (error: any) {
-    console.error('[Teams] Erreur update pointage:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur update pointage:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -1019,7 +1020,7 @@ router.put('/time-entries/:id/clock-out', authenticateToken, requireChantierActi
       try {
         clockOutPhotoUrl = await savePointagePhoto(photo, 'out');
       } catch (e) {
-        console.error('[Pointage] Erreur sauvegarde photo sortie:', e);
+        logger.error('[Pointage] Erreur sauvegarde photo sortie:', e);
       }
     }
 
@@ -1054,8 +1055,8 @@ router.put('/time-entries/:id/clock-out', authenticateToken, requireChantierActi
     });
 
     return res.json({ success: true, data: entry });
-  } catch (error: any) {
-    console.error('[Teams] Erreur clock-out:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur clock-out:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -1071,8 +1072,8 @@ router.delete('/time-entries/:id', authenticateToken, requireChantierAction('poi
     }
     await db.timeEntry.delete({ where: { id: req.params.id } });
     return res.json({ success: true, message: 'Pointage supprimé' });
-  } catch (error: any) {
-    console.error('[Teams] Erreur suppression pointage:', error);
+  } catch (error: unknown) {
+    logger.error('[Teams] Erreur suppression pointage:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 });

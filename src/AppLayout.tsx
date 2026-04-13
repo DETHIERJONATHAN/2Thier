@@ -4,6 +4,7 @@ import { useAuth } from './auth/useAuth';
 import MainLayoutNew from './pages/page2thier/MainLayoutNew';
 import StoreInitializer from './components/StoreInitializer';
 import { NotificationsContainer } from './components/Notifications';
+import NotFoundPage from './pages/NotFoundPage';
 
 
 // 🚀 LAZY IMPORTS POUR RÉDUIRE LE BUNDLE INITIAL
@@ -345,7 +346,7 @@ export default function AppLayout() {
             <Route path="/colony/:orgId" element={<ColonyProfilePage />} />
 
             {/* Fallback pour les routes non trouvées */}
-            <Route path="*" element={<div>Page non trouvée</div>} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>
       </MainLayoutNew>

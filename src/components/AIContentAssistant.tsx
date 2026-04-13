@@ -21,11 +21,11 @@ const { Title, Text, Paragraph } = Typography;
 
 export interface AIContentAssistantProps {
   type: 'service' | 'project' | 'testimonial' | 'page' | 'seo';
-  onContentGenerated: (content: any) => void;
+  onContentGenerated: (content: unknown) => void;
   buttonText?: string;
   siteName?: string;
   industry?: string;
-  currentContent?: any;
+  currentContent?: unknown;
 }
 
 export const AIContentAssistant: React.FC<AIContentAssistantProps> = ({
@@ -185,7 +185,7 @@ export const AIContentAssistant: React.FC<AIContentAssistantProps> = ({
     }
   };
 
-  const handleGenerate = async (values: any) => {
+  const handleGenerate = async (values: unknown) => {
     setLoading(true);
     setGeneratedContent(null);
 
@@ -207,7 +207,7 @@ export const AIContentAssistant: React.FC<AIContentAssistantProps> = ({
       } else {
         throw new Error(response.data.error || 'Erreur inconnue');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur génération IA:', error);
       message.error(error.response?.data?.error || 'Erreur lors de la génération');
     } finally {

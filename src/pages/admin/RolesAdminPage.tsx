@@ -233,11 +233,11 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
       const response = await api.get(url);
       if (response.success) {
         const permsData = Array.isArray(response.data) ? response.data : [];
-        console.log('[ModulesModal] Permissions loaded:', permsData.length, '| access:', permsData.filter((p: any) => p.action === 'access' && p.allowed).length);
+        console.log('[ModulesModal] Permissions loaded:', permsData.length, '| access:', permsData.filter((p: Record<string, unknown>) => p.action === 'access' && p.allowed).length);
         setPermissions(permsData);
         // Auto-expand modules that have fine-grained permissions
         const modulesWithFinePerms = new Set<string>();
-        permsData.forEach((p: any) => {
+        permsData.forEach((p: Record<string, unknown>) => {
           if (p.action !== 'access' && p.moduleId) modulesWithFinePerms.add(p.moduleId);
         });
         setExpandedModules(modulesWithFinePerms);

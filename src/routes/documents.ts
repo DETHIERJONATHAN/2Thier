@@ -7,8 +7,11 @@ import crypto from 'crypto';
 import { renderDocumentPdf } from '../services/documentPdfRenderer';
 import type { AuthenticatedRequest } from '../middlewares/auth';
 import { getPostalService } from '../services/PostalEmailService';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
+router.use(authenticateToken);
 const prisma = db;
 
 /**
@@ -23,7 +26,7 @@ const prisma = db;
  */
 async function buildSelectOptionsMap(
   organizationId: string,
-  tblData: Record<string, any>
+  tblData: Record<string, unknown>
 ): Promise<Record<string, string>> {
   const map: Record<string, string> = {};
 
@@ -101,17 +104,17 @@ async function buildSelectOptionsMap(
       }
     }
 
-  } catch (error: any) {
-    console.error('⚠️ [buildSelectOptionsMap] Erreur (non bloquante):', error?.message);
+  } catch (error: unknown) {
+    logger.error('⚠️ [buildSelectOptionsMap] Erreur (non bloquante):', error?.message);
   }
 
   return map;
 }
 
-function toJsonSafe(value: any): any {
+function toJsonSafe(value: unknown): any {
   const seen = new WeakSet<object>();
 
-  const inner = (v: any): any => {
+  const inner = (v: unknown): unknown => {
     if (v === undefined) return undefined;
     if (v === null) return null;
     if (typeof v === 'function' || typeof v === 'symbol') return undefined;
@@ -137,7 +140,7 @@ function toJsonSafe(value: any): any {
       if (seen.has(v)) return '[Circular]';
       seen.add(v);
 
-      const out: Record<string, any> = {};
+      const out: Record<string, unknown> = {};
       for (const [key, val] of Object.entries(v)) {
         const safeVal = inner(val);
         if (safeVal !== undefined) out[key] = safeVal;
@@ -158,7 +161,7 @@ function toJsonSafe(value: any): any {
  * 2. Champs dans lead.data (JSON)
  * 3. Parse de l'adresse complète (format belge : "Rue Numéro Boîte, Code Postal Ville")
  */
-function extractAddressComponents(lead: any): {
+function extractAddressComponents(lead: unknown): {
   address: string;
   street: string;
   number: string;
@@ -279,7 +282,7 @@ router.get('/product-options/:treeId', async (req: Request, res: Response) => {
       where: {
         treeId,
         hasProduct: true,
-        product_options: { not: null as any },
+        product_options: { not: null as unknown },
       },
       select: {
         id: true,
@@ -294,16 +297,16 @@ router.get('/product-options/:treeId', async (req: Request, res: Response) => {
           ? JSON.parse(productSourceNode.product_options as string)
           : productSourceNode.product_options;
         if (Array.isArray(raw)) {
-          productOptions = raw.filter((o: any) => o.value !== 'all');
+          productOptions = raw.filter((o: Record<string, unknown>) => o.value !== 'all');
         }
       } catch (e) {
-        console.warn('[DOCS] Erreur parsing product_options:', e);
+        logger.warn('[DOCS] Erreur parsing product_options:', e);
       }
     }
 
     res.json(productOptions);
   } catch (error) {
-    console.error('Erreur récupération product options:', error);
+    logger.error('Erreur récupération product options:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -321,7 +324,7 @@ router.get('/templates', async (req: Request, res: Response) => {
     }
 
     // Construire les filtres - Super Admin voit tout
-    const where: any = isSuperAdmin ? {} : { organizationId };
+    const where: unknown = isSuperAdmin ? {} : { organizationId };
     
     // Filtrer par arbre TBL si spécifié
     if (treeId) {
@@ -373,7 +376,7 @@ router.get('/templates', async (req: Request, res: Response) => {
 
     res.json(templates);
   } catch (error) {
-    console.error('Erreur récupération templates:', error);
+    logger.error('Erreur récupération templates:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -386,7 +389,7 @@ router.get('/templates/:id', async (req: Request, res: Response) => {
     const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
 
     // Construire la clause where en fonction du rôle
-    const whereClause: any = { id };
+    const whereClause: unknown = { id };
     if (!isSuperAdmin && organizationId) {
       whereClause.organizationId = organizationId;
     }
@@ -407,7 +410,7 @@ router.get('/templates/:id', async (req: Request, res: Response) => {
 
     res.json(template);
   } catch (error) {
-    console.error('Erreur récupération template:', error);
+    logger.error('Erreur récupération template:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -451,7 +454,7 @@ router.post('/templates', async (req: Request, res: Response) => {
         createdBy: userId,
         updatedAt: new Date(),
         DocumentSection: {
-          create: (sections || []).map((section: any, index: number) => ({
+          create: (sections || []).map((section: unknown, index: number) => ({
             id: nanoid(),
             order: section.order || index,
             type: section.type,
@@ -472,7 +475,7 @@ router.post('/templates', async (req: Request, res: Response) => {
 
     res.status(201).json(template);
   } catch (error) {
-    console.error('Erreur création template:', error);
+    logger.error('Erreur création template:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -500,7 +503,7 @@ router.put('/templates/:id', async (req: Request, res: Response) => {
 
 
     // Vérifier que le template existe et appartient à l'organisation
-    const whereClause: any = { id };
+    const whereClause: unknown = { id };
     if (!isSuperAdmin && organizationId) {
       whereClause.organizationId = organizationId;
     }
@@ -536,7 +539,7 @@ router.put('/templates/:id', async (req: Request, res: Response) => {
         updatedAt: new Date(),
         ...(sections && {
           DocumentSection: {
-            create: sections.map((section: any, index: number) => ({
+            create: sections.map((section: unknown, index: number) => ({
               id: nanoid(),
               order: section.order || index,
               type: section.type,
@@ -561,7 +564,7 @@ router.put('/templates/:id', async (req: Request, res: Response) => {
 
     res.json(template);
   } catch (error) {
-    console.error('Erreur mise à jour template:', error);
+    logger.error('Erreur mise à jour template:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -575,7 +578,7 @@ router.delete('/templates/:id', async (req: Request, res: Response) => {
     const force = req.query.force === 'true';
 
     // Construire la clause where
-    const whereClause: any = { id };
+    const whereClause: unknown = { id };
     if (!isSuperAdmin && organizationId) {
       whereClause.organizationId = organizationId;
     }
@@ -618,7 +621,7 @@ router.delete('/templates/:id', async (req: Request, res: Response) => {
 
     res.json({ success: true, message: 'Template supprimé' });
   } catch (error) {
-    console.error('Erreur suppression template:', error);
+    logger.error('Erreur suppression template:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -642,7 +645,7 @@ router.get('/themes', async (req: Request, res: Response) => {
 
     res.json(themes);
   } catch (error) {
-    console.error('Erreur récupération thèmes:', error);
+    logger.error('Erreur récupération thèmes:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -671,7 +674,7 @@ router.post('/themes', async (req: Request, res: Response) => {
 
     res.status(201).json(theme);
   } catch (error) {
-    console.error('Erreur création thème:', error);
+    logger.error('Erreur création thème:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -702,7 +705,7 @@ router.put('/themes/:id', async (req: Request, res: Response) => {
 
     res.json(theme);
   } catch (error) {
-    console.error('Erreur mise à jour thème:', error);
+    logger.error('Erreur mise à jour thème:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -730,7 +733,7 @@ router.delete('/themes/:id', async (req: Request, res: Response) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Erreur suppression thème:', error);
+    logger.error('Erreur suppression thème:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -747,7 +750,7 @@ router.get('/templates/:templateId/sections', async (req: Request, res: Response
     const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
 
     // Construire la clause where en fonction du rôle
-    const whereClause: any = { id: templateId };
+    const whereClause: unknown = { id: templateId };
     if (!isSuperAdmin && organizationId) {
       whereClause.organizationId = organizationId;
     }
@@ -768,7 +771,7 @@ router.get('/templates/:templateId/sections', async (req: Request, res: Response
 
     res.json(sections);
   } catch (error) {
-    console.error('Erreur récupération sections:', error);
+    logger.error('Erreur récupération sections:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -782,7 +785,7 @@ router.post('/templates/:templateId/sections', async (req: Request, res: Respons
     const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
 
     // Construire la clause where en fonction du rôle
-    const whereClause: any = { id: templateId };
+    const whereClause: unknown = { id: templateId };
     if (!isSuperAdmin && organizationId) {
       whereClause.organizationId = organizationId;
     }
@@ -808,9 +811,9 @@ router.post('/templates/:templateId/sections', async (req: Request, res: Respons
     });
 
     res.json(section);
-  } catch (error: any) {
-    console.error('Erreur création section:', error?.message || error);
-    console.error('Stack:', error?.stack);
+  } catch (error: unknown) {
+    logger.error('Erreur création section:', error?.message || error);
+    logger.error('Stack:', error?.stack);
     res.status(500).json({ error: 'Erreur serveur', details: error?.message });
   }
 });
@@ -824,7 +827,7 @@ router.put('/templates/:templateId/sections/:sectionId', async (req: Request, re
     const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
 
     // Construire la clause where en fonction du rôle
-    const whereClause: any = { id: templateId };
+    const whereClause: unknown = { id: templateId };
     if (!isSuperAdmin && organizationId) {
       whereClause.organizationId = organizationId;
     }
@@ -848,7 +851,7 @@ router.put('/templates/:templateId/sections/:sectionId', async (req: Request, re
 
     res.json(section);
   } catch (error) {
-    console.error('Erreur mise à jour section:', error);
+    logger.error('Erreur mise à jour section:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -861,7 +864,7 @@ router.delete('/templates/:templateId/sections/:sectionId', async (req: Request,
     const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
 
     // Construire la clause where en fonction du rôle
-    const whereClause: any = { id: templateId };
+    const whereClause: unknown = { id: templateId };
     if (!isSuperAdmin && organizationId) {
       whereClause.organizationId = organizationId;
     }
@@ -881,7 +884,7 @@ router.delete('/templates/:templateId/sections/:sectionId', async (req: Request,
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Erreur suppression section:', error);
+    logger.error('Erreur suppression section:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -902,7 +905,7 @@ router.get('/generated', async (req: Request, res: Response) => {
     }
 
     // Construire les filtres - le document a directement organizationId
-    const where: any = {
+    const where: unknown = {
       organizationId
     };
     
@@ -949,7 +952,7 @@ router.get('/generated', async (req: Request, res: Response) => {
     });
 
     // Mapper les noms de relations pour compatibilité frontend
-    const mappedDocuments = documents.map((doc: any) => ({
+    const mappedDocuments = documents.map((doc: Record<string, unknown>) => ({
       ...doc,
       template: doc.DocumentTemplate,
       sentByUser: doc.User_GeneratedDocument_sentByToUser,
@@ -960,8 +963,8 @@ router.get('/generated', async (req: Request, res: Response) => {
     }));
 
     res.json(mappedDocuments);
-  } catch (error: any) {
-    console.error('❌ [GET /generated] Erreur récupération documents générés:', error?.message);
+  } catch (error: unknown) {
+    logger.error('❌ [GET /generated] Erreur récupération documents générés:', error?.message);
     res.status(500).json({ error: 'Erreur serveur', details: error?.message });
   }
 });
@@ -1008,7 +1011,7 @@ router.get('/generated/:id', async (req: Request, res: Response) => {
 
     res.json(mappedDocument);
   } catch (error) {
-    console.error('Erreur récupération document:', error);
+    logger.error('Erreur récupération document:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1031,13 +1034,13 @@ router.post('/generated/generate', async (req: AuthenticatedRequest, res: Respon
 
     try {
     } catch (e) {
-      console.warn('📄 [GENERATE DOC] Body non serialisable (log simplifié):', {
+      logger.warn('📄 [GENERATE DOC] Body non serialisable (log simplifié):', {
         templateId,
         leadId,
         submissionId,
         hasTblData: !!tblData,
         hasLeadData: !!leadData,
-        error: (e as any)?.message,
+        error: (e as unknown)?.message,
       });
     }
   const tblDataSafe = toJsonSafe(tblData ?? {});
@@ -1072,7 +1075,7 @@ router.post('/generated/generate', async (req: AuthenticatedRequest, res: Respon
 
 
     if (!template) {
-      console.error('❌ [GENERATE DOC] Template non trouvé avec templateId=' + templateId + ' et organizationId=' + organizationId);
+      logger.error('❌ [GENERATE DOC] Template non trouvé avec templateId=' + templateId + ' et organizationId=' + organizationId);
       return res.status(404).json({ 
         error: 'Template non trouvé',
         details: `Template ${templateId} not found for organization ${organizationId}`,
@@ -1159,12 +1162,12 @@ router.post('/generated/generate', async (req: AuthenticatedRequest, res: Respon
     });
 
     res.status(201).json(updatedDocument);
-  } catch (error: any) {
-    console.error('❌ [GENERATE DOC] Erreur génération document:', error);
-    console.error('❌ [GENERATE DOC] Error name:', error?.name);
-    console.error('❌ [GENERATE DOC] Error code:', error?.code);
-    console.error('❌ [GENERATE DOC] Error message:', error?.message);
-    console.error('❌ [GENERATE DOC] Error meta:', error?.meta);
+  } catch (error: unknown) {
+    logger.error('❌ [GENERATE DOC] Erreur génération document:', error);
+    logger.error('❌ [GENERATE DOC] Error name:', error?.name);
+    logger.error('❌ [GENERATE DOC] Error code:', error?.code);
+    logger.error('❌ [GENERATE DOC] Error message:', error?.message);
+    logger.error('❌ [GENERATE DOC] Error meta:', error?.meta);
     res.status(500).json({
       error: 'Erreur serveur lors de la génération',
       details: error?.message,
@@ -1204,7 +1207,7 @@ router.delete('/generated/:id', async (req: Request, res: Response) => {
 
     res.json({ success: true, message: 'Document supprimé' });
   } catch (error) {
-    console.error('Erreur suppression document:', error);
+    logger.error('Erreur suppression document:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1235,7 +1238,7 @@ export async function generateClientPdfBuffer(documentId: string, options?: {
   const defaultTheme = await prisma.documentTheme.findFirst({ where: { organizationId, isDefault: true } });
   const organization = await prisma.organization.findFirst({ where: { id: organizationId } });
 
-  const tblRawData = ((document.dataSnapshot || {}) as Record<string, any>).tblData || (document.dataSnapshot || {});
+  const tblRawData = ((document.dataSnapshot || {}) as Record<string, unknown>).tblData || (document.dataSnapshot || {});
   const selectOptionsMap = await buildSelectOptionsMap(organizationId, tblRawData);
 
   let formulaResultsMap: Record<string, string> = {};
@@ -1257,7 +1260,7 @@ export async function generateClientPdfBuffer(documentId: string, options?: {
 
     const allRefs: string[] = [];
     const sections = document.DocumentTemplate?.DocumentSection || [];
-    for (const sec of sections) collectRefsDeep((sec.config || {}) as Record<string, any>, allRefs);
+    for (const sec of sections) collectRefsDeep((sec.config || {}) as Record<string, unknown>, allRefs);
 
     if (allRefs.length > 0 && docSubmissionId) {
       const { interpretReference } = await import('../components/TreeBranchLeaf/treebranchleaf-new/api/operation-interpreter.js');
@@ -1282,7 +1285,7 @@ export async function generateClientPdfBuffer(documentId: string, options?: {
     }
   } catch { /* non bloquant */ }
 
-  const dataSnapshot = (document.dataSnapshot || {}) as Record<string, any>;
+  const dataSnapshot = (document.dataSnapshot || {}) as Record<string, unknown>;
   const templateTheme = document.DocumentTemplate?.DocumentTheme;
   const themeSource = templateTheme || defaultTheme;
   const theme = themeSource ? {
@@ -1292,19 +1295,19 @@ export async function generateClientPdfBuffer(documentId: string, options?: {
     fontSize: themeSource.fontSize || 12, logoUrl: themeSource.logoUrl || ''
   } : { primaryColor: '#1890ff', secondaryColor: '#52c41a', accentColor: '#faad14', textColor: '#333333', backgroundColor: '#ffffff', fontFamily: 'Helvetica', fontSize: 12, logoUrl: '' };
 
-  const mappedSections = (document.DocumentTemplate?.DocumentSection || []).map((s: any) => ({
-    id: s.id, type: s.type, name: (s as any).name || s.type, config: (s.config || {}) as Record<string, any>,
-    translations: (s.translations || {}) as Record<string, any>, linkedNodeIds: (s.linkedNodeIds || []) as string[],
+  const mappedSections = (document.DocumentTemplate?.DocumentSection || []).map((s: Record<string, unknown>) => ({
+    id: s.id, type: s.type, name: (s as any).name || s.type, config: (s.config || {}) as Record<string, unknown>,
+    translations: (s.translations || {}) as Record<string, unknown>, linkedNodeIds: (s.linkedNodeIds || []) as string[],
     order: s.order, isActive: (s as any).isActive !== false
   }));
 
-  const renderContext: any = {
+  const renderContext: unknown = {
     template: document.DocumentTemplate ? {
       id: document.DocumentTemplate.id, name: document.DocumentTemplate.name, type: document.DocumentTemplate.type,
       theme, sections: mappedSections
     } : { id: 'default', name: 'Document', type: 'QUOTE', theme, sections: [] },
     lead: (() => {
-      const dbLead = document.Lead || {} as any;
+      const dbLead = document.Lead || {} as unknown;
       const snapshotLead = dataSnapshot.lead || {};
       const mergedLead = { ...snapshotLead, ...dbLead, address: (dbLead as any).address || snapshotLead.address || '', data: (dbLead as any).data || {} };
       const addressComponents = extractAddressComponents(mergedLead);
@@ -1392,7 +1395,7 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
 
     // 🔥 Construire la map de résolution SELECT (optionId → label)
     // Cela permet au PDF renderer de traduire les UUID d'options en labels lisibles
-    const tblRawData = ((document.dataSnapshot || {}) as Record<string, any>).tblData || (document.dataSnapshot || {});
+    const tblRawData = ((document.dataSnapshot || {}) as Record<string, unknown>).tblData || (document.dataSnapshot || {});
     const selectOptionsMap = await buildSelectOptionsMap(organizationId, tblRawData);
 
     // 🔥 SYSTÈME DYNAMIQUE: Résoudre TOUTES les refs de capacités TBL (formule, condition, table, value, etc.)
@@ -1438,7 +1441,7 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
       const allRefs: string[] = [];
       const sections = document.DocumentTemplate?.DocumentSection || [];
       for (const sec of sections) {
-        const config = (sec.config || {}) as Record<string, any>;
+        const config = (sec.config || {}) as Record<string, unknown>;
         // Parcourir en profondeur TOUTE la config de la section (modules, pricingLines, labelParts, conditions...)
         collectRefsDeep(config, allRefs);
       }
@@ -1488,17 +1491,17 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
               formulaResultsMap[ref] = String(resultValue);
             }
           } catch (refErr) {
-            console.warn(`📥 [DOWNLOAD] ⚠️ Résolution "${ref}" échouée:`, refErr);
+            logger.warn(`📥 [DOWNLOAD] ⚠️ Résolution "${ref}" échouée:`, refErr);
           }
         }
       }
 
     } catch (err) {
-      console.warn('📥 [DOWNLOAD] Erreur résolution dynamique:', err);
+      logger.warn('📥 [DOWNLOAD] Erreur résolution dynamique:', err);
     }
 
     // Construire le contexte pour le renderer
-    const dataSnapshot = (document.dataSnapshot || {}) as Record<string, any>;
+    const dataSnapshot = (document.dataSnapshot || {}) as Record<string, unknown>;
     
     // Priorité : theme du template (relation) > theme par défaut de l'org > valeurs par défaut
     const templateTheme = document.DocumentTemplate?.DocumentTheme;
@@ -1528,8 +1531,8 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
       id: s.id,
       type: s.type,
       name: (s as any).name || s.type,
-      config: (s.config || {}) as Record<string, any>,
-      translations: (s.translations || {}) as Record<string, any>,
+      config: (s.config || {}) as Record<string, unknown>,
+      translations: (s.translations || {}) as Record<string, unknown>,
       linkedNodeIds: (s.linkedNodeIds || []) as string[],
       order: s.order,
       isActive: (s as any).isActive !== false
@@ -1537,7 +1540,7 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
     
     // Debug: log des sections
     for (const sec of sections) {
-      if ((sec.config as any)?.modules?.length > 0) {
+      if ((sec.config as unknown)?.modules?.length > 0) {
       }
     }
     
@@ -1631,8 +1634,8 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
     res.setHeader('Content-Length', pdfBuffer.length.toString());
     
     res.send(pdfBuffer);
-  } catch (error: any) {
-    console.error('❌ [DOWNLOAD] Erreur téléchargement:', error);
+  } catch (error: unknown) {
+    logger.error('❌ [DOWNLOAD] Erreur téléchargement:', error);
     res.status(500).json({ error: 'Erreur serveur', details: error?.message });
   }
 });
@@ -1648,7 +1651,7 @@ router.get('/generated/:id/download', async (req: AuthenticatedRequest, res: Res
  */
 async function getProductDocumentsForDevis(
   organizationId: string,
-  tblData: Record<string, any>
+  tblData: Record<string, unknown>
 ): Promise<Array<{ id: string; name: string; fileName: string; mimeType: string; storageType: string; driveFileId?: string | null; localPath?: string | null; externalUrl?: string | null; category: string; nodeLabel?: string }>> {
   if (!tblData || Object.keys(tblData).length === 0) return [];
 
@@ -1689,12 +1692,12 @@ async function getProductDocumentsForDevis(
     try {
       const raw = doc.tableRow.cells;
       if (Array.isArray(raw)) {
-        cells = raw.map((c: any) => String(c).trim());
+        cells = raw.map((c: Record<string, unknown>) => String(c).trim());
       } else if (typeof raw === 'string') {
         // Tenter de parser comme JSON d'abord
         try {
           const parsed = JSON.parse(raw);
-          cells = Array.isArray(parsed) ? parsed.map((c: any) => String(c).trim()) : [raw.trim()];
+          cells = Array.isArray(parsed) ? parsed.map((c: Record<string, unknown>) => String(c).trim()) : [raw.trim()];
         } catch {
           // CSV ou valeur simple
           cells = raw.split(',').map(c => c.trim());
@@ -1755,7 +1758,7 @@ async function downloadDriveFileAsBuffer(
 
     return Buffer.from(response.data as ArrayBuffer);
   } catch (error) {
-    console.error('📎 [FICHES-TECH] ❌ Erreur téléchargement Drive:', driveFileId, error);
+    logger.error('📎 [FICHES-TECH] ❌ Erreur téléchargement Drive:', driveFileId, error);
     return null;
   }
 }
@@ -1795,7 +1798,7 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
     }
 
     // 2. Générer le PDF (même logique que download)
-    const dataSnapshot = (document.dataSnapshot || {}) as Record<string, any>;
+    const dataSnapshot = (document.dataSnapshot || {}) as Record<string, unknown>;
     const templateTheme = document.DocumentTemplate?.DocumentTheme;
     const defaultTheme = await prisma.documentTheme.findFirst({
       where: { organizationId: document.organizationId, isDefault: true }
@@ -1822,8 +1825,8 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
 
     const sections = document.DocumentTemplate?.DocumentSection?.map(s => ({
       id: s.id, type: s.type, name: (s as any).name || s.type,
-      config: (s.config || {}) as Record<string, any>,
-      translations: (s.translations || {}) as Record<string, any>,
+      config: (s.config || {}) as Record<string, unknown>,
+      translations: (s.translations || {}) as Record<string, unknown>,
       linkedNodeIds: (s.linkedNodeIds || []) as string[],
       order: s.order, isActive: (s as any).isActive !== false
     })) || [];
@@ -1927,25 +1930,25 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
               attachedProductDocsCount++;
               attachedProductDocNames.push(doc.name || doc.fileName);
             } else {
-              console.warn('📎 [SEND-EMAIL] ⚠️ Impossible de télécharger:', doc.fileName);
+              logger.warn('📎 [SEND-EMAIL] ⚠️ Impossible de télécharger:', doc.fileName);
             }
           } catch (docErr) {
-            console.warn('📎 [SEND-EMAIL] ⚠️ Erreur téléchargement fiche:', doc.fileName, docErr);
+            logger.warn('📎 [SEND-EMAIL] ⚠️ Erreur téléchargement fiche:', doc.fileName, docErr);
           }
         }
 
         if (attachedProductDocsCount > 0) {
         }
       } catch (prodDocErr) {
-        console.warn('📎 [SEND-EMAIL] ⚠️ Erreur récupération fiches techniques (envoi sans):', prodDocErr);
+        logger.warn('📎 [SEND-EMAIL] ⚠️ Erreur récupération fiches techniques (envoi sans):', prodDocErr);
       }
     }
 
     // Construire un email HTML professionnel pour éviter les filtres anti-spam
     const orgName = organization?.name || '2Thier CRM';
-    const orgEmail = (organization as any)?.email || '';
-    const orgPhone = (organization as any)?.phone || '';
-    const orgAddress = (organization as any)?.address || '';
+    const orgEmail = (organization as unknown)?.email || '';
+    const orgPhone = (organization as unknown)?.phone || '';
+    const orgAddress = (organization as unknown)?.address || '';
     const bodyText = (body || '').trim();
     // Convertir les sauts de ligne en <br> pour le HTML
     const bodyHtml = bodyText.replace(/\n/g, '<br>');
@@ -1965,7 +1968,7 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
         const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000); // 3 jours
 
         // Parser le nom du destinataire depuis le lead si dispo
-        const leadData = document.Lead as any;
+        const leadData = document.Lead as unknown;
         const signerName = [leadData?.firstName, leadData?.lastName].filter(Boolean).join(' ') || to;
 
         const legalText = `En signant ce document, je, ${signerName}, confirme avoir pris connaissance de l'intégralité du devis ci-joint et accepte les termes et conditions qui y sont décrits. Cette signature électronique a la même valeur juridique qu'une signature manuscrite conformément au règlement européen eIDAS. Date: ${new Date().toLocaleDateString('fr-BE')}`;
@@ -2012,7 +2015,7 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
         </div>`;
 
       } catch (sigErr) {
-        console.warn('⚠️ [SEND-EMAIL] Impossible de créer le lien de signature:', sigErr);
+        logger.warn('⚠️ [SEND-EMAIL] Impossible de créer le lien de signature:', sigErr);
       }
     }
 
@@ -2107,7 +2110,7 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
           },
         });
       } catch (tlErr) {
-        console.warn('⚠️ [SEND-EMAIL] Impossible de créer TimelineEvent:', tlErr);
+        logger.warn('⚠️ [SEND-EMAIL] Impossible de créer TimelineEvent:', tlErr);
       }
     }
 
@@ -2119,8 +2122,8 @@ router.post('/generated/:id/send-email', async (req: AuthenticatedRequest, res: 
       productDocsAttached: attachedProductDocsCount,
       signatureLinkIncluded: !!signatureAccessToken,
     });
-  } catch (error: any) {
-    console.error('❌ [SEND-EMAIL] Erreur:', error);
+  } catch (error: unknown) {
+    logger.error('❌ [SEND-EMAIL] Erreur:', error);
     res.status(500).json({ error: 'Erreur lors de l\'envoi', details: error?.message });
   }
 });
@@ -2144,7 +2147,7 @@ router.post('/templates/:templateId/preview-pdf', async (req: Request, res: Resp
     });
 
     // Construire les sections à partir des pages du PageBuilder
-    const sections = pages.map((page: any, index: number) => ({
+    const sections = pages.map((page: unknown, index: number) => ({
       id: page.id || `page-${index}`,
       type: 'MODULAR_PAGE',
       order: index,
@@ -2264,8 +2267,8 @@ router.post('/templates/:templateId/preview-pdf', async (req: Request, res: Resp
     res.setHeader('Content-Length', pdfBuffer.length.toString());
     
     res.send(pdfBuffer);
-  } catch (error: any) {
-    console.error('❌ [PREVIEW-PDF] Erreur génération:', error);
+  } catch (error: unknown) {
+    logger.error('❌ [PREVIEW-PDF] Erreur génération:', error);
     res.status(500).json({ error: 'Erreur serveur', details: error?.message });
   }
 });
@@ -2322,8 +2325,8 @@ router.get('/generated/:id/preview', async (req: Request, res: Response) => {
       paymentAmount: document.paymentAmount,
       paymentMethod: document.paymentMethod
     });
-  } catch (error: any) {
-    console.error('❌ [PREVIEW] Erreur aperçu:', error);
+  } catch (error: unknown) {
+    logger.error('❌ [PREVIEW] Erreur aperçu:', error);
     res.status(500).json({ error: 'Erreur serveur', details: error?.message });
   }
 });

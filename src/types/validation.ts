@@ -5,7 +5,7 @@ export interface Validation {
     value?: string;
     message?: string;
     active?: boolean;
-    params?: Record<string, any>;
+    params?: Record<string, unknown>;
 }
 
 export interface ValidationResult {
@@ -18,6 +18,6 @@ export interface ValidationParams {
     max?: number;
     pattern?: string;
     targetFieldId?: string;
-    condition?: Record<string, any>;
+    condition?: Record<string, unknown>;
     blacklist?: string[];
 }

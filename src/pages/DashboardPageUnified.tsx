@@ -329,7 +329,7 @@ const activityVerb = (type: string, t: (k: string) => string) => {
   }
 };
 
-const timeAgo = (timestamp: string, t?: (k: string, o?: any) => string): string => {
+const timeAgo = (timestamp: string, t?: (k: string, o?: unknown) => string): string => {
   const diff = Date.now() - new Date(timestamp).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return t ? t('common.justNow') : 'À l\'instant';
@@ -342,10 +342,10 @@ const timeAgo = (timestamp: string, t?: (k: string, o?: any) => string): string 
 };
 
 const getVisibilityLabel = (t: (k: string) => string): Record<string, { icon: React.ReactNode; label: string; color: string }> => ({
-  OUT: { icon: <LockOutlined />, label: t('common.private'), color: "#8c8c8c" },
-  IN: { icon: <TeamOutlined />, label: t('hive.colony'), color: "#1890ff" },
-  ALL: { icon: <GlobalOutlined />, label: t('common.public'), color: "#52c41a" },
-  CLIENT: { icon: <UserOutlined />, label: t('dashboard.client'), color: "#722ed1" },
+  OUT: { icon: <LockOutlined />, label: t('common.private'), color: SF.scopePrivate },
+  IN: { icon: <TeamOutlined />, label: t('hive.colony'), color: SF.scopeColony },
+  ALL: { icon: <GlobalOutlined />, label: t('common.public'), color: SF.scopePublic },
+  CLIENT: { icon: <UserOutlined />, label: t('dashboard.client'), color: FB.purple },
 });
 
 const crmEventIcon = (type?: string) => {
@@ -451,10 +451,10 @@ export const WallPostCard: React.FC<{
   isMobile: boolean;
   currentUserId: string;
   currentUser?: { id: string; firstName?: string; lastName?: string; avatarUrl?: string };
-  api: any;
+  api: unknown;
   onUpdate: () => void;
   feedMode?: string;
-  currentOrganization?: any;
+  currentOrganization?: unknown;
 }> = ({ post, isMobile, currentUserId: _uid, currentUser, api, onUpdate: _onUpdate, feedMode: _feedModeProp, currentOrganization: _orgProp }) => {
   // 🐝 Identité centralisée — on utilise le hook au lieu des props feedMode/currentOrganization
   const cardIdentity = useActiveIdentity();
@@ -563,7 +563,7 @@ export const WallPostCard: React.FC<{
     if (!text.trim() || submittingComment) return;
     setSubmittingComment(true);
     try {
-      const body: Record<string, any> = { content: text.trim() };
+      const body: Record<string, unknown> = { content: text.trim() };
       if (parentCommentId) body.parentCommentId = parentCommentId;
       // 🐝 publishAsOrg piloté par le système d'identité centralisé
       if (cardIdentity.publishAsOrg) body.publishAsOrg = true;
@@ -839,9 +839,9 @@ export const WallPostCard: React.FC<{
                   const isSingle = (pp.mediaUrls as string[]).length === 1;
                   const isVideo = /\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(url);
                   if (isVideo) {
-                    return <video key={i} src={url} controls style={{ width: isSingle ? "100%" : "calc(50% - 2px)", maxHeight: 300, objectFit: "contain", background: "#000" }} />;
+                    return <video key={i} src={url} controls style={{ width: isSingle ? "100%" : "calc(50% - 2px)", maxHeight: 300, objectFit: "contain", background: SF.black }} />;
                   }
-                  return <img key={i} src={url} alt="" onClick={() => setLightboxUrl(url)} style={{ width: isSingle ? "100%" : "calc(50% - 2px)", maxHeight: 300, objectFit: isSingle ? "contain" : "cover", cursor: "pointer", background: isSingle ? "#f0f0f0" : "transparent" }} />;
+                  return <img key={i} src={url} alt="" loading="lazy" onClick={() => setLightboxUrl(url)} style={{ width: isSingle ? "100%" : "calc(50% - 2px)", maxHeight: 300, objectFit: isSingle ? "contain" : "cover", cursor: "pointer", background: isSingle ? "#f0f0f0" : "transparent" }} />;
                 })}
               </div>
             )}
@@ -868,13 +868,13 @@ export const WallPostCard: React.FC<{
                       width: isSingle ? "100%" : "calc(50% - 2px)",
                       maxHeight: isSingle ? 500 : 300,
                       borderRadius: isSingle ? 0 : 8,
-                      background: "#000",
+                      background: SF.black,
                       objectFit: "contain",
                     }} />
                 );
               }
               return (
-                <img key={i} src={url} alt=""
+                <img key={i} src={url} alt="" loading="lazy"
                   onClick={() => setLightboxUrl(url)}
                   style={{
                     width: isSingle ? "100%" : "calc(50% - 2px)",
@@ -901,7 +901,7 @@ export const WallPostCard: React.FC<{
             cursor: "zoom-out",
           }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ position: "absolute", top: 16, right: 16, color: "#fff", fontSize: 32,
+            style={{ position: "absolute", top: 16, right: 16, color: SF.textLight, fontSize: 32,
               cursor: "pointer", fontWeight: 700, lineHeight: 1, zIndex: 10000 }}
             onMouseEnter={e => (e.currentTarget.style.color = "#ccc")}
             onMouseLeave={e => (e.currentTarget.style.color = "#fff")}
@@ -917,7 +917,7 @@ export const WallPostCard: React.FC<{
                 boxShadow: "0 4px 40px rgba(0,0,0,0.5)",
               }} />
           ) : (
-            <img src={lightboxUrl} alt=""
+            <img src={lightboxUrl} alt="" loading="lazy"
               style={{
                 maxWidth: "92vw", maxHeight: "92vh",
                 objectFit: "contain", borderRadius: 4,
@@ -1414,9 +1414,9 @@ export const WallPostCard: React.FC<{
                 {(post.mediaUrls as string[]).slice(0, 1).map((url: string, i: number) => {
                   const isVideo = /\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(url);
                   if (isVideo) {
-                    return <video key={i} src={url} controls style={{ width: '100%', maxHeight: 300, objectFit: 'contain', background: '#000' }} />;
+                    return <video key={i} src={url} controls style={{ width: '100%', maxHeight: 300, objectFit: 'contain', background: SF.black }} />;
                   }
-                  return <img key={i} src={url} alt="" style={{ width: '100%', maxHeight: 300, objectFit: 'cover' }} />;
+                  return <img key={i} src={url} alt="" loading="lazy" style={{ width: '100%', maxHeight: 300, objectFit: 'cover' }} />;
                 })}
               </div>
             )}
@@ -1825,19 +1825,19 @@ export default function DashboardPageUnified() {
         isAdmin ? api.get("/api/users?role=CLIENT").catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
       ]);
 
-      const leads = Array.isArray(leadsResponse) ? leadsResponse : ((leadsResponse as any)?.data || []);
-      const users = Array.isArray(usersResponse) ? usersResponse : ((usersResponse as any)?.data || []);
-      const clients = Array.isArray(clientsResponse) ? clientsResponse : ((clientsResponse as any)?.data || []);
+      const leads = Array.isArray(leadsResponse) ? leadsResponse : ((leadsResponse as unknown)?.data || []);
+      const users = Array.isArray(usersResponse) ? usersResponse : ((usersResponse as unknown)?.data || []);
+      const clients = Array.isArray(clientsResponse) ? clientsResponse : ((clientsResponse as unknown)?.data || []);
 
       const totalLeads = leads.length;
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const newLeadsToday = leads.filter((lead: any) => {
+      const newLeadsToday = leads.filter((lead: Record<string, unknown>) => {
         const d = new Date(lead.createdAt); d.setHours(0, 0, 0, 0);
         return d.getTime() === today.getTime();
       }).length;
 
-      const convertedLeads = leads.filter((lead: any) => {
+      const convertedLeads = leads.filter((lead: Record<string, unknown>) => {
         const s = lead.LeadStatus?.name?.toLowerCase();
         return s?.includes("gagné") || s?.includes("converti") || s?.includes("client");
       });
@@ -1845,7 +1845,7 @@ export default function DashboardPageUnified() {
 
       let totalResponseTime = 0;
       let leadsWithResponse = 0;
-      leads.forEach((lead: any) => {
+      leads.forEach((lead: Record<string, unknown>) => {
         if (lead.lastContactDate && lead.createdAt) {
           totalResponseTime += (new Date(lead.lastContactDate).getTime() - new Date(lead.createdAt).getTime()) / (1000 * 60 * 60);
           leadsWithResponse++;
@@ -1859,12 +1859,12 @@ export default function DashboardPageUnified() {
         const chantierStats = await api.get("/api/chantiers/stats/overview").catch(() => null);
         if (chantierStats?.data?.totalAmount) {
           totalRevenue = chantierStats.data.totalAmount;
-        } else if ((chantierStats as any)?.totalAmount) {
+        } else if ((chantierStats as unknown)?.totalAmount) {
           totalRevenue = (chantierStats as any).totalAmount;
         }
       } catch { /* fallback 0 */ }
 
-      const lastMonthLeads = leads.filter((lead: any) => {
+      const lastMonthLeads = leads.filter((lead: Record<string, unknown>) => {
         const d = new Date(lead.createdAt);
         const lm = new Date(); lm.setMonth(lm.getMonth() - 1);
         return d >= lm;
@@ -1880,19 +1880,19 @@ export default function DashboardPageUnified() {
 
       // Chart: leads by status
       const statusCounts: Record<string, number> = {};
-      leadStatuses.forEach((s: any) => { statusCounts[s.id] = 0; });
-      leads.forEach((lead: any) => {
+      leadStatuses.forEach((s: Record<string, unknown>) => { statusCounts[s.id] = 0; });
+      leads.forEach((lead: Record<string, unknown>) => {
         if (statusCounts[lead.statusId] !== undefined) statusCounts[lead.statusId]++;
       });
       setChartData({
-        leadsByStatus: leadStatuses.map((s: any) => ({
+        leadsByStatus: leadStatuses.map((s: Record<string, unknown>) => ({
           name: s.name, value: statusCounts[s.id] || 0, color: s.color,
         })),
       });
 
       // Top Leads
-      const sorted = [...leads].sort((a: any, b: any) => (b.data?.score || 50) - (a.data?.score || 50)).slice(0, 5);
-      setTopLeads(sorted.map((l: any) => ({
+      const sorted = [...leads].sort((a: unknown, b: unknown) => (b.data?.score || 50) - (a.data?.score || 50)).slice(0, 5);
+      setTopLeads(sorted.map((l: Record<string, unknown>) => ({
         id: l.id,
         nom: l.lastName || l.data?.lastName || "N/A",
         prenom: l.firstName || l.data?.firstName || "",
@@ -1905,7 +1905,7 @@ export default function DashboardPageUnified() {
 
       // Activities
       const acts: RecentActivity[] = [];
-      leads.forEach((lead: any) => {
+      leads.forEach((lead: Record<string, unknown>) => {
         acts.push({
           id: "creation-" + lead.id, type: "creation", title: t('dashboard.newLead'),
           description: ((lead.firstName || "") + " " + (lead.lastName || "") + " " + (lead.company ? "(" + lead.company + ")" : "")).trim(),
@@ -1913,7 +1913,7 @@ export default function DashboardPageUnified() {
           user: lead.assignedTo ? ((lead.assignedTo.firstName || "") + " " + (lead.assignedTo.lastName || "")).trim() : t('common.system'),
         });
         if (lead.TimelineEvent && Array.isArray(lead.TimelineEvent)) {
-          lead.TimelineEvent.forEach((ev: any) => {
+          lead.TimelineEvent.forEach((ev: Record<string, unknown>) => {
             acts.push({
               id: ev.id,
               type: ev.eventType === "email" ? "email" : ev.eventType === "meeting" ? "meeting" : "task",
@@ -1940,7 +1940,7 @@ export default function DashboardPageUnified() {
       setAnalyticsLoading(true);
       const queryParam = collaboratorId ? `?userId=${collaboratorId}` : '';
       const resp = await api.get(`/api/dashboard/analytics${queryParam}`);
-      const data = (resp as any)?.data || resp;
+      const data = (resp as unknown)?.data || resp;
       setAnalytics(data);
     } catch (error) {
       console.error('Erreur analytics:', error);
@@ -2222,7 +2222,7 @@ export default function DashboardPageUnified() {
 
   const sectionsWithModules = useMemo(() => {
     const activeSections = sharedSections.filter(s => s.active);
-    return organizeModulesInSections(activeSections, modules as any || []);
+    return organizeModulesInSections(activeSections, modules as unknown || []);
   }, [sharedSections, modules]);
 
   useEffect(() => {
@@ -2276,7 +2276,7 @@ export default function DashboardPageUnified() {
     landing_pages: '/landing-pages', telnyx: '/telnyx',
   };
 
-  const getModuleRoute = (mod: any): string => {
+  const getModuleRoute = (mod: unknown): string => {
     if (mod.route) return mod.route;
     if (mod.key && MODULE_ROUTES[mod.key]) return MODULE_ROUTES[mod.key];
     const moduleKey = mod.name || mod.label;
@@ -2306,7 +2306,7 @@ export default function DashboardPageUnified() {
     FaCodeBranch: <ApartmentOutlined />,
   };
 
-  const getModuleIcon = (mod: any) => {
+  const getModuleIcon = (mod: unknown) => {
     const iconName = mod.icon;
     const color = mod.iconColor || mod.categoryColor || '#1a4951';
     if (iconName && ICON_MAP[iconName]) {
@@ -2315,7 +2315,7 @@ export default function DashboardPageUnified() {
     return <AppstoreOutlined style={{ color: '#fff', fontSize: 16 }} />;
   };
 
-  const getModuleColor = (mod: any): string => {
+  const getModuleColor = (mod: unknown): string => {
     return mod.iconColor || mod.categoryColor || '#1a4951';
   };
 
@@ -2418,14 +2418,14 @@ export default function DashboardPageUnified() {
             filterOption={(input, option) =>
               (option?.label as string || "").toLowerCase().includes(input.toLowerCase())
             }
-            options={analytics.collaborators.map((c: any) => ({
+            options={analytics.collaborators.map((c: Record<string, unknown>) => ({
               value: c.id,
               label: `${c.name} (${getRoleLabel(c.role)})`,
             }))}
           />
           {selectedCollaborator && (
             <div style={{ marginTop: 6, fontSize: 11, color: FB.textSecondary }}>
-              {t('dashboard.statsViewOf', { name: analytics.collaborators.find((c: any) => c.id === selectedCollaborator)?.name })}
+              {t('dashboard.statsViewOf', { name: analytics.collaborators.find((c: Record<string, unknown>) => c.id === selectedCollaborator)?.name })}
             </div>
           )}
         </FBCard>
@@ -2496,7 +2496,7 @@ export default function DashboardPageUnified() {
                 <YAxis tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
                 <RechartsTooltip
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "none", boxShadow: FB.shadow }}
-                  formatter={(value: any, name: string) => [name === "revenue" ? formatRevenue(value) : value, name === "revenue" ? t('dashboard.revenueShort') : t('dashboard.chantiers')]}
+                  formatter={(value: unknown, name: string) => [name === "revenue" ? formatRevenue(value) : value, name === "revenue" ? t('dashboard.revenueShort') : t('dashboard.chantiers')]}
                 />
                 <Bar dataKey="chantiers" fill={FB.blue} radius={[4, 4, 0, 0]} barSize={16} name={t('dashboard.chantiers')} />
               </BarChart>
@@ -2506,7 +2506,7 @@ export default function DashboardPageUnified() {
       )}
 
       {/* === GRAPHIQUE CA MENSUEL (Area) === */}
-      {analytics?.monthlyData?.length > 0 && analytics.monthlyData.some((d: any) => d.revenue > 0) && (
+      {analytics?.monthlyData?.length > 0 && analytics.monthlyData.some((d: Record<string, unknown>) => d.revenue > 0) && (
         <FBCard>
           <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
             {t('dashboard.monthlyRevenue')}
@@ -2524,7 +2524,7 @@ export default function DashboardPageUnified() {
                 <YAxis tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${v / 1000}k` : v} />
                 <RechartsTooltip
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "none", boxShadow: FB.shadow }}
-                  formatter={(value: any) => [formatRevenue(value), "CA"]}
+                  formatter={(value: unknown) => [formatRevenue(value), "CA"]}
                 />
                 <Area type="monotone" dataKey="revenue" stroke="#722ed1" strokeWidth={2} fill="url(#revenueGradient)" />
               </AreaChart>
@@ -2570,7 +2570,7 @@ export default function DashboardPageUnified() {
           <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
             {t('dashboard.chantiersByStatus')}
           </span>
-          {analytics.roleStats.chantiersByStatus.map((s: any, i: number) => (
+          {analytics.roleStats.chantiersByStatus.map((s: unknown, i: number) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0" }}>
               <div style={{ width: 10, height: 10, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
               <div style={{ flex: 1, fontSize: 12, color: FB.text }}>{s.name}</div>
@@ -2587,7 +2587,7 @@ export default function DashboardPageUnified() {
           <span style={{ fontSize: 14, fontWeight: 700, color: FB.text, display: "block", marginBottom: 8 }}>
             {t('dashboard.topCommercials')}
           </span>
-          {analytics.roleStats.topCommercials.map((c: any, i: number) => (
+          {analytics.roleStats.topCommercials.map((c: unknown, i: number) => (
             <div key={i} style={{
               display: "flex", alignItems: "center", gap: 8, padding: "6px 2px",
               borderRadius: 6, cursor: "pointer", transition: "background 0.15s",
@@ -2672,7 +2672,7 @@ export default function DashboardPageUnified() {
             value={selectedCollaborator}
             onChange={(val) => setSelectedCollaborator(val || null)}
             filterOption={(input, option) => (option?.label as string || "").toLowerCase().includes(input.toLowerCase())}
-            options={analytics.collaborators.map((c: any) => ({ value: c.id, label: `${c.name} (${getRoleLabel(c.role)})` }))}
+            options={analytics.collaborators.map((c: Record<string, unknown>) => ({ value: c.id, label: `${c.name} (${getRoleLabel(c.role)})` }))}
           />
         </FBCard>
       )}
@@ -2736,7 +2736,7 @@ export default function DashboardPageUnified() {
       )}
 
       {/* Revenue area chart */}
-      {analytics?.monthlyData?.length > 0 && analytics.monthlyData.some((d: any) => d.revenue > 0) && (
+      {analytics?.monthlyData?.length > 0 && analytics.monthlyData.some((d: Record<string, unknown>) => d.revenue > 0) && (
         <FBCard>
           <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>{t('dashboard.monthlyRevenue')}</span>
           <div style={{ height: 110, minWidth: 0, minHeight: 0 }}>
@@ -2750,7 +2750,7 @@ export default function DashboardPageUnified() {
                 </defs>
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: FB.textSecondary }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${v / 1000}k` : v} />
-                <RechartsTooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "none", boxShadow: FB.shadow }} formatter={(value: any) => [formatRevenue(value), t('dashboard.revenueShort')]} />
+                <RechartsTooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "none", boxShadow: FB.shadow }} formatter={(value: unknown) => [formatRevenue(value), t('dashboard.revenueShort')]} />
                 <Area type="monotone" dataKey="revenue" stroke="#722ed1" strokeWidth={2} fill="url(#mobileRevenueGrad)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -2899,11 +2899,11 @@ export default function DashboardPageUnified() {
                 {m.type === 'video' ? (
                   <video src={m.preview} style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6 }} />
                 ) : (
-                  <img src={m.preview} alt="" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6 }} />
+                  <img src={m.preview} alt="" loading="lazy" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6 }} />
                 )}
                 <div onClick={() => removeMediaPreview(i)} style={{
                   position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: '50%',
-                  background: '#e74c3c', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: SF.dangerAlt, color: SF.textLight, display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 10, cursor: 'pointer', fontWeight: 700,
                 }}>✕</div>
               </div>
@@ -3114,6 +3114,7 @@ export default function DashboardPageUnified() {
                       <img
                         src={result.img_src}
                         alt=""
+                        loading="lazy"
                         style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                         onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                       />
@@ -3125,7 +3126,7 @@ export default function DashboardPageUnified() {
                     {/* Favicon + domain */}
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                       {result.favicon && (
-                        <img src={result.favicon} alt="" style={{ width: 16, height: 16, borderRadius: 2 }}
+                        <img src={result.favicon} alt="" loading="lazy" style={{ width: 16, height: 16, borderRadius: 2 }}
                           onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       )}
                       <span style={{ fontSize: 11, color: FB.green, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -3414,7 +3415,7 @@ export default function DashboardPageUnified() {
             style={{
               display: "flex", overflowX: "auto", overflowY: "hidden",
               scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch",
-              scrollbarWidth: "none", msOverflowStyle: "none" as any,
+              scrollbarWidth: "none", msOverflowStyle: "none" as unknown,
               height: `calc(100vh - ${TOP_NAV_HEIGHT}px)`,
             }}
           >
@@ -3506,7 +3507,7 @@ export default function DashboardPageUnified() {
           <div className="sf-center-col" style={{
             flex: 1, minWidth: 0, overflowY: activeModule ? "hidden" : "auto", padding: "8px 16px",
             display: 'flex', flexDirection: 'column',
-            scrollbarWidth: 'none', msOverflowStyle: 'none' as any,
+            scrollbarWidth: 'none', msOverflowStyle: 'none' as unknown,
           }}>
             <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               {activeModule ? (

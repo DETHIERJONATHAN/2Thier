@@ -67,7 +67,7 @@ interface FormQuestion {
   defaultNextQuestionKey?: string;
   isRequired: boolean;
   placeholder?: string;
-  validationRules?: any;
+  validationRules?: unknown;
   createdAt: string;
   updatedAt: string;
 }
@@ -104,7 +104,7 @@ interface QuestionsManagerModalProps {
   visible: boolean;
   onClose: () => void;
   form: WebsiteForm | null;
-  api: any;
+  api: unknown;
   onUpdate: () => void;
 }
 
@@ -606,7 +606,7 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
     setQuestionModalVisible(true);
   };
 
-  const handleSaveQuestion = async (values: any) => {
+  const handleSaveQuestion = async (values: unknown) => {
     if (!websiteForm) return;
     
     try {
@@ -629,7 +629,7 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
       setQuestionModalVisible(false);
       fetchQuestions();
       onUpdate();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err.message || 'Erreur lors de la sauvegarde');
     }
   };
@@ -650,7 +650,7 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
     setNavigationModalVisible(true);
   };
 
-  const handleSaveNavigation = async (values: any) => {
+  const handleSaveNavigation = async (values: unknown) => {
     if (!selectedQuestion) return;
     
     try {

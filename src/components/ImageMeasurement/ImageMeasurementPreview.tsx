@@ -83,11 +83,11 @@ interface MobileFullscreenCanvasProps {
   onValidate?: (annotations: ImageAnnotations) => void;
   onCancel?: () => void;
   referenceRealSize?: { width: number; height: number };
-  onReferenceAdjusted?: (newBoundingBox: any, newPixelPerCmX: number, newPixelPerCmY?: number) => void;
+  onReferenceAdjusted?: (newBoundingBox: unknown, newPixelPerCmX: number, newPixelPerCmY?: number) => void;
   imageBase64?: string;
   mimeType?: string;
-  api?: any;
-  fusedCorners?: any;
+  api?: unknown;
+  fusedCorners?: unknown;
   homographyReady?: boolean;
   referenceConfig?: {
     referenceType: 'a4' | 'card' | 'meter' | 'custom';
@@ -95,7 +95,7 @@ interface MobileFullscreenCanvasProps {
     customWidth?: number;
     customHeight?: number;
   };
-  measurementObjectConfig?: any;
+  measurementObjectConfig?: unknown;
 }
 
 const MobileFullscreenCanvas: React.FC<MobileFullscreenCanvasProps> = ({
@@ -366,7 +366,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
 
       if (response?.success && response.points && response.points.length > 0) {
         // Convertir les points du format API vers MeasurementPoint
-        const points: MeasurementPoint[] = response.points.map((p: any, index: number) => ({
+        const points: MeasurementPoint[] = response.points.map((p: unknown, index: number) => ({
           id: `point_${index}`,
           x: p.x,
           y: p.y,

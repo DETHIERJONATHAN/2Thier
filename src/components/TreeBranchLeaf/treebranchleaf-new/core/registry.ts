@@ -1149,10 +1149,10 @@ export class TreeBranchLeafRegistry {
 
     const selectMode = tblData.select_multiple ? 'multiple' : 'single';
 
-    const meta = (tblData as any)?.metadata || {};
+    const meta = (tblData as unknown)?.metadata || {};
     const metaAppearance = (meta?.appearance || {}) as Record<string, unknown>;
     // 🎨 Lire displayIcon depuis toutes les sources possibles
-    const appearanceObj = (tblData as any)?.appearance || {};
+    const appearanceObj = (tblData as unknown)?.appearance || {};
 
     const result: Record<string, unknown> = {
       size: tblData.appearance_size || 'md',
@@ -1160,7 +1160,7 @@ export class TreeBranchLeafRegistry {
       width: tblData.appearance_width || '',
 
       // 🎨 displayIcon: priorité colonne > appearance objet > metadata > appearanceConfig
-      displayIcon: (tblData as any)?.appearance_displayIcon || appearanceObj.displayIcon || metaAppearance.displayIcon || (tblData as any)?.appearanceConfig?.displayIcon || undefined,
+      displayIcon: (tblData as unknown)?.appearance_displayIcon || appearanceObj.displayIcon || metaAppearance.displayIcon || (tblData as unknown)?.appearanceConfig?.displayIcon || undefined,
 
       columnsDesktop: numberOrUndefined(tblData.section_columnsDesktop),
       columnsMobile: numberOrUndefined(tblData.section_columnsMobile),

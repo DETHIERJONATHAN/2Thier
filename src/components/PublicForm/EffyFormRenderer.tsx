@@ -48,7 +48,7 @@ interface NavigationRule {
   condition?: {
     field: string;
     operator: 'equals' | 'notEquals' | 'in' | 'notIn' | 'greaterThan' | 'lessThan';
-    value: any;
+    value: unknown;
   };
   nextQuestionKey: string;
 }
@@ -77,7 +77,7 @@ interface FormData {
   name: string;
   slug: string;
   description?: string;
-  settings: any;
+  settings: unknown;
   startQuestionKey: string;
   successTitle?: string;
   successMessage?: string;
@@ -323,7 +323,7 @@ const EffyFormRenderer: React.FC = () => {
 
   // Navigation et réponses
   const [currentQuestionKey, setCurrentQuestionKey] = useState<string>('');
-  const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [history, setHistory] = useState<string[]>([]); // Pour le bouton retour
   const [currentAnswer, setCurrentAnswer] = useState<any>(null);
   
@@ -396,7 +396,7 @@ const EffyFormRenderer: React.FC = () => {
   }, [formData]);
 
   // Trouver la question suivante basée sur la navigation conditionnelle
-  const getNextQuestionKey = useCallback((questionKey: string, answerValue: any): string | null => {
+  const getNextQuestionKey = useCallback((questionKey: string, answerValue: unknown): string | null => {
     if (!formData) return null;
     
     const question = formData.questions.find(q => q.questionKey === questionKey);
@@ -472,12 +472,12 @@ const EffyFormRenderer: React.FC = () => {
   }, []);
 
   // Gérer les inputs (number, text, etc.)
-  const handleInputChange = useCallback((value: any) => {
+  const handleInputChange = useCallback((value: unknown) => {
     setCurrentAnswer(value);
   }, []);
 
   // Soumettre le formulaire
-  const handleSubmit = useCallback(async (finalAnswers: Record<string, any>) => {
+  const handleSubmit = useCallback(async (finalAnswers: Record<string, unknown>) => {
     if (!formData) return;
 
     setSubmitting(true);

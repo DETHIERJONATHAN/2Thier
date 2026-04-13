@@ -132,7 +132,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       ]);
       setStatus(statusData);
       setAccounts(accountsData || []);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Fetch status error:', e);
     }
   }, [api]);
@@ -141,7 +141,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
     try {
       const data = await api.api.get('/api/zhiivemail/server-overview');
       setServerOverview(data);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Fetch server-overview error:', e);
     }
   }, [api]);
@@ -150,7 +150,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
     try {
       const data = await api.api.get('/api/zhiivemail/postal-stats');
       setPostalStats(data);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Fetch postal-stats error:', e);
     }
   }, [api]);
@@ -159,7 +159,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
     try {
       const data = await api.api.get('/api/zhiivemail/postal-messages?limit=100');
       setPostalMessages(data || []);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Fetch postal-messages error:', e);
     }
   }, [api]);
@@ -174,7 +174,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       setPostalDomains(domains || []);
       setPostalCredentials(credentials || []);
       setPostalRoutes(routes || []);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Fetch infrastructure error:', e);
     }
   }, [api]);
@@ -199,7 +199,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       const result = await api.api.post('/api/zhiivemail/test-smtp', { to: testEmail || undefined });
       if (result.success) message.success(`Email test envoyé à ${result.recipient}`);
       else message.error('Échec du test SMTP');
-    } catch (e: any) { message.error(e.message || 'Erreur SMTP'); }
+    } catch (e: unknown) { message.error(e.message || 'Erreur SMTP'); }
     finally { setTestLoading(false); }
   };
 
@@ -209,7 +209,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       const result = await api.api.post('/api/zhiivemail/provision-all', {});
       message.success(`${result.created} compte(s) créé(s) sur ${result.total} utilisateur(s)`);
       fetchStatus();
-    } catch (e: any) { message.error(e.message || 'Erreur provisionnement'); }
+    } catch (e: unknown) { message.error(e.message || 'Erreur provisionnement'); }
     finally { setProvisionLoading(false); }
   };
 
@@ -218,7 +218,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       await api.api.delete(`/api/zhiivemail/accounts/${id}`);
       message.success('Compte supprimé');
       fetchStatus();
-    } catch (e: any) { message.error(e.message || 'Erreur suppression'); }
+    } catch (e: unknown) { message.error(e.message || 'Erreur suppression'); }
   };
 
   const handleEdit = async () => {
@@ -228,7 +228,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       message.success('Compte mis à jour');
       setEditModal({ visible: false, account: null });
       fetchStatus();
-    } catch (e: any) { message.error(e.message || 'Erreur modification'); }
+    } catch (e: unknown) { message.error(e.message || 'Erreur modification'); }
   };
 
   const handleClearSuppressions = async () => {
@@ -236,7 +236,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
       const result = await api.api.post('/api/zhiivemail/clear-suppressions', {});
       message.success(`Suppressions vidées. Restantes: ${result.remaining}`);
       fetchServerOverview();
-    } catch (e: any) { message.error(e.message || 'Erreur'); }
+    } catch (e: unknown) { message.error(e.message || 'Erreur'); }
   };
 
   const handleRestartPostal = async () => {
@@ -248,7 +248,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
         message.success(`Postal redémarré (${result.containers?.length} containers)`);
         setTimeout(fetchServerOverview, 3000);
       }
-    } catch (e: any) { hide(); message.error(e.message || 'Erreur redémarrage'); }
+    } catch (e: unknown) { hide(); message.error(e.message || 'Erreur redémarrage'); }
   };
 
   // ─── Guard ───────────────────────────────────────────────
@@ -442,7 +442,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
               { text: 'HardFail', value: 'HardFail' },
               { text: 'Held', value: 'Held' },
             ],
-            onFilter: (v: any, r: PostalMessage) => r.status === v,
+            onFilter: (v: unknown, r: PostalMessage) => r.status === v,
           },
           {
             title: 'Date', dataIndex: 'timestamp', key: 'timestamp', width: 160,
@@ -473,7 +473,7 @@ const ZhiiveMailAdminPage: React.FC = () => {
         columns={[
           {
             title: 'Utilisateur', key: 'user',
-            render: (_: any, r: EmailAccount) => (
+            render: (_: unknown, r: EmailAccount) => (
               <div>
                 <Text strong>{`${r.user?.firstName || ''} ${r.user?.lastName || ''}`.trim() || '—'}</Text>
                 <br /><Text type="secondary" style={{ fontSize: 11 }}>{r.user?.email}</Text>
@@ -482,11 +482,11 @@ const ZhiiveMailAdminPage: React.FC = () => {
           },
           { title: 'Adresse Zhiive', dataIndex: 'emailAddress', key: 'emailAddress', render: (email: string) => <Tag icon={<MailOutlined />} color="purple">{email}</Tag> },
           { title: 'Provider', dataIndex: 'mailProvider', key: 'mailProvider', render: (p: string) => <Tag color={p === 'postal' ? 'green' : p === 'gmail' ? 'blue' : 'default'}>{p}</Tag> },
-          { title: 'Rôle', key: 'role', render: (_: any, r: EmailAccount) => <Tag>{r.user?.role || '—'}</Tag> },
+          { title: 'Rôle', key: 'role', render: (_: unknown, r: EmailAccount) => <Tag>{r.user?.role || '—'}</Tag> },
           { title: 'Créé le', dataIndex: 'createdAt', key: 'createdAt', render: (d: string) => d ? new Date(d).toLocaleDateString('fr-BE') : '—' },
           {
             title: 'Actions', key: 'actions', width: 100,
-            render: (_: any, r: EmailAccount) => (
+            render: (_: unknown, r: EmailAccount) => (
               <Space>
                 <Tooltip title="Modifier l'adresse"><Button size="small" icon={<EditOutlined />} onClick={() => { setEditEmail(r.emailAddress); setEditModal({ visible: true, account: r }); }} /></Tooltip>
                 <Popconfirm title="Supprimer ce compte email ?" onConfirm={() => handleDelete(r.id)} okText="Supprimer" cancelText="Annuler">

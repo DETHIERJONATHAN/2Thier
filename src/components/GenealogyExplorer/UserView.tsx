@@ -39,7 +39,7 @@ const UserNodeIcon: React.FC<{ type: 'O' | 'O+C' | 'C' }> = ({ type }) => {
 const UserTreeNode: React.FC<{
   node: UserNodeData;
   level: number;
-  onFieldChange?: (nodeId: string, value: any) => void;
+  onFieldChange?: (nodeId: string, value: unknown) => void;
 }> = ({ node, level, onFieldChange }) => {
   const [expanded, setExpanded] = useState(false);
   const [fieldValue, setFieldValue] = useState("");
@@ -111,13 +111,13 @@ const UserTreeNode: React.FC<{
 // Composant principal pour les utilisateurs
 interface GenealogyUserViewProps {
   tree: UserNodeData[];
-  onFormChange?: (formData: Record<string, any>) => void;
+  onFormChange?: (formData: Record<string, unknown>) => void;
 }
 
 const GenealogyUserView: React.FC<GenealogyUserViewProps> = ({ tree, onFormChange }) => {
-  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
 
-  const handleFieldChange = (nodeId: string, value: any) => {
+  const handleFieldChange = (nodeId: string, value: unknown) => {
     const newFormData = { ...formData, [nodeId]: value };
     setFormData(newFormData);
     

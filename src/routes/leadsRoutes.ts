@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma';
 import { notify } from '../services/NotificationHelper';
 import { generateFormResponsePdf } from '../services/formResponsePdfGenerator';
 import { uploadFile } from '../lib/storage';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -82,7 +83,7 @@ router.get('/', async (req, res) => {
         res.json({ success: true, data: formattedLeads });
         return;
       } catch (error) {
-        console.error('[LEADS] Erreur lors de la récupération des leads pour SuperAdmin:', error);
+        logger.error('[LEADS] Erreur lors de la récupération des leads pour SuperAdmin:', error);
         res.status(500).json({ 
           success: false,
           error: 'Erreur lors de la récupération des leads pour SuperAdmin',
@@ -156,7 +157,7 @@ router.get('/', async (req, res) => {
     res.json({ success: true, data: formattedLeads });
 
   } catch (error) {
-    console.error('[LEADS] Erreur lors de la récupération des leads:', error);
+    logger.error('[LEADS] Erreur lors de la récupération des leads:', error);
     res.status(500).json({ 
       success: false,
       error: 'Erreur lors de la récupération des leads',
@@ -286,7 +287,7 @@ router.post('/', async (req, res) => {
       email: newLead.email,
       phone: newLead.phone,
       company: newLead.company,
-      address: (newLead.data as any)?.address || '',
+      address: (newLead.data as unknown)?.address || '',
       status: newLead.status,
       source: newLead.source,
       assignedTo: newLead.User,
@@ -302,7 +303,7 @@ router.post('/', async (req, res) => {
     res.status(201).json(formattedLead);
     
   } catch (error) {
-    console.error('[LEADS] Erreur lors de la création du lead:', error);
+    logger.error('[LEADS] Erreur lors de la création du lead:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la création du lead',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -398,7 +399,7 @@ router.get('/:id', async (req, res) => {
     res.json(formattedLead);
     
   } catch (error) {
-    console.error('[LEADS] Erreur lors de la récupération du lead:', error);
+    logger.error('[LEADS] Erreur lors de la récupération du lead:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la récupération du lead',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -460,7 +461,7 @@ router.post('/:id/form-pdf/regenerate', async (req, res) => {
         lastName: lead.lastName || undefined,
         email: lead.email || undefined,
         phone: lead.phone || undefined,
-        civility: (lead.data as any)?.civility
+        civility: (lead.data as unknown)?.civility
       },
       answers: (latestSubmission.formData as Record<string, unknown>) || {},
       questions: (form.questions || []).map((q) => ({
@@ -501,7 +502,7 @@ router.post('/:id/form-pdf/regenerate', async (req, res) => {
       leadId: updatedLead.id
     });
   } catch (error) {
-    console.error('[LEADS] Erreur régénération PDF formulaire:', error);
+    logger.error('[LEADS] Erreur régénération PDF formulaire:', error);
     return res.status(500).json({
       error: 'Erreur lors de la régénération du PDF',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -603,7 +604,7 @@ router.put('/:id', async (req, res) => {
       const normalizedStatus = statusMapping[status.toLowerCase()] || status;
       
       if (!validStatuses.includes(normalizedStatus)) {
-        console.warn('[LEADS] Statut invalide:', status, '- utilisation de "new" par défaut');
+        logger.warn('[LEADS] Statut invalide:', status, '- utilisation de "new" par défaut');
         updateData.status = 'new';
       } else {
         updateData.status = normalizedStatus;
@@ -667,7 +668,7 @@ router.put('/:id', async (req, res) => {
       email: updatedLead.email || '',
       phone: updatedLead.phone || '',
       company: updatedLead.company || '',
-      address: (updatedLead.data as any)?.address || '',
+      address: (updatedLead.data as unknown)?.address || '',
       status: updatedLead.status,
       source: updatedLead.source || 'unknown',
       assignedTo: updatedLead.User,
@@ -687,7 +688,7 @@ router.put('/:id', async (req, res) => {
     res.json(formattedLead);
     
   } catch (error) {
-    console.error('[LEADS] Erreur lors de la modification du lead:', error);
+    logger.error('[LEADS] Erreur lors de la modification du lead:', error);
     res.status(500).json({ 
       error: 'Erreur lors de la modification du lead',
       message: error instanceof Error ? error.message : 'Erreur inconnue'
@@ -727,7 +728,7 @@ router.delete('/:id', async (req, res) => {
     // 204 No Content pour simplifier la gestion côté client (converti en {success:true})
     return res.status(204).send();
   } catch (error) {
-    console.error('[LEADS] Erreur lors de la suppression du lead:', error);
+    logger.error('[LEADS] Erreur lors de la suppression du lead:', error);
     // Conflits potentiels liés aux contraintes d’intégrité (FK)
     return res.status(500).json({
       error: 'Erreur lors de la suppression du lead',
@@ -759,7 +760,7 @@ router.get('/:id/history', async (req, res) => {
     const history: HistoryItem[] = Array.isArray(dataObj.history) ? dataObj.history : [];
     return res.json({ success: true, data: history });
   } catch (e) {
-    console.error('[LEADS] GET history error', e);
+    logger.error('[LEADS] GET history error', e);
     return res.status(500).json({ success: false, error: 'Erreur lors du chargement de l\'historique' });
   }
 });
@@ -799,7 +800,7 @@ router.post('/:id/history', async (req, res) => {
     await prisma.lead.update({ where: { id: lead.id }, data: { data: dataObj } });
     return res.status(201).json({ success: true, item: historyItem });
   } catch (e) {
-    console.error('[LEADS] POST history error', e);
+    logger.error('[LEADS] POST history error', e);
     return res.status(500).json({ success: false, error: 'Erreur lors de l\'ajout à l\'historique' });
   }
 });
@@ -827,7 +828,7 @@ router.get('/:id/documents', async (req, res) => {
     const docs: LeadDoc[] = Array.isArray(dataObj.documents) ? dataObj.documents : [];
     return res.json({ success: true, data: docs });
   } catch (e) {
-    console.error('[LEADS] GET documents error', e);
+    logger.error('[LEADS] GET documents error', e);
     return res.status(500).json({ success: false, error: 'Erreur lors du chargement des documents' });
   }
 });
@@ -871,7 +872,7 @@ router.post('/:id/documents', async (req, res) => {
     await prisma.lead.update({ where: { id: lead.id }, data: { data: dataObj } });
     return res.status(201).json({ success: true, item: newDoc });
   } catch (e) {
-    console.error('[LEADS] POST documents error', e);
+    logger.error('[LEADS] POST documents error', e);
     return res.status(500).json({ success: false, error: 'Erreur lors de l\'ajout du document' });
   }
 });

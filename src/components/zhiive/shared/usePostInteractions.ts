@@ -7,8 +7,8 @@ import { useState, useCallback} from 'react';
 import { message } from 'antd';
 
 interface UsePostInteractionsOptions {
-  api: any;
-  t: (key: string, opts?: any) => string;
+  api: unknown;
+  t: (key: string, opts?: unknown) => string;
   userId?: string;
 }
 

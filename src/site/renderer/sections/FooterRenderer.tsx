@@ -23,7 +23,7 @@ import { motion } from 'framer-motion';
  */
 
 interface FooterRendererProps {
-  content: any;
+  content: unknown;
   mode: 'preview' | 'edit';
 }
 
@@ -163,7 +163,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
               {/* SOCIAL ICONS */}
               {socialData?.enabled && socialData?.links && socialData.links.length > 0 && (
                 <Space size="middle">
-                  {socialData.links.map((item: any, index: number) => (
+                  {socialData.links.map((item: unknown, index: number) => (
                     <motion.a
                       key={index}
                       href={item.url || '#'}
@@ -194,7 +194,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
           </Col>
 
           {/* 📝 COLUMNS */}
-          {columns.map((column: any, colIndex: number) => (
+          {columns.map((column: unknown, colIndex: number) => (
             <Col 
               key={colIndex} 
               xs={24} 
@@ -228,7 +228,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
                     padding: 0,
                     margin: 0
                   }}>
-                    {column.links.map((link: any, linkIndex: number) => (
+                    {column.links.map((link: unknown, linkIndex: number) => (
                       <motion.li
                         key={linkIndex}
                         whileHover={{ x: 5 }}
@@ -380,7 +380,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
           {/* LEGAL LINKS */}
           {copyright?.legalLinks && copyright.legalLinks.length > 0 && (
             <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
-              {copyright.legalLinks.map((link: any, index: number) => (
+              {copyright.legalLinks.map((link: unknown, index: number) => (
                 <React.Fragment key={index}>
                   {index > 0 && <span style={{ color: 'rgba(255,255,255,0.3)' }}>•</span>}
                   <a

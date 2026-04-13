@@ -32,7 +32,7 @@ export interface CopyFormulaOptions {
   nodeIdMap?: Map<string, string>;
   /** Map des formules dÃƒÂ©jÃƒÂ  copiÃƒÂ©es (cache pour ÃƒÂ©viter doublons) */
   formulaCopyCache?: Map<string, string>;  /** PERF: Formula data pre-loaded by deep-copy-service (avoids findUnique per formula) */
-  preloadedFormula?: { id: string; nodeId: string; organizationId: string; name: string | null; description: string | null; tokens: any; targetProperty: string | null; constraintMessage: string | null; isDefault: boolean | null; order: number | null } | null;
+  preloadedFormula?: { id: string; nodeId: string; organizationId: string; name: string | null; description: string | null; tokens: unknown; targetProperty: string | null; constraintMessage: string | null; isDefault: boolean | null; order: number | null } | null;
   /** PERF: Set of existing node IDs to skip findUnique owner check */
   existingNodeIds?: Set<string>;
   /** PERF: formulaIdMap from deep-copy-service (passed to rewriteMaps) */
@@ -297,24 +297,24 @@ export async function copyFormulaCapacity(
     // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
     // Utiliser la fonction helper pour forcer les suffixes sur TOUS les shared-refs
     const sharedRefsCountBefore = rewrittenTokens && Array.isArray(rewrittenTokens) 
-      ? rewrittenTokens.filter((t: any) => typeof t === 'string' && t.includes('shared-ref')).length
+      ? rewrittenTokens.filter((t: Record<string, unknown>) => typeof t === 'string' && t.includes('shared-ref')).length
       : 0;
     
     rewrittenTokens = forceSharedRefSuffixes(rewrittenTokens, suffix);
     
     const sharedRefsCountAfter1 = rewrittenTokens && Array.isArray(rewrittenTokens) 
-      ? rewrittenTokens.filter((t: any) => typeof t === 'string' && t.includes('shared-ref')).length
+      ? rewrittenTokens.filter((t: Record<string, unknown>) => typeof t === 'string' && t.includes('shared-ref')).length
       : 0;
     
     // Ã°Å¸â€Â¥ RÃƒâ€°Ãƒâ€°CRITURE RÃƒâ€°CURSIVE - Appel AUSSI la version JSON pour traiter les structures imbriquÃƒÂ©es
     rewrittenTokens = forceSharedRefSuffixesInJson(rewrittenTokens, suffix);
     
     const sharedRefsCountAfter2 = rewrittenTokens && Array.isArray(rewrittenTokens) 
-      ? rewrittenTokens.filter((t: any) => typeof t === 'string' && t.includes('shared-ref')).length
+      ? rewrittenTokens.filter((t: Record<string, unknown>) => typeof t === 'string' && t.includes('shared-ref')).length
       : 0;
     
     if (Array.isArray(rewrittenTokens)) {
-      const unsuffixed = rewrittenTokens.filter((t: any) => 
+      const unsuffixed = rewrittenTokens.filter((t: Record<string, unknown>) => 
         typeof t === 'string' && t.includes('shared-ref') && !/-\d+$/.test(t)
       );
       if (unsuffixed.length > 0) {

@@ -35,7 +35,7 @@ describe('interpretTable - lookup Mode 1 (column-only) Option 2 CHAMP with opera
         { id: 'r3', rowIndex: 3, cells: JSON.stringify(["50600", 'R3 - X3']) },
         { id: 'r4', rowIndex: 4, cells: JSON.stringify(["114440", 'R4 - X2']) }
       ]
-    } as any;
+    } as unknown;
 
     const prisma = {
       treeBranchLeafNodeTable: {
@@ -44,7 +44,7 @@ describe('interpretTable - lookup Mode 1 (column-only) Option 2 CHAMP with opera
       },
       treeBranchLeafNode: { findUnique: jest.fn() },
       treeBranchLeafSubmissionData: { findFirst: jest.fn() }
-    } as any;
+    } as unknown;
 
     const submissionId = 'sub1';
 

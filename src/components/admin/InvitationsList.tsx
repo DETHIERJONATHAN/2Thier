@@ -96,7 +96,7 @@ const InvitationsList: React.FC<InvitationsListProps> = ({ refreshKey }) => {
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, record: Invitation) => (
+      render: (_: unknown, record: Invitation) => (
         <Space>
           {record.status === 'PENDING' && (
             <Popconfirm

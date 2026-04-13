@@ -189,7 +189,7 @@ export const useCalculatedFieldValue = (
             let calculatedValue: unknown = (result as any).value ?? (result as any).calculatedValue;
 
             setValue(calculatedValue);
-            setHumanText((result.operationResult as any)?.humanText || '');
+            setHumanText((result.operationResult as unknown)?.humanText || '');
             setDisplayConfig((result as any).displayConfig || null);
           } else {
             setValue(undefined);

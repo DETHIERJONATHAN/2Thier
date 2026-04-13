@@ -128,8 +128,8 @@ const AIMeasurePanel: React.FC<AIMeasurePanelProps> = ({
             enabled: node.aiMeasure_enabled ?? false,
             autoTrigger: node.aiMeasure_autoTrigger ?? true,
             prompt: node.aiMeasure_prompt ?? '',
-            measureKeys: (node.aiMeasure_keys ?? []).map((k: any) => k.key || k),
-            mappings: (node.aiMeasure_keys ?? []).map((k: any) => ({
+            measureKeys: (node.aiMeasure_keys ?? []).map((k: Record<string, unknown>) => k.key || k),
+            mappings: (node.aiMeasure_keys ?? []).map((k: Record<string, unknown>) => ({
               id: k.id || k.key,
               key: k.key,
               label: k.label || k.key,

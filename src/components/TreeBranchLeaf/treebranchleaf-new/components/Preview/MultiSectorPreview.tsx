@@ -172,7 +172,7 @@ export default function MultiSectorPreview({ treeId, leadId }: MultiSectorPrevie
   // Rendu d'un nœud feuille basique (aperçu simple)
   const renderLeaf = (node: TreeBranchLeafNode) => {
     if (node.subType === 'option') {
-      const options: string[] = (node as any)?.fieldConfig?.options || [];
+      const options: string[] = (node as unknown)?.fieldConfig?.options || [];
       return (
         <div key={node.id} style={{ marginBottom: 16 }}>
           <Text strong>
@@ -197,7 +197,7 @@ export default function MultiSectorPreview({ treeId, leadId }: MultiSectorPrevie
     }
 
     // field
-    const fieldType = (node as any)?.fieldConfig?.fieldType || 'text';
+    const fieldType = (node as unknown)?.fieldConfig?.fieldType || 'text';
     return (
       <div key={node.id} style={{ marginBottom: 16 }}>
         <Text strong>

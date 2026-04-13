@@ -1062,7 +1062,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       await assignToChantier(chantierId, technicianId, role);
       message.success('Technicien assigné !');
       refetch(); // Refresh chantiers to update badges
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err?.message?.includes('déjà assigné')) {
         message.info('Ce technicien est déjà assigné à ce chantier');
       } else {
@@ -1077,7 +1077,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       const result = await assignTeamToChantier(chantierId, teamId);
       message.success(result.message || 'Équipe assignée !');
       refetch();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur lors de l\'assignation de l\'équipe');
     }
   }, [assignTeamToChantier, refetch, canAssign]);
@@ -1091,7 +1091,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       message.success('Équipe créée !');
       setNewTeamName('');
       setTeamModalOpen(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur création équipe');
     } finally {
       setCreatingTeam(false);
@@ -1103,7 +1103,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
     try {
       await deleteTeam(teamId);
       message.success('Équipe supprimée');
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur suppression équipe');
     }
   }, [deleteTeam, canManageTeams]);
@@ -1116,7 +1116,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       message.success('Membre ajouté à l\'équipe');
       setAddMemberTechId('');
       setAddMemberTeamId(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur ajout membre');
     }
   }, [addTeamMember, addMemberTeamId, addMemberTechId, canManageTeams]);
@@ -1128,7 +1128,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       message.success('Statut mis à jour');
       setDraggingFromStatusId(null);
       refetch();
-    } catch (err: any) {
+    } catch (err: unknown) {
       const responseData = err?.data;
       const errorCode = responseData?.code;
       const isBillingBlock = errorCode === 'BILLING_BLOCK'
@@ -1169,7 +1169,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
       message.success('Statut mis à jour (facturation ignorée)');
       setBillingBlock(null);
       refetch();
-    } catch (forceErr: any) {
+    } catch (forceErr: unknown) {
       message.error(forceErr?.message || 'Erreur lors du déplacement forcé');
     } finally {
       setForceLoading(false);
@@ -1747,7 +1747,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                       try {
                         const result = await syncTechnicians();
                         message.success(result.message || 'Synchronisation terminée');
-                      } catch (err: any) {
+                      } catch (err: unknown) {
                         message.error(err?.message || 'Erreur sync');
                       }
                     }}
@@ -2110,7 +2110,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             message.success('Technicien créé !');
             setTechFormOpen(false);
             setTechFormData({ type: 'INTERNAL', billingMode: '', firstName: '', lastName: '', email: '', phone: '', company: '', specialties: [], color: '#1677ff', vatNumber: '', address: '', postalCode: '', city: '', country: 'Belgique', iban: '' });
-          } catch (err: any) {
+          } catch (err: unknown) {
             message.error(err?.message || 'Erreur création');
           }
         }}
@@ -2252,7 +2252,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             setUnavailModalOpen(false);
             setUnavailTechId('');
             setUnavailData({ startDate: '', endDate: '', type: 'CONGE', note: '' });
-          } catch (err: any) {
+          } catch (err: unknown) {
             message.error(err?.message || 'Erreur');
           }
         }}

@@ -161,7 +161,7 @@ const DocumentTemplatesPage = () => {
   };
 
   // Sauvegarder template
-  const handleSaveTemplate = async (values: any) => {
+  const handleSaveTemplate = async (values: unknown) => {
     try {
       if (editingTemplate) {
         await api.put(`/api/documents/templates/${editingTemplate.id}`, values);
@@ -246,7 +246,7 @@ const DocumentTemplatesPage = () => {
   };
 
   // Sauvegarder un thème
-  const handleSaveTheme = async (themeData: any) => {
+  const handleSaveTheme = async (themeData: unknown) => {
     try {
       await api.post('/api/documents/themes', themeData);
       loadThemes();
@@ -266,7 +266,7 @@ const DocumentTemplatesPage = () => {
       message.success('Template supprimé');
       setDeleteConfirm(null);
       loadTemplates();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ [handleDeleteTemplate] Erreur suppression template:', error);
       message.error(error?.message || 'Erreur lors de la suppression');
     } finally {
@@ -281,7 +281,7 @@ const DocumentTemplatesPage = () => {
       const response = await api.get(`/api/documents/templates/${template.id}`);
 
       // Mapper DocumentSection → sections (le POST attend "sections", pas "DocumentSection")
-      const sections = (response.DocumentSection || []).map((s: any) => ({
+      const sections = (response.DocumentSection || []).map((s: Record<string, unknown>) => ({
         order: s.order,
         type: s.type,
         config: s.config || {},
@@ -419,7 +419,7 @@ const DocumentTemplatesPage = () => {
       key: 'productLink',
       width: 120,
       responsive: ['md'] as ('md')[],
-      render: (_: any, record: DocumentTemplate) => (
+      render: (_: unknown, record: DocumentTemplate) => (
         record.isDefault ? (
           <Tag color="blue">📌 Par défaut</Tag>
         ) : record.productValue ? (
@@ -460,7 +460,7 @@ const DocumentTemplatesPage = () => {
       title: '',
       key: 'actions',
       width: isMobile ? 50 : 220,
-      render: (_: any, record: DocumentTemplate) => (
+      render: (_: unknown, record: DocumentTemplate) => (
         isMobile ? (
           <Dropdown menu={getActionMenu(record)} trigger={['click']}>
             <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>⋯</button>

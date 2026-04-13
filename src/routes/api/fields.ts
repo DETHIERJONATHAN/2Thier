@@ -2,12 +2,13 @@ import express from 'express';
 import { authMiddleware } from '../../middlewares/auth.js';
 import formulasRouter from './formulas.js';
 import { db } from '../../lib/database';
+import { logger } from '../lib/logger';
 
 const router = express.Router();
 const prisma = db;
 
 // Appliquer le middleware d'authentification à toutes les routes
-router.use(authMiddleware as any);
+router.use(authMiddleware as unknown);
 
 // Vérifier l'existence des formules pour debug
 router.get('/debug/check-formulas', async (_req, res) => {
@@ -23,7 +24,7 @@ router.get('/debug/check-formulas', async (_req, res) => {
       }))
     });
   } catch (error) {
-    console.error('[DEBUG] Erreur lors de la vérification des formules:', error);
+    logger.error('[DEBUG] Erreur lors de la vérification des formules:', error);
     res.status(500).json({ error: 'Erreur lors de la vérification des formules' });
   }
 });
@@ -59,7 +60,7 @@ router.get('/create-test-formula', async (_req, res) => {
       totalFormulas: allFormulas.length
     });
   } catch (error) {
-    console.error('[DEBUG] Erreur lors de la création de la formule de test:', error);
+    logger.error('[DEBUG] Erreur lors de la création de la formule de test:', error);
     res.status(500).json({ error: 'Erreur lors de la création de la formule de test', details: String(error) });
   }
 });

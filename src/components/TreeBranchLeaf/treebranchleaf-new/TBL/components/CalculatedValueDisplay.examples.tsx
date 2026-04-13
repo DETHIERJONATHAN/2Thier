@@ -146,7 +146,7 @@ export function Example5_InTBLSectionRenderer() {
 /**
  * Exemple 6: Récapitulatif complet (Devis)
  */
-export function Example6_QuoteSummary({ submissionId, treeId }: any) {
+export function Example6_QuoteSummary({ submissionId, treeId }: unknown) {
   return (
     <div className="bg-white p-6 rounded-lg shadow">
       <h2 className="text-xl font-bold mb-6">📊 Récapitulatif des Calculs</h2>

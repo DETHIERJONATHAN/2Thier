@@ -13,6 +13,7 @@ import express from 'express';
 import { authMiddleware } from '../middlewares/auth';
 import type { AuthenticatedRequest } from '../middlewares/auth';
 import { getGeminiService } from '../services/GoogleGeminiService';
+import { logger } from '../lib/logger';
 
 const router = express.Router();
 const geminiService = getGeminiService();
@@ -32,7 +33,7 @@ class SmartPromptBuilder {
     fieldId: string;
     fieldType: string;
     fieldLabel: string;
-    currentValue?: any;
+    currentValue?: unknown;
     aiContext: {
       sectionType: string;
       businessType?: string;
@@ -86,7 +87,7 @@ ${currentValue ? `- Valeur actuelle: "${currentValue}"` : ''}
   /**
    * Prompt pour champs texte courts (titres, labels, CTA)
    */
-  private static buildTextPrompt(context: string, fieldId: string, label: string, current?: any): string {
+  private static buildTextPrompt(context: string, fieldId: string, label: string, current?: unknown): string {
     // Détection du type de contenu par l'ID du champ
     const isTitle = fieldId.toLowerCase().includes('title') || label.toLowerCase().includes('titre');
     const isCTA = fieldId.toLowerCase().includes('cta') || label.toLowerCase().includes('bouton');
@@ -170,7 +171,7 @@ Retourne UNIQUEMENT un objet JSON valide avec cette structure:
   /**
    * Prompt pour champs textarea (descriptions, paragraphes)
    */
-  private static buildTextareaPrompt(context: string, fieldId: string, label: string, current?: any): string {
+  private static buildTextareaPrompt(context: string, fieldId: string, label: string, current?: unknown): string {
     const isDescription = fieldId.toLowerCase().includes('description') || label.toLowerCase().includes('description');
     const isAbout = fieldId.toLowerCase().includes('about') || label.toLowerCase().includes('présentation');
 
@@ -250,7 +251,7 @@ Retourne UNIQUEMENT un objet JSON valide avec cette structure:
   /**
    * Prompt pour champs select/multiselect (features, tags, options)
    */
-  private static buildSelectPrompt(context: string, fieldId: string, label: string, current?: any): string {
+  private static buildSelectPrompt(context: string, fieldId: string, label: string, current?: unknown): string {
     const isFeatures = fieldId.toLowerCase().includes('feature') || label.toLowerCase().includes('caractéristique');
     const isTags = fieldId.toLowerCase().includes('tag') || label.toLowerCase().includes('étiquette');
     const isBenefits = fieldId.toLowerCase().includes('benefit') || label.toLowerCase().includes('avantage');
@@ -333,7 +334,7 @@ Retourne UNIQUEMENT un objet JSON valide avec cette structure:
   /**
    * Prompt pour richtext (contenu HTML/Markdown enrichi)
    */
-  private static buildRichtextPrompt(context: string, fieldId: string, label: string, current?: any): string {
+  private static buildRichtextPrompt(context: string, fieldId: string, label: string, current?: unknown): string {
     return `${context}
 
 TÂCHE: Génère 2 PROPOSITIONS VARIÉES de contenu enrichi (paragraphes structurés).
@@ -376,7 +377,7 @@ Retourne UNIQUEMENT un objet JSON valide avec cette structure:
   /**
    * Prompt générique pour types inconnus
    */
-  private static buildGenericPrompt(context: string, label: string, current?: any): string {
+  private static buildGenericPrompt(context: string, label: string, current?: unknown): string {
     return `${context}
 
 TÂCHE: Génère 3 PROPOSITIONS PERTINENTES pour le champ "${label}".
@@ -420,16 +421,16 @@ class QualityAnalyzer {
   /**
    * Analyse et enrichit les suggestions avec des métriques
    */
-  static analyzeSuggestions(response: any, fieldType: string): any {
+  static analyzeSuggestions(response: unknown, fieldType: string): any {
     try {
       // Calcul du score moyen
-      const scores = response.suggestions.map((s: any) => s.score || 0);
+      const scores = response.suggestions.map((s: Record<string, unknown>) => s.score || 0);
       const avgScore = scores.length > 0 
         ? Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length)
         : 0;
 
       // Tri des suggestions par score
-      response.suggestions.sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+      response.suggestions.sort((a: unknown, b: unknown) => (b.score || 0) - (a.score || 0));
 
       // Enrichissement de l'analyse
       response.analysis = {
@@ -442,7 +443,7 @@ class QualityAnalyzer {
 
       return response;
     } catch (error) {
-      console.error('❌ [QualityAnalyzer] Erreur analyse:', error);
+      logger.error('❌ [QualityAnalyzer] Erreur analyse:', error);
       return response;
     }
   }
@@ -474,7 +475,7 @@ router.post('/generate-field', async (req: AuthenticatedRequest, res) => {
       });
     }
 
-    console.log('🤖 [AI] Génération pour:', {
+    logger.info('🤖 [AI] Génération pour:', {
       fieldId,
       fieldType,
       fieldLabel,
@@ -490,7 +491,7 @@ router.post('/generate-field', async (req: AuthenticatedRequest, res) => {
       aiContext
     });
 
-    console.log('📝 [AI] Prompt construit, appel à Gemini...');
+    logger.info('📝 [AI] Prompt construit, appel à Gemini...');
 
     // 🚀 Génération avec Gemini
     const geminiResult = await geminiService.chat({ prompt, raw: true });
@@ -499,7 +500,7 @@ router.post('/generate-field', async (req: AuthenticatedRequest, res) => {
       throw new Error(geminiResult.error || 'Erreur lors de l\'appel à Gemini');
     }
 
-    console.log('✅ [AI] Réponse brute reçue:', geminiResult.content.substring(0, 200));
+    logger.info('✅ [AI] Réponse brute reçue:', geminiResult.content.substring(0, 200));
 
     // 📊 Extraction et parsing du JSON
     const jsonMatch = geminiResult.content.match(/\{[\s\S]*\}/);
@@ -515,7 +516,7 @@ router.post('/generate-field', async (req: AuthenticatedRequest, res) => {
   const duration = Date.now() - startTime;
   const modelUsed = geminiResult.model || geminiService.getStatus().model;
 
-    console.log(`✅ [AI] Génération réussie en ${duration}ms, score moyen: ${parsedResponse.analysis.avgScore}/100`);
+    logger.info(`✅ [AI] Génération réussie en ${duration}ms, score moyen: ${parsedResponse.analysis.avgScore}/100`);
 
     // 🎉 Réponse structurée
     return res.json({
@@ -532,10 +533,10 @@ router.post('/generate-field', async (req: AuthenticatedRequest, res) => {
       }
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     const duration = Date.now() - startTime;
     
-    console.error('❌ [AI] Erreur génération:', error);
+    logger.error('❌ [AI] Erreur génération:', error);
 
     // Gestion des erreurs spécifiques
     if (error.message?.includes('API key')) {
@@ -580,7 +581,7 @@ router.get('/status', async (_req: AuthenticatedRequest, res) => {
       service: 'Google Gemini',
       timestamp: new Date().toISOString()
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(500).json({
       success: false,
       available: false,

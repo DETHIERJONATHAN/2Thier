@@ -122,7 +122,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
       <TextArea
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
-        onSelect={(e: any) => {
+        onSelect={(e: unknown) => {
           setSelection({
             start: e.target.selectionStart,
             end: e.target.selectionEnd

@@ -1,7 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
+router.use(authenticateToken);
 const prisma = db;
 
 // 📝 SECTIONS DE FORMULAIRES - Gestion des sections Block→Section→Field
@@ -35,7 +38,7 @@ router.get('/:blockId', async (req: Request, res: Response): Promise<void> => {
     res.json(adaptedSections);
     
   } catch (e) {
-    console.error(`[API] Erreur récupération sections pour bloc ${blockId}:`, e);
+    logger.error(`[API] Erreur récupération sections pour bloc ${blockId}:`, e);
     res.status(500).json({ error: 'Erreur lors de la récupération des sections', details: e });
   }
 });
@@ -68,7 +71,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     res.json({ success: true, data: section });
     
   } catch (error) {
-    console.error('[API] Erreur création section:', error);
+    logger.error('[API] Erreur création section:', error);
     res.status(500).json({ error: 'Erreur lors de la création de la section de formulaire' });
   }
 });
@@ -96,7 +99,7 @@ router.put('/:sectionId', async (req: Request, res: Response): Promise<void> => 
     res.json({ success: true, data: section });
     
   } catch (error) {
-    console.error(`[API] Erreur modification section ${req.params.sectionId}:`, error);
+    logger.error(`[API] Erreur modification section ${req.params.sectionId}:`, error);
     res.status(500).json({ error: 'Erreur lors de la modification de la section de formulaire' });
   }
 });
@@ -114,7 +117,7 @@ router.delete('/:sectionId', async (req: Request, res: Response): Promise<void> 
     res.json({ success: true, message: 'Section de formulaire supprimée' });
     
   } catch (error) {
-    console.error(`[API] Erreur suppression section ${req.params.sectionId}:`, error);
+    logger.error(`[API] Erreur suppression section ${req.params.sectionId}:`, error);
     res.status(500).json({ error: 'Erreur lors de la suppression de la section de formulaire' });
   }
 });

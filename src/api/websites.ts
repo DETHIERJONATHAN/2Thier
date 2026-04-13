@@ -28,7 +28,7 @@ router.get('/websites', authenticateToken, async (req: Request, res: Response) =
       return res.status(400).json({ error: 'Organization ID is required' });
     }
 
-    const whereClause: any = {
+    const whereClause: unknown = {
       isActive: true
     };
 
@@ -112,7 +112,7 @@ router.put('/websites/:id', authenticateToken, async (req: Request, res: Respons
     }
 
     // Vérifier que le site existe et appartient à l'organisation (sauf pour Super Admin)
-    const whereClause: any = { id: websiteId };
+    const whereClause: unknown = { id: websiteId };
     // Super Admin peut modifier n'importe quel site, pas de filtre organizationId
     if (!isSuperAdmin) {
       whereClause.organizationId = organizationId;
@@ -138,7 +138,7 @@ router.put('/websites/:id', authenticateToken, async (req: Request, res: Respons
     }
 
     // Préparer les données de mise à jour
-    const updateData: any = {
+    const updateData: unknown = {
       updatedAt: new Date()
     };
 
@@ -188,7 +188,7 @@ router.delete('/websites/:id', authenticateToken, async (req: Request, res: Resp
     const isSuperAdmin = req.headers['x-is-super-admin'] === 'true';
 
     // Vérifier que le site existe et appartient à l'organisation (sauf pour Super Admin)
-    const whereClause: any = { id: websiteId };
+    const whereClause: unknown = { id: websiteId };
     if (!isSuperAdmin || (organizationId && organizationId !== 'all')) {
       whereClause.organizationId = organizationId;
     }
@@ -267,7 +267,7 @@ router.get('/websites/:idOrSlug', async (req: Request, res: Response) => {
     // Déterminer si c'est un ID (nombre) ou un slug (string)
     const isId = /^\d+$/.test(idOrSlug);
     
-    const whereClause: any = { isActive: true };
+    const whereClause: unknown = { isActive: true };
     
     if (isId) {
       whereClause.id = parseInt(idOrSlug, 10);
@@ -381,7 +381,7 @@ router.get('/websites/:slug/projects', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Website not found' });
     }
 
-    const whereClause: any = {
+    const whereClause: unknown = {
       websiteId: website.id,
       isActive: true
     };
@@ -420,7 +420,7 @@ router.get('/websites/:slug/testimonials', async (req: Request, res: Response) =
       return res.status(404).json({ error: 'Website not found' });
     }
 
-    const whereClause: any = {
+    const whereClause: unknown = {
       websiteId: website.id,
       isActive: true
     };
@@ -459,7 +459,7 @@ router.get('/websites/:slug/blog', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Website not found' });
     }
 
-    const whereClause: any = {
+    const whereClause: unknown = {
       websiteId: website.id,
       isPublished: true
     };

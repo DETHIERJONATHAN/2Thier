@@ -11,6 +11,7 @@ import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth';
 import { getGeminiService } from '../services/GoogleGeminiService';
 import { prisma } from '../lib/prisma';
 import { randomUUID } from 'crypto';
+import { logger } from '../lib/logger';
 
 // Instance unique réutilisable via singleton global
 const geminiSingleton = getGeminiService();
@@ -48,7 +49,7 @@ async function ensureAiUsageLogTable() {
         await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "AiUsageLog_type_idx" ON "AiUsageLog"(type);');
         await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "AiUsageLog_createdAt_idx" ON "AiUsageLog"("createdAt");');
       } catch (e) {
-        console.warn('⚠️ Impossible de garantir la table AiUsageLog (continuation sans log):', (e as Error).message);
+        logger.warn('⚠️ Impossible de garantir la table AiUsageLog (continuation sans log):', (e as Error).message);
       }
     })();
   }
@@ -130,7 +131,7 @@ async function logAiUsage(params: AiUsageParams) {
     });
   } catch (e) {
     // Ne jamais interrompre la réponse utilisateur pour un problème de log
-    console.warn('⚠️ Log AI usage échoué:', (e as Error).message);
+    logger.warn('⚠️ Log AI usage échoué:', (e as Error).message);
   }
 }
 
@@ -177,7 +178,7 @@ router.post('/analyze-section', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Erreur route analyze-section:', error);
+    logger.error('❌ Erreur route analyze-section:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de l\'analyse de la section',
@@ -196,7 +197,7 @@ router.post('/analyze-section', async (req, res) => {
 });
 
 // Helper: Construire le prompt d'analyse de section
-function buildSectionAnalysisPrompt(sectionType: string, content: any): string {
+function buildSectionAnalysisPrompt(sectionType: string, content: unknown): string {
   // Déterminer les champs spécifiques selon le type de section
   const sectionTypeGuide = getSectionTypeGuide(sectionType);
   
@@ -352,13 +353,13 @@ function parseSectionAnalysis(content: string | null): any {
     
     return parsed;
   } catch (error) {
-    console.warn('⚠️ Impossible de parser la réponse Gemini, utilisation du mock');
+    logger.warn('⚠️ Impossible de parser la réponse Gemini, utilisation du mock');
     return generateMockSectionAnalysis('unknown', {});
   }
 }
 
 // Helper: Générer une analyse mock spécifique à la section
-function generateMockSectionAnalysis(sectionType: string, content: any): any {
+function generateMockSectionAnalysis(sectionType: string, content: unknown): any {
   const hasTitle = content?.title || content?.heading;
   const hasDescription = content?.description || content?.subtitle;
   const hasImage = content?.image || content?.backgroundImage;
@@ -366,7 +367,7 @@ function generateMockSectionAnalysis(sectionType: string, content: any): any {
   const hasBackgroundColor = content?.backgroundColor;
   const hasTextColor = content?.textColor;
   
-  const suggestions: any[] = [];
+  const suggestions: unknown[] = [];
   let score = 75; // Score de base pour une section
   
   // === SUGGESTIONS SPÉCIFIQUES AU TYPE DE SECTION ===
@@ -773,7 +774,7 @@ function buildChatPrompt({ message, context, conversationHistory, analysis, memo
       
       // 🎯 FORMULAIRES REMPLIS - CRUCIAL POUR L'ANALYSE SPÉCIFIQUE!
       if (Array.isArray(formSubmissions) && formSubmissions.length > 0) {
-        const formData = formSubmissions.map((fs: any) => {
+        const formData = formSubmissions.map((fs: Record<string, unknown>) => {
           const formTitle = fs.formTitle || 'Formulaire';
           const data = fs.data;
           if (!data || typeof data !== 'object') return `${formTitle} (${new Date(fs.createdAt).toLocaleDateString('fr-FR')})`;
@@ -1110,7 +1111,7 @@ async function handleChatLike(req: express.Request, res: express.Response, endpo
         }).join('\n');
       }
     } catch (memErr) {
-      console.warn('[AI] Mémoire système indisponible:', (memErr as Error).message);
+      logger.warn('[AI] Mémoire système indisponible:', (memErr as Error).message);
     }
 
     // Enrichissement contexte fonctionnel interne dynamique
@@ -1138,7 +1139,7 @@ Checklist d'audit (prioriser concret et actionnable):
 Restitue: Points forts, Problèmes, Améliorations, Ajouts à envisager, À retirer, Quick wins (priorisés).`;
       }
     } catch (ctxErr) {
-      console.warn('[AI] Contexte fonctionnel Gmail non disponible:', (ctxErr as Error).message);
+      logger.warn('[AI] Contexte fonctionnel Gmail non disponible:', (ctxErr as Error).message);
     }
 
     // Contexte code si question technique
@@ -1150,7 +1151,7 @@ Restitue: Points forts, Problèmes, Améliorations, Ajouts à envisager, À reti
           codeContext = referenced.map(r => __aiSummarizeFile(r) || (`// ${r} (lecture impossible)`)).join('\n\n');
         }
       }
-    } catch (e) { console.warn('[AI] Contexte code échoué:', (e as Error).message); }
+    } catch (e) { logger.warn('[AI] Contexte code échoué:', (e as Error).message); }
 
     // Analyse automatique (page & feature) – heuristique légère pour alimenter le raisonnement sans surcoût externe
     interface AutoPageAnalysis { path: string; lines: number; hooks: { total: number; useEffect: number; custom: string[] }; antd: string[]; i18n: boolean; tailwind: boolean; complexity: string[]; suggestions: string[]; score: number }
@@ -1234,7 +1235,7 @@ Restitue: Points forts, Problèmes, Améliorations, Ajouts à envisager, À reti
             if (/dangerouslySetInnerHTML/.test(content)) suggestions.push('Sanitiser le contenu HTML (DOMPurify) pour éviter le XSS');
             let score = 85; if (large) score -=5; if (veryLarge) score -=8; if (hooksCount>18) score -=5; if (!hasI18n) score -=4; score = Math.max(30, Math.min(95, score));
             autoAnalysis.page = { path: pagePath, lines: linesArr.length, hooks: { total: hooksCount, useEffect: useEffectCount, custom: Array.from(new Set(customHooks)).slice(0,25) }, antd: antdComponents, i18n: hasI18n, tailwind: usesTailwind, complexity, suggestions: suggestions.slice(0,20), score };
-          } catch (e) { console.warn('[AI] Analyse page échouée:', (e as Error).message); }
+          } catch (e) { logger.warn('[AI] Analyse page échouée:', (e as Error).message); }
         }
         // Feature aggregate
         if (featureKey && featureMap && featureMap[featureKey]) {
@@ -1256,10 +1257,10 @@ Restitue: Points forts, Problèmes, Améliorations, Ajouts à envisager, À reti
             if (count) {
               autoAnalysis.feature = { feature: featureKey, fileCount: count, totalLines, avgLines: Math.round(totalLines / count), totalHooks, i18nCoverage: i18nYes / count, antdUsageRate: antdYes / count, tailwindUsageRate: tailwindYes / count };
             }
-          } catch (e) { console.warn('[AI] Analyse feature échouée:', (e as Error).message); }
+          } catch (e) { logger.warn('[AI] Analyse feature échouée:', (e as Error).message); }
         }
       }
-    } catch (e) { console.warn('[AI] Auto-analysis failed:', (e as Error).message); }
+    } catch (e) { logger.warn('[AI] Auto-analysis failed:', (e as Error).message); }
 
     const memoryCombined = memoryString ? memoryString + (internalFunctionalContext ? '\n'+internalFunctionalContext : '') : internalFunctionalContext;
     // Fusionner éventuelle analyse existante (fourni côté client) et autoAnalysis
@@ -1280,7 +1281,7 @@ Restitue: Points forts, Problèmes, Améliorations, Ajouts à envisager, À reti
     try {
       suggestions = isLive ? deriveSuggestions(aiText) : defaultSuggestions();
     } catch (sugErr) {
-      console.warn('⚠️ [AI] Erreur génération suggestions:', sugErr);
+      logger.warn('⚠️ [AI] Erreur génération suggestions:', sugErr);
       suggestions = defaultSuggestions();
     }
 
@@ -1343,7 +1344,7 @@ Restitue: Points forts, Problèmes, Améliorations, Ajouts à envisager, À reti
       }
     });
   } catch (error) {
-    console.error(`❌ Erreur route ${endpoint}:`, error);
+    logger.error(`❌ Erreur route ${endpoint}:`, error);
     res.status(500).json({ success: false, error: `Erreur IA (${endpoint})`, details: (error as Error).message });
   void logAiUsage({ req, endpoint, success: false, latencyMs: Date.now() - t0, model: null, mode: null, error: (error as Error).message });
   }
@@ -1431,7 +1432,7 @@ router.post('/schedule-recommendations', async (req, res) => {
   void logAiUsage({ req, endpoint: 'schedule-recommendations', success: true, latencyMs: latency, model: 'mock', mode: 'mock' });
     
   } catch (error) {
-    console.error('❌ Erreur route schedule-recommendations:', error);
+    logger.error('❌ Erreur route schedule-recommendations:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la génération des recommandations',
@@ -1478,7 +1479,7 @@ Réponds en français concis (<=110 mots).`;
     });
   void logAiUsage({ req, endpoint: 'schedule-explain', success: true, latencyMs: latency, model: serviceResp.mode === 'live' ? (process.env.GEMINI_MODEL || 'gemini-1.5-flash') : 'mock', mode: serviceResp.mode, error: serviceResp.error ? String(serviceResp.error) : null });
   } catch (error) {
-    console.error('❌ Erreur route schedule-explain:', error);
+    logger.error('❌ Erreur route schedule-explain:', error);
   res.status(500).json({ success: false, error: 'Erreur explication planning', details: (error as Error).message });
   void logAiUsage({ req, endpoint: 'schedule-explain', success: false, latencyMs: Date.now() - t0, model: null, mode: null, error: (error as Error).message });
   }
@@ -1534,7 +1535,7 @@ router.post('/analyze-conversation', async (req, res) => {
   void logAiUsage({ req, endpoint: 'analyze-conversation', success: true, latencyMs: latency, model: 'mock', mode: 'mock' });
     
   } catch (error) {
-    console.error('❌ Erreur route analyze-conversation:', error);
+    logger.error('❌ Erreur route analyze-conversation:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de l\'analyse de la conversation',
@@ -1563,7 +1564,7 @@ router.get('/test', async (req, res) => {
       ]
     });
   } catch (error) {
-    console.error('❌ Erreur test IA:', error);
+    logger.error('❌ Erreur test IA:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors du test IA',
@@ -1669,7 +1670,7 @@ router.get('/context/summary', async (req, res) => {
     });
   void logAiUsage({ req, endpoint: 'context-summary', success: true, latencyMs: latency, model: 'internal', mode: 'context' });
   } catch (error) {
-    console.error('❌ Erreur /api/ai/context/summary:', error);
+    logger.error('❌ Erreur /api/ai/context/summary:', error);
   res.status(500).json({ success: false, error: 'Erreur récupération contexte IA', details: (error as Error).message });
   void logAiUsage({ req, endpoint: 'context-summary', success: false, latencyMs: Date.now() - t0, model: null, mode: 'context', error: (error as Error).message });
   }
@@ -1772,7 +1773,7 @@ router.get('/context/lead/:id', async (req: AuthenticatedRequest, res) => {
     });
   void logAiUsage({ req, endpoint: 'context-lead', success: true, latencyMs: latency, model: 'internal', mode: 'context' });
   } catch (error) {
-    console.error('❌ Erreur /api/ai/context/lead/:id', error);
+    logger.error('❌ Erreur /api/ai/context/lead/:id', error);
   res.status(500).json({ success: false, error: 'Erreur contexte lead', details: (error as Error).message });
   void logAiUsage({ req, endpoint: 'context-lead', success: false, latencyMs: Date.now() - t0, model: null, mode: 'context', error: (error as Error).message });
   }
@@ -1817,7 +1818,7 @@ router.get('/context/leads', async (req: AuthenticatedRequest, res) => {
     });
   void logAiUsage({ req, endpoint: 'context-leads-batch', success: true, latencyMs: latency, model: 'internal', mode: 'context' });
   } catch (error) {
-    console.error('❌ Erreur /api/ai/context/leads (batch)', error);
+    logger.error('❌ Erreur /api/ai/context/leads (batch)', error);
     res.status(500).json({ success: false, error: 'Erreur contexte leads batch', details: (error as Error).message });
   void logAiUsage({ req, endpoint: 'context-leads-batch', success: false, latencyMs: Date.now() - t0, model: null, mode: 'context', error: (error as Error).message });
   }
@@ -1915,7 +1916,7 @@ ${mockAnalysis.commercialWisdom.successFactors.join('\n• ')}
   void logAiUsage({ req, endpoint: 'ultimate-recommendation', success: true, latencyMs: latency, model: 'mock', mode: 'analysis' });
 
   } catch (error) {
-    console.error('❌ Erreur route ultimate-recommendation:', error);
+    logger.error('❌ Erreur route ultimate-recommendation:', error);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de l\'analyse ultime',
@@ -2025,7 +2026,7 @@ router.get('/usage/recent', async (req, res) => {
         usedPrisma = true;
       }
     } catch (e) {
-      console.warn('⚠️ Lecture via Prisma aiUsageLog échouée, fallback SQL:', (e as Error).message);
+      logger.warn('⚠️ Lecture via Prisma aiUsageLog échouée, fallback SQL:', (e as Error).message);
     }
     if (!usedPrisma) {
       // Fallback SQL brut (meta JSONB -> text)
@@ -2036,6 +2037,7 @@ router.get('/usage/recent', async (req, res) => {
       if (successFilter !== undefined) { conditions.push(`success = $${idx++}`); params.push(successFilter); }
       const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
       const sql = `SELECT id, type, model, "tokensPrompt", "tokensOutput", "latencyMs", success, "errorCode", "errorMessage", "createdAt", meta FROM "AiUsageLog" ${where} ORDER BY "createdAt" DESC LIMIT ${limit}`;
+      // SECURITY: $queryRawUnsafe is safe here — all user inputs are passed as parameterized $1,$2,... params, no interpolation.
       // @ts-expect-error raw
       logs = await prisma.$queryRawUnsafe(sql, ...params);
     }
@@ -2071,7 +2073,7 @@ router.get('/usage/recent', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Erreur /api/ai/usage/recent:', error);
+    logger.error('❌ Erreur /api/ai/usage/recent:', error);
     res.status(500).json({ success: false, error: 'Erreur récupération logs IA', details: (error as Error).message });
   }
 });

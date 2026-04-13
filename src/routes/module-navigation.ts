@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -111,7 +112,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     res.json(sections);
 
   } catch (error) {
-    console.error('[module-navigation] Erreur:', error);
+    logger.error('[module-navigation] Erreur:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des catégories depuis la table Category' });
   }
 });

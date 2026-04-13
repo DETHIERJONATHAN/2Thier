@@ -9,6 +9,7 @@ import { refreshGoogleTokenIfNeeded } from '../utils/googleTokenRefresh.js';
 import { googleOAuthService, GOOGLE_SCOPES_LIST } from '../google-auth/core/GoogleOAuthCore.js';
 // Gmail routes supprimées — Postal (@zhiive.com) est maintenant le système mail principal
 import { logSecurityEvent } from '../security/securityLogger.js';
+import { logger } from '../lib/logger';
 // import { googleOAuthConfig } from '../auth/googleConfig.js';
 
 /**
@@ -159,7 +160,7 @@ async function getGoogleWorkspaceConfig(organizationId: string) {
 
     return decryptedConfig;
   } catch (error) {
-    console.error('[GOOGLE-AUTH] ❌ Erreur récupération config:', error);
+    logger.error('[GOOGLE-AUTH] ❌ Erreur récupération config:', error);
     return null;
   }
 }
@@ -268,14 +269,14 @@ async function activateGoogleModules(organizationId: string, grantedScopes: stri
         } else {
         }
       } catch (moduleError) {
-        console.error('[GOOGLE-AUTH] ❌ Erreur activation module', moduleName, ':', moduleError);
+        logger.error('[GOOGLE-AUTH] ❌ Erreur activation module', moduleName, ':', moduleError);
       }
     }
 
     return modulesToActivate;
 
   } catch (error) {
-    console.error('[GOOGLE-AUTH] ❌ Erreur activation modules:', error);
+    logger.error('[GOOGLE-AUTH] ❌ Erreur activation modules:', error);
     return [];
   }
 }
@@ -363,7 +364,7 @@ router.get('/url', authMiddleware, async (req: AuthenticatedRequest, res) => {
     });
 
   } catch (error) {
-    console.error('[GOOGLE-AUTH] Erreur génération URL:', error);
+    logger.error('[GOOGLE-AUTH] Erreur génération URL:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la génération de l\'URL d\'authentification'
@@ -396,7 +397,7 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
           }
         });
       } catch (deleteError) {
-        console.warn('[GOOGLE-AUTH] ⚠️ Erreur suppression ancien token:', deleteError);
+        logger.warn('[GOOGLE-AUTH] ⚠️ Erreur suppression ancien token:', deleteError);
         // Continue anyway
       }
     }
@@ -448,7 +449,7 @@ router.get('/connect', authMiddleware, async (req: AuthenticatedRequest, res) =>
     });
 
   } catch (error) {
-    console.error('[GOOGLE-AUTH] Erreur génération URL connect:', error);
+    logger.error('[GOOGLE-AUTH] Erreur génération URL connect:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la génération de l\'URL d\'authentification'
@@ -494,7 +495,7 @@ router.get('/callback', async (req, res) => {
       }
       
     } catch {
-      console.error('[GOOGLE-AUTH] ❌ State invalide, non-JSON ou champs manquants:', state);
+      logger.error('[GOOGLE-AUTH] ❌ State invalide, non-JSON ou champs manquants:', state);
       return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=invalid_state`);
     }
 
@@ -554,12 +555,12 @@ router.get('/callback', async (req, res) => {
 
     } catch (tokenError: unknown) {
       const error = tokenError as { response?: { status?: number; data?: { error?: string } }; message?: string; config?: { url?: string } };
-      console.error('[GOOGLE-AUTH] ❌ Erreur lors de l\'échange des tokens:', error);
-      console.error('[GOOGLE-AUTH] 📊 Détails erreur:');
-      console.error('[GOOGLE-AUTH] 🆔 Status:', error.response?.status);
-      console.error('[GOOGLE-AUTH] 📝 Message:', error.message);
-      console.error('[GOOGLE-AUTH] 📋 Data:', error.response?.data);
-      console.error('[GOOGLE-AUTH] 🔗 URL appelée:', error.config?.url);
+      logger.error('[GOOGLE-AUTH] ❌ Erreur lors de l\'échange des tokens:', error);
+      logger.error('[GOOGLE-AUTH] 📊 Détails erreur:');
+      logger.error('[GOOGLE-AUTH] 🆔 Status:', error.response?.status);
+      logger.error('[GOOGLE-AUTH] 📝 Message:', error.message);
+      logger.error('[GOOGLE-AUTH] 📋 Data:', error.response?.data);
+      logger.error('[GOOGLE-AUTH] 🔗 URL appelée:', error.config?.url);
       
       let errorType = 'token_exchange_failed';
       if (error.response?.status === 400) {
@@ -576,7 +577,7 @@ router.get('/callback', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('[GOOGLE-AUTH] ❌ Erreur callback générale:', error);
+    logger.error('[GOOGLE-AUTH] ❌ Erreur callback générale:', error);
     return res.redirect(`${getFrontendUrl()}/google-auth-callback?google_error=callback_error`);
   }
 });
@@ -735,7 +736,7 @@ router.get('/status', authMiddleware, async (req: AuthenticatedRequest, res) => 
     });
 
   } catch (error) {
-    console.error('[GOOGLE-AUTH] ❌ Erreur statut:', error);
+    logger.error('[GOOGLE-AUTH] ❌ Erreur statut:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la vérification du statut'
@@ -772,7 +773,7 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
         userAgent: req.headers['user-agent'] || null
       }, 'info');
     } catch (e) {
-      console.warn('[GOOGLE-AUTH] Warn: échec logSecurityEvent (REQUESTED):', (e as Error)?.message);
+      logger.warn('[GOOGLE-AUTH] Warn: échec logSecurityEvent (REQUESTED):', (e as Error)?.message);
     }
 
     const currentUserId = req.user.userId;
@@ -863,7 +864,7 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
         userAgent: req.headers['user-agent'] || null
       }, 'info');
     } catch (e) {
-      console.warn('[GOOGLE-AUTH] Warn: échec logSecurityEvent (COMPLETED):', (e as Error)?.message);
+      logger.warn('[GOOGLE-AUTH] Warn: échec logSecurityEvent (COMPLETED):', (e as Error)?.message);
     }
     
     res.json({
@@ -872,7 +873,7 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
     });
 
   } catch (error) {
-    console.error('[GOOGLE-AUTH] ❌ Erreur déconnexion:', error);
+    logger.error('[GOOGLE-AUTH] ❌ Erreur déconnexion:', error);
     try {
       const orgIdFromBody = (req.body && typeof (req.body as Record<string, unknown>).organizationId === 'string')
         ? (req.body as Record<string, string>).organizationId
@@ -886,7 +887,7 @@ router.post('/disconnect', authMiddleware, async (req: AuthenticatedRequest, res
         error: errMsg
       }, 'error');
     } catch (e) {
-      console.warn('[GOOGLE-AUTH] Warn: échec logSecurityEvent (ERROR):', (e as Error)?.message);
+      logger.warn('[GOOGLE-AUTH] Warn: échec logSecurityEvent (ERROR):', (e as Error)?.message);
     }
     res.status(500).json({
       success: false,
@@ -1009,7 +1010,7 @@ router.post('/toggle-module', authMiddleware, async (req: AuthenticatedRequest, 
     });
 
   } catch (error) {
-    console.error('[GOOGLE-AUTH] ❌ Erreur toggle module:', error);
+    logger.error('[GOOGLE-AUTH] ❌ Erreur toggle module:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la modification du module'

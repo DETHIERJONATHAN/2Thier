@@ -18,6 +18,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { db } from '../lib/database.js';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -92,7 +93,7 @@ router.get('/provider', authMiddleware, async (req: AuthenticatedRequest, res) =
           const postal = getPostalService();
           await postal.createMailbox(zhiiveEmail, `${user?.firstName || ''} ${user?.lastName || ''}`.trim());
         } catch (postalErr) {
-          console.error(`⚠️ [MAIL-PROVIDER] Erreur provisionnement Postal (non bloquant):`, postalErr);
+          logger.error(`⚠️ [MAIL-PROVIDER] Erreur provisionnement Postal (non bloquant):`, postalErr);
         }
       }
     } else if (emailAccount.mailProvider === 'gmail' || emailAccount.mailProvider === 'none') {
@@ -115,7 +116,7 @@ router.get('/provider', authMiddleware, async (req: AuthenticatedRequest, res) =
     });
 
   } catch (error) {
-    console.error('❌ [MAIL-PROVIDER] Erreur détection provider:', error);
+    logger.error('❌ [MAIL-PROVIDER] Erreur détection provider:', error);
     return res.status(500).json({
       error: 'Erreur lors de la détection du fournisseur de messagerie',
       details: error instanceof Error ? error.message : 'Erreur inconnue'

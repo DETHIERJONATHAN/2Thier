@@ -116,7 +116,7 @@ interface LookupExtensionsResult {
 // 🔄 Évaluer une condition de lookup (utilisé par columnOverrides, valueCaps, lookupAlerts)
 const evaluateLookupCondition = (
   cond: LookupCondition,
-  formData: Record<string, any>
+  formData: Record<string, unknown>
 ): boolean => {
   if (!cond.fieldRef) return false;
   
@@ -172,8 +172,8 @@ const evaluateLookupCondition = (
 // 🔄 Évaluer les extensions du lookup (columnOverrides, valueCaps, lookupAlerts)
 // Lit directement depuis filterConditions — PAS de système séparé
 const evaluateLookupExtensions = (
-  filterConditions: any,
-  formData: Record<string, any>
+  filterConditions: unknown,
+  formData: Record<string, unknown>
 ): LookupExtensionsResult => {
   const result: LookupExtensionsResult = { activeCaps: [], activeAlerts: [], activeRowCaps: [], activeRowAlerts: [] };
   if (!filterConditions) return result;
@@ -215,7 +215,7 @@ const evaluateLookupExtensions = (
         const met = evaluateLookupCondition(c, formData);
         return { ref: c.fieldRef, op: c.operator, val: c.value, met };
       });
-      const allMet = condResults.every((r: any) => r.met);
+      const allMet = condResults.every((r: Record<string, unknown>) => r.met);
       console.log(`[LookupAlerts] "${alert.label}": ${allMet ? '✅ ACTIVE' : '❌ inactive'}`, condResults);
       if (allMet) {
         result.activeAlerts.push({ message: alert.message, level: alert.level || 'warning', label: alert.label });
@@ -262,7 +262,7 @@ const evaluateLookupExtensions = (
         const met = evaluateLookupCondition(c, formData);
         return { ref: c.fieldRef, op: c.operator, val: c.value, met };
       });
-      const allMet = condResults.every((r: any) => r.met);
+      const allMet = condResults.every((r: Record<string, unknown>) => r.met);
       if (allMet) {
         result.activeRowAlerts.push({ message: alert.message, level: alert.level || 'warning', label: alert.label });
       }
@@ -312,11 +312,11 @@ const normalizeValueForUi = (value: unknown): unknown => {
 
 // 🔥 NOUVEAU: Fonction pour évaluer si une option de lookup passe les conditions de filtrage
 const evaluateFilterConditions = (
-  option: any, // Option courante {value, label}
+  option: unknown, // Option courante {value, label}
   conditions: TableLookupCondition[], 
-  formData: Record<string, any>,
+  formData: Record<string, unknown>,
   tableData: {columns: string[], rows: string[], data: unknown[][], type: 'columns' | 'matrix'},
-  config: any, // Configuration du lookup (keyColumn, keyRow, etc.)
+  config: unknown, // Configuration du lookup (keyColumn, keyRow, etc.)
   filterLogic: 'AND' | 'OR' = 'AND'
 ): boolean => {
   if (!conditions || conditions.length === 0) return true;
@@ -326,7 +326,7 @@ const evaluateFilterConditions = (
 
   const results = conditions.map(condition => {
     // 1. Extraire la valeur de référence depuis formData
-    let referenceValue: any = null;
+    let referenceValue: unknown = null;
     
     if (condition.compareWithRef?.startsWith('@value.')) {
       const fieldId = condition.compareWithRef.replace('@value.', '');
@@ -375,7 +375,7 @@ const evaluateFilterConditions = (
     }
 
     // 2. Trouver la/les valeur(s) correspondante(s) dans le tableau pour cette option
-    const tableValues: any[] = [];
+    const tableValues: unknown[] = [];
     
     try {
       // Collecter les valeurs selon filterByColumn et/ou filterByRow
@@ -459,7 +459,7 @@ const evaluateFilterConditions = (
           }
         };
         
-        const allConditionsMet = conditions.every((cond: any, idx: number) => evaluateSingleCondition(cond, idx));
+        const allConditionsMet = conditions.every((cond: unknown, idx: number) => evaluateSingleCondition(cond, idx));
         
         const mode = mult.mode || 'multiply';
         if (mode === 'fixed') {
@@ -543,10 +543,10 @@ const evaluateFilterConditions = (
 
 // 🔧 Fonction utilitaire pour extraire une valeur depuis une colonne du tableau
 const extractValueFromColumn = (
-  option: any,
+  option: unknown,
   targetColumn: string,
   tableData: {columns: string[], rows: string[], data: unknown[][], type: 'columns' | 'matrix'},
-  config: any
+  config: unknown
 ): any => {
   try {
     if (tableData.type === 'columns') {
@@ -624,10 +624,10 @@ const extractValueFromColumn = (
 
 // 🔧 Fonction utilitaire pour extraire une valeur depuis une ligne du tableau
 const extractValueFromRow = (
-  option: any,
+  option: unknown,
   targetRow: string,
   tableData: {columns: string[], rows: string[], data: unknown[][], type: 'columns' | 'matrix'},
-  config: any
+  config: unknown
 ): any => {
   if (tableData.type === 'columns') {
     // Mode colonnes: targetRow n'est pas applicable directement
@@ -1091,7 +1091,7 @@ const FIELD_TYPE_DEFINITIONS = {
 } as const;
 
 // Helper pour gérer les tooltips personnalisés
-const wrapWithCustomTooltip = (element: React.ReactElement, field: any): React.ReactElement => {
+const wrapWithCustomTooltip = (element: React.ReactElement, field: unknown): React.ReactElement => {
   // Vérifier si le champ a une configuration de tooltip personnalisé
   const appearanceConfig = field.appearanceConfig || {};
   const tooltipType = appearanceConfig.helpTooltipType;
@@ -1284,8 +1284,8 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   // ✅ NOUVEAU: On passe hasTableCapability pour que le hook vide les options quand le lookup est désactivé
   const repeaterTemplateNodeId = (field as Record<string, unknown> | undefined)?.repeaterTemplateNodeId as string | undefined;
   const originalFieldId = (field as Record<string, unknown> | undefined)?.originalFieldId as string | undefined;
-  const metaOriginalNodeId = (field as Record<string, unknown> | undefined)?.metadata && (field as Record<string, any>).metadata?.originalNodeId as string | undefined;
-  const sourceTemplateNodeId = (field as Record<string, any> | undefined)?.sourceTemplateId as string | undefined;
+  const metaOriginalNodeId = (field as Record<string, unknown> | undefined)?.metadata && (field as Record<string, unknown>).metadata?.originalNodeId as string | undefined;
+  const sourceTemplateNodeId = (field as Record<string, unknown> | undefined)?.sourceTemplateId as string | undefined;
   // Détecteur d'UUID v4 simple
   const looksLikeUUID = (s?: string) => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
   // Éviter les IDs namespacés type node_123_abcdef
@@ -1293,7 +1293,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
   
   // 🔧 FIX 07/01/2026: Pour les champs créés via repeat (duplicatedFromRepeater=true),
   // TOUJOURS utiliser field.id au lieu de repeaterTemplateNodeId qui pointe à l'original
-  const isDuplicatedFromRepeater = (field as Record<string, any>)?.metadata?.duplicatedFromRepeater === true;
+  const isDuplicatedFromRepeater = (field as Record<string, unknown>)?.metadata?.duplicatedFromRepeater === true;
   
   // Choisir le meilleur candidat d'ID pour le lookup table côté backend
   let lookupNodeId: string;
@@ -1369,7 +1369,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     // 🚀 FIX PRÉ-FILTRAGE: Enrichir avec TBL_FORM_DATA pour que les valueCaps/columnOverrides
     // voient les valeurs calculées (DISPLAY) dès le premier render
     const enrichedFormData = typeof window !== 'undefined' && (window as any).TBL_FORM_DATA
-      ? { ...(window as any).TBL_FORM_DATA as Record<string, any>, ...formData }
+      ? { ...(window as any).TBL_FORM_DATA as Record<string, unknown>, ...formData }
       : formData;
     return evaluateLookupExtensions(fc, enrichedFormData);
   }, [tableLookup.filterConditions, formData, tableLookup.options, broadcastGen]);
@@ -1390,12 +1390,12 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       }
     };
 
-    const meta = ((field as Record<string, any>)?.metadata) || {};
+    const meta = ((field as Record<string, unknown>)?.metadata) || {};
     const candidateIds = new Set<string>();
 
-    safePush(candidateIds, (field as Record<string, any>)?.repeaterTemplateNodeId);
-    safePush(candidateIds, (field as Record<string, any>)?.sourceTemplateId);
-    safePush(candidateIds, (field as Record<string, any>)?.originalFieldId);
+    safePush(candidateIds, (field as Record<string, unknown>)?.repeaterTemplateNodeId);
+    safePush(candidateIds, (field as Record<string, unknown>)?.sourceTemplateId);
+    safePush(candidateIds, (field as Record<string, unknown>)?.originalFieldId);
     safePush(candidateIds, meta?.sourceTemplateId);
     safePush(candidateIds, meta?.originalNodeId);
 
@@ -1558,9 +1558,9 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     
     //  CORRECTION: Lire l'apparence depuis field.config ET metadata.appearance
     const columnAppearance = {
-      size: (field as Record<string, any>)?.appearance_size,
-      width: (field as Record<string, any>)?.appearance_width,
-      variant: (field as Record<string, any>)?.appearance_variant
+      size: (field as Record<string, unknown>)?.appearance_size,
+      width: (field as Record<string, unknown>)?.appearance_width,
+      variant: (field as Record<string, unknown>)?.appearance_variant
     };
 
     const metadataAppearance = {
@@ -1642,7 +1642,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       normalizedAppearanceConfig.isRequired as boolean | undefined,
       field.required,
       metadata.isRequired,
-      (metadata as Record<string, any>).required
+      (metadata as Record<string, unknown>).required
     ) ?? false;
 
     // 🔧 FIX CRITIQUE: visibleToUser ne doit masquer un champ QUE si la capacité data est activée.
@@ -1736,7 +1736,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       },
       
       selectConfig: {
-        options: field.options || (config.options as any) || metadataSelectConfig.options || metadata.options || [],
+        options: field.options || (config.options as unknown) || metadataSelectConfig.options || metadata.options || [],
         defaultValue: pickDefined(
           config.selectDefaultValue,
           metadataSelectConfig.defaultValue,
@@ -2565,7 +2565,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
     // les champs avec capacités Data/Formula qui doivent afficher une valeur calculée.)
 
     const fieldNodeId = (field as any).nodeId || field.id;
-    const resolveBackendNodeId = (f: any): string | undefined => {
+    const resolveBackendNodeId = (f: unknown): string | undefined => {
       try {
         const meta = (f && f.metadata) || {};
         let cid = meta?.copiedFromNodeId;
@@ -3442,7 +3442,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             // MAINTENANT: on injecte les valeurs calculées dès le premier render
             // formData utilisateur a PRIORITÉ (spread en dernier)
             const enrichedFormData = typeof window !== 'undefined' && (window as any).TBL_FORM_DATA
-              ? { ...(window as any).TBL_FORM_DATA as Record<string, any>, ...formData }
+              ? { ...(window as any).TBL_FORM_DATA as Record<string, unknown>, ...formData }
               : formData;
             
             // Filtrer chaque option individuellement
@@ -3473,7 +3473,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               const currentSuffix = suffixMatch ? parseInt(suffixMatch[1], 10) : 0;
               // 🚀 FIX PRÉ-FILTRAGE: Enrichir avec TBL_FORM_DATA pour les valueCaps repeater
               const enrichedFormDataCaps = typeof window !== 'undefined' && (window as any).TBL_FORM_DATA
-                ? { ...(window as any).TBL_FORM_DATA as Record<string, any>, ...formData }
+                ? { ...(window as any).TBL_FORM_DATA as Record<string, unknown>, ...formData }
                 : formData;
               // Parcourir formData pour trouver les copies du même champ
               for (const [key, val] of Object.entries(enrichedFormDataCaps)) {
@@ -3529,7 +3529,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         // ce qui empêche la détection de hiérarchie et l'utilisation du Cascader (donc pas d'injection).
         // Stratégie: pour chaque option sans id, chercher un nœud enfant (leaf_option/leaf_option_field)
         // du champ courant dont le label correspond. Si trouvé, utiliser son id comme option.id.
-        const enrichedOptions = finalOptions.map((opt: any) => {
+        const enrichedOptions = finalOptions.map((opt: Record<string, unknown>) => {
           if (opt && (opt.id || opt.nodeId)) return opt; // déjà enrichi
           try {
             const candidates = allNodes.filter(n =>
@@ -3568,7 +3568,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         
         // 🔥 NOUVEAU: Détecter si le champ a une hiérarchie (sous-options imbriquées)
         // Récupérer les IDs des options du champ
-  const optionIds = enrichedOptions.map((opt: any) => opt.id || opt.nodeId || opt.value);
+  const optionIds = enrichedOptions.map((opt: Record<string, unknown>) => opt.id || opt.nodeId || opt.value);
         
         // Chercher si des leaf_option ont comme parentId un ID d'option du champ
         const hasHierarchy = allNodes.length > 0 && optionIds.length > 0 && allNodes.some(node => 
@@ -3589,7 +3589,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         // 🔥 CASCADER: Si hiérarchie détectée, utiliser Cascader au lieu de Select
         if (hasHierarchy) {
           // Construire les options Cascader : Niveau 1 = options du champ, Niveaux suivants = sous-options depuis allNodes
-          const buildRecursive = (parentId: string, depth = 0): any[] => {
+          const buildRecursive = (parentId: string, depth = 0): unknown[] => {
             if (depth > 20) return []; // Protection anti-boucle
             
             return allNodes
@@ -3610,7 +3610,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           };
           
           // Construire l'arbre complet: options du champ + leurs sous-options
-          const cascaderOptions = enrichedOptions.map((option: any) => {
+          const cascaderOptions = enrichedOptions.map((option: Record<string, unknown>) => {
             const optionId = option.id || option.value;
             const children = buildRecursive(optionId);
             
@@ -3643,14 +3643,14 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
                       // ✅ Fallback persistant pour l'injection: stocker aussi dans TBL_FORM_DATA
                       try {
                         if (window.TBL_FORM_DATA) {
-                          (window.TBL_FORM_DATA as any)[`${field.id}__selectedNodeId`] = lastOption.nodeId;
+                          (window.TBL_FORM_DATA as unknown)[`${field.id}__selectedNodeId`] = lastOption.nodeId;
                         }
                       } catch { /* noop */ }
                     } else if (window.TBL_CASCADER_NODE_IDS) {
                       delete window.TBL_CASCADER_NODE_IDS[field.id];
                       try {
                         if (window.TBL_FORM_DATA) {
-                          delete (window.TBL_FORM_DATA as any)[`${field.id}__selectedNodeId`];
+                          delete (window.TBL_FORM_DATA as unknown)[`${field.id}__selectedNodeId`];
                         }
                       } catch { /* noop */ }
                     }
@@ -3658,7 +3658,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
                     delete window.TBL_CASCADER_NODE_IDS[field.id];
                     try {
                       if (window.TBL_FORM_DATA) {
-                        delete (window.TBL_FORM_DATA as any)[`${field.id}__selectedNodeId`];
+                        delete (window.TBL_FORM_DATA as unknown)[`${field.id}__selectedNodeId`];
                       }
                     } catch { /* noop */ }
                   }
@@ -3747,7 +3747,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         
         // SELECT classique (sans hiérarchie)
         // 📋 Détecter si des options ont un groupe pour afficher des OptGroup
-        const hasOptGroups = finalOptions.some((opt: any) => opt.group);
+        const hasOptGroups = finalOptions.some((opt: Record<string, unknown>) => opt.group);
         
         const renderSelectOptions = () => {
           if (!hasOptGroups) {
@@ -3765,7 +3765,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           // Regrouper par propriété group (préserver l'ordre d'insertion)
           const groups: Array<{ group: string; items: typeof finalOptions }> = [];
           const groupMap = new Map<string, typeof groups[0]>();
-          finalOptions.forEach((opt: any) => {
+          finalOptions.forEach((opt: Record<string, unknown>) => {
             const g = opt.group || '';
             if (!groupMap.has(g)) {
               const entry = { group: g, items: [] as typeof finalOptions };
@@ -3951,7 +3951,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               return `string (${finalValue.length}chars)`;
             }
             if (typeof finalValue === 'object') {
-              const keys = Object.keys(finalValue as any);
+              const keys = Object.keys(finalValue as unknown);
               return `object {${keys.join(', ')}}`;
             }
             return typeof finalValue;
@@ -4160,7 +4160,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         const minItems = repeaterOverrides.minItems ?? repeaterMetadata?.minItems ?? 0;
 
         // 🎨 Apparence du bouton "+" (respecte les réglages du répétiteur)
-          const buttonSize: 'tiny' | 'small' | 'middle' | 'large' = repeaterOverrides.buttonSize || (repeaterMetadata?.buttonSize as any) || 'middle';
+          const buttonSize: 'tiny' | 'small' | 'middle' | 'large' = repeaterOverrides.buttonSize || (repeaterMetadata?.buttonSize as unknown) || 'middle';
           const iconOnly: boolean = repeaterOverrides.iconOnly ?? Boolean(repeaterMetadata?.iconOnly);
 
         // Helpers de style pour le bouton "+"

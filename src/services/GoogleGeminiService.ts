@@ -651,10 +651,10 @@ Bien à vous`;
       const visionModel = this.genAI.getGenerativeModel({
         model: visionModelName,
         safetySettings: [
-          { category: 'HARM_CATEGORY_HARASSMENT' as any, threshold: 'BLOCK_NONE' as any },
-          { category: 'HARM_CATEGORY_HATE_SPEECH' as any, threshold: 'BLOCK_NONE' as any },
-          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT' as any, threshold: 'BLOCK_NONE' as any },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT' as any, threshold: 'BLOCK_NONE' as any },
+          { category: 'HARM_CATEGORY_HARASSMENT' as unknown, threshold: 'BLOCK_NONE' as unknown },
+          { category: 'HARM_CATEGORY_HATE_SPEECH' as unknown, threshold: 'BLOCK_NONE' as unknown },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT' as unknown, threshold: 'BLOCK_NONE' as unknown },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT' as unknown, threshold: 'BLOCK_NONE' as unknown },
         ],
         generationConfig: {
           temperature: 0.1,
@@ -666,7 +666,7 @@ Bien à vous`;
         { text: prompt },
         {
           inlineData: {
-            mimeType: mimeType as any,
+            mimeType: mimeType as unknown,
             data: imageBase64
           }
         }
@@ -692,7 +692,7 @@ Bien à vous`;
 
       return { success: true, content: text, modelUsed: visionModelName };
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errMsg = error?.message || String(error);
       console.error('❌ [Gemini Vision API] Erreur:', errMsg);
       // Retry avec modèle fallback si disponible
@@ -702,21 +702,21 @@ Bien à vous`;
           const fallbackModel = this.genAI!.getGenerativeModel({
             model: fallback,
             safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT' as any, threshold: 'BLOCK_NONE' as any },
-              { category: 'HARM_CATEGORY_HATE_SPEECH' as any, threshold: 'BLOCK_NONE' as any },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT' as any, threshold: 'BLOCK_NONE' as any },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT' as any, threshold: 'BLOCK_NONE' as any },
+              { category: 'HARM_CATEGORY_HARASSMENT' as unknown, threshold: 'BLOCK_NONE' as unknown },
+              { category: 'HARM_CATEGORY_HATE_SPEECH' as unknown, threshold: 'BLOCK_NONE' as unknown },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT' as unknown, threshold: 'BLOCK_NONE' as unknown },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT' as unknown, threshold: 'BLOCK_NONE' as unknown },
             ],
           }, { apiVersion: 'v1beta' });
           const r2 = await fallbackModel.generateContent([
             { text: prompt },
-            { inlineData: { mimeType: mimeType as any, data: imageBase64 } }
+            { inlineData: { mimeType: mimeType as unknown, data: imageBase64 } }
           ]);
           const t2 = r2.response.text();
           if (t2?.trim()) {
             return { success: true, content: t2, modelUsed: fallback };
           }
-        } catch (e2: any) {
+        } catch (e2: unknown) {
           console.error(`❌ [Gemini Vision] Fallback ${fallback} échoué:`, e2?.message);
         }
       }

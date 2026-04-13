@@ -51,7 +51,7 @@ export default function DirectAddLeadModal({ isOpen, onClose, onLeadAdded, organ
       NotificationManager.success("Lead ajouté avec succès !");
       onLeadAdded();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de l\'ajout du lead direct:', error);
       NotificationManager.error(error.message || "Erreur lors de l'ajout du lead");
     } finally {

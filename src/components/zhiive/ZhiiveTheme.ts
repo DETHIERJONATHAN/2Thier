@@ -184,3 +184,29 @@ export const FB = {
   warningBorder: '#ffe58f',
   warningText: '#ad6800',
 } as const;
+
+/**
+ * Shared color constants — use for colors not covered by SF or FB.
+ * Prevents raw hex values in component files.
+ */
+export const COLORS = {
+  // Login / Register / Auth pages
+  authAccent: '#93c5fd',
+  authAccentStrong: '#60a5fa',
+  authAccentAlt: '#38bdf8',
+  authTitle: '#111827',
+  authMuted: '#9ca3af',
+  authBorder: '#f1f5f9',
+  authLink: '#2563eb',
+  authDivider: '#d1d5db',
+  authWarning: '#78350f',
+  // Neutral / UI
+  white: '#ffffff',
+  black: '#000000',
+  grayLight: '#ccc',
+  grayMd: '#888',
+  // Status
+  skyBlue: '#0ea5e9',
+  orangeWeb: '#f97316',
+  funnelOrange: '#ff7a45',
+} as const;

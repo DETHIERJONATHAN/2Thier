@@ -29,7 +29,7 @@ const Wrapper: React.FC<{ treeId: string }> = ({ treeId }) => {
 describe('useTBLDataHierarchicalFixed', () => {
   it('should call api.get on mount and again on tbl-subtabs-updated event', async () => {
     const { useAuthenticatedApi } = await import('../../../../../hooks/useAuthenticatedApi');
-    const spyGet = useAuthenticatedApi().api.get as any;
+    const spyGet = useAuthenticatedApi().api.get as unknown;
 
     const treeId = 'test-tree-1';
     render(<Wrapper treeId={treeId} />);
@@ -47,7 +47,7 @@ describe('useTBLDataHierarchicalFixed', () => {
 
   it('should merge updated node on tbl-node-updated event', async () => {
     const { useAuthenticatedApi } = await import('../../../../../hooks/useAuthenticatedApi');
-    const spyGet = useAuthenticatedApi().api.get as any;
+    const spyGet = useAuthenticatedApi().api.get as unknown;
     // Initial node list without displayAlways
     spyGet.mockResolvedValueOnce([{ id: 's1', label: 'section1', metadata: {} }]);
 

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -48,7 +49,7 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
 
     res.json({ success: true, data: defaultRoles });
   } catch (error) {
-    console.error('Erreur récupération roles:', error);
+    logger.error('Erreur récupération roles:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
@@ -102,7 +103,7 @@ router.get('/:id', requireRole(['admin', 'super_admin']), async (req: Authentica
 
     res.json({ success: true, data: role });
   } catch (error) {
-    console.error('Erreur récupération role:', error);
+    logger.error('Erreur récupération role:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
@@ -150,7 +151,7 @@ router.get('/permissions', requireRole(['admin', 'super_admin']), async (req: Au
     const permissions = permissionsByRole[roleId as string] || permissionsByRole['user'];
     res.json({ success: true, data: permissions });
   } catch (error) {
-    console.error('Erreur récupération permissions:', error);
+    logger.error('Erreur récupération permissions:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
@@ -167,7 +168,7 @@ router.put('/permissions/:roleId', requireRole(['super_admin']), async (req: Aut
       data: { roleId, permissions }
     });
   } catch (error) {
-    console.error(`❌ [PUT /api/roles/permissions/${req.params.roleId}] Erreur:`, error);
+    logger.error(`❌ [PUT /api/roles/permissions/${req.params.roleId}] Erreur:`, error);
     res.status(500).json({ success: false, error: 'Erreur lors de la mise à jour des permissions' });
   }
 });

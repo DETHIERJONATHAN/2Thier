@@ -10,7 +10,7 @@ const { Title, Paragraph, Text } = Typography;
  */
 
 interface TestimonialsRendererProps {
-  content: any;
+  content: unknown;
   mode: 'preview' | 'edit';
 }
 
@@ -57,7 +57,7 @@ export const TestimonialsRenderer: React.FC<TestimonialsRendererProps> = ({ cont
 
         {/* CAROUSEL */}
         <Carousel autoplay={autoplay} autoplaySpeed={autoplaySpeed} dots={{ className: 'custom-dots' }}>
-          {items.map((testimonial: any, index: number) => (
+          {items.map((testimonial: unknown, index: number) => (
             <div key={index}>
               <Card
                 style={{

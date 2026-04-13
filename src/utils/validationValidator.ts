@@ -4,7 +4,7 @@ import type { FieldValidation } from "../../../../../../../store/slices/types";
 interface ValidationResult {
   isValid: boolean;
   message: string;
-  details?: any;
+  details?: unknown;
 }
 
 /**
@@ -133,7 +133,7 @@ export function getAPIHeaders(): HeadersInit {
  * @param validation La validation à évaluer
  * @param values Les valeurs à utiliser pour l'évaluation
  */
-export function evaluateValidation(validation: FieldValidation, values: Record<string, any>): { isValid: boolean; error?: string; details?: any } {
+export function evaluateValidation(validation: FieldValidation, values: Record<string, unknown>): { isValid: boolean; error?: string; details?: any } {
   console.log(`[ValidationEvaluator] 🧪 Évaluation de la validation ${validation.id}`, values);
   
   if (!validation.sequence) {

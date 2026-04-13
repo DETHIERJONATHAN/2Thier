@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { db } from '../lib/database';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -30,7 +31,7 @@ router.get('/rules', requireRole(['admin', 'super_admin']), async (req: Authenti
     });
     res.json({ success: true, data: rules });
   } catch (error) {
-    console.error('❌ [DISPATCH] Erreur liste:', error);
+    logger.error('❌ [DISPATCH] Erreur liste:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération des règles' });
   }
 });
@@ -47,7 +48,7 @@ router.post('/rules', requireRole(['admin', 'super_admin']), async (req: Authent
     const created = await prisma.automationRule.create({ data: { organizationId, event, action, params: params ?? {}, active: !!active } });
     res.json({ success: true, data: created, message: 'Règle créée' });
   } catch (error) {
-    console.error('❌ [DISPATCH] Erreur création:', error);
+    logger.error('❌ [DISPATCH] Erreur création:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la création de la règle' });
   }
 });
@@ -66,7 +67,7 @@ router.put('/rules/:id', requireRole(['admin', 'super_admin']), async (req: Auth
     const updated = await prisma.automationRule.update({ where: { id }, data: { event, action, params, active } });
     res.json({ success: true, data: updated, message: 'Règle mise à jour' });
   } catch (error) {
-    console.error('❌ [DISPATCH] Erreur mise à jour:', error);
+    logger.error('❌ [DISPATCH] Erreur mise à jour:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la mise à jour de la règle' });
   }
 });
@@ -82,7 +83,7 @@ router.delete('/rules/:id', requireRole(['admin', 'super_admin']), async (req: A
     if (!deleted.count) return res.status(404).json({ success: false, message: 'Règle non trouvée' });
     res.json({ success: true, message: 'Règle supprimée' });
   } catch (error) {
-    console.error('❌ [DISPATCH] Erreur suppression:', error);
+    logger.error('❌ [DISPATCH] Erreur suppression:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la suppression de la règle' });
   }
 });
@@ -116,7 +117,7 @@ router.post('/simulate', requireRole(['admin', 'super_admin']), async (req: Auth
 
     res.json({ success: true, data: { matches } });
   } catch (error) {
-    console.error('❌ [DISPATCH] Erreur simulate:', error);
+    logger.error('❌ [DISPATCH] Erreur simulate:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la simulation' });
   }
 });

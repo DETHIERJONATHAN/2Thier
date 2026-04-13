@@ -45,8 +45,8 @@ interface OrbitFriend {
 }
 
 interface UniversePanelProps {
-  api: any;
-  currentUser?: any;
+  api: unknown;
+  currentUser?: unknown;
 }
 
 const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
@@ -103,7 +103,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
         setEvents(eventsRes.events);
         // Hydrater le RSVP set depuis les données backend
         const attending = new Set<string>();
-        eventsRes.events.forEach((e: any) => { if (e.isAttending) attending.add(e.id); });
+        eventsRes.events.forEach((e: Record<string, unknown>) => { if (e.isAttending) attending.add(e.id); });
         setRsvpSet(attending);
       }
       if (capsulesRes?.capsules) setCapsules(capsulesRes.capsules);
@@ -460,7 +460,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
               boxShadow: SF.shadow,
             }}>
               {event.coverImage && (
-                <img src={event.coverImage} alt="" style={{ width: '100%', height: 100, objectFit: 'cover' }} />
+                <img src={event.coverImage} alt="" loading="lazy" style={{ width: '100%', height: 100, objectFit: 'cover' }} />
               )}
               <div style={{ padding: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>

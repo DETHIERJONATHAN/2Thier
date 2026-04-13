@@ -3,6 +3,7 @@ import { authMiddleware, AuthenticatedRequest } from '../middlewares/auth';
 import UniversalNotificationService from '../services/UniversalNotificationService.js';
 import { prisma } from '../lib/prisma';
 import { getGeminiService } from '../services/GoogleGeminiService';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -67,7 +68,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 
     res.json({ success: true, data: notifications });
   } catch (error) {
-    console.error('Échec de la récupération des notifications:', error);
+    logger.error('Échec de la récupération des notifications:', error);
     res.status(500).json({ success: false, message: 'Échec de la récupération des notifications' });
   }
 });
@@ -117,7 +118,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
     res.status(201).json({ success: true, data: notification });
   } catch (error) {
-    console.error('Échec de la création de la notification:', error);
+    logger.error('Échec de la création de la notification:', error);
     res.status(500).json({ success: false, message: 'Échec de la création de la notification' });
   }
 });
@@ -171,7 +172,7 @@ router.patch('/:id/read', async (req: Request, res: Response): Promise<void> => 
         res.json({ success: true, data: updatedNotification });
 
     } catch (error) {
-        console.error('Échec de la mise à jour de la notification:', error);
+        logger.error('Échec de la mise à jour de la notification:', error);
         res.status(500).json({ success: false, message: 'Échec de la mise à jour de la notification' });
     }
 });
@@ -221,7 +222,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
         res.json({ success: true, message: 'Notification supprimée avec succès.' });
 
     } catch (error) {
-        console.error('Échec de la suppression de la notification:', error);
+        logger.error('Échec de la suppression de la notification:', error);
         res.status(500).json({ success: false, message: 'Échec de la suppression de la notification' });
     }
 });
@@ -248,7 +249,7 @@ router.post('/check-emails', async (req: Request, res: Response): Promise<void> 
             await autoMailSync.syncForUser(user.userId);
             
         } catch (syncError) {
-            console.error('❌ [API] Erreur sync manuelle:', syncError);
+            logger.error('❌ [API] Erreur sync manuelle:', syncError);
             // Continuer malgré l'erreur de sync pour la notification backup
         }
         
@@ -266,7 +267,7 @@ router.post('/check-emails', async (req: Request, res: Response): Promise<void> 
         });
 
     } catch (error) {
-        console.error('Échec de la vérification des emails:', error);
+        logger.error('Échec de la vérification des emails:', error);
         res.status(500).json({ success: false, message: 'Échec de la vérification des emails' });
     }
 });
@@ -300,7 +301,7 @@ router.post('/check-emails-all', async (req: Request, res: Response): Promise<vo
         });
 
     } catch (error) {
-        console.error('Échec de la vérification globale des emails:', error);
+        logger.error('Échec de la vérification globale des emails:', error);
         res.status(500).json({ success: false, message: 'Échec de la vérification globale des emails' });
     }
 });
@@ -337,7 +338,7 @@ router.patch('/mark-all-read', async (req: Request, res: Response): Promise<void
 
     res.json({ success: true, updated: result.count });
   } catch (error) {
-    console.error('Erreur mark-all-read:', error);
+    logger.error('Erreur mark-all-read:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -394,7 +395,7 @@ router.get('/stats', async (req: Request, res: Response): Promise<void> => {
       }
     });
   } catch (error) {
-    console.error('Erreur stats notifications:', error);
+    logger.error('Erreur stats notifications:', error);
     res.status(500).json({ success: false });
   }
 });
@@ -493,7 +494,7 @@ Sois concis et actionnable. Utilise des emojis pertinents.`;
       });
     } catch (aiError) {
       // Fallback sans IA
-      console.warn('[Notifications] Gemini non disponible, fallback sans IA:', aiError);
+      logger.warn('[Notifications] Gemini non disponible, fallback sans IA:', aiError);
       const pending = notifications.filter(n => n.status === 'PENDING');
       const urgent = notifications.filter(n => (n as any).priority === 'urgent');
 
@@ -501,7 +502,7 @@ Sois concis et actionnable. Utilise des emojis pertinents.`;
         success: true,
         data: {
           summary: `📊 ${pending.length} notification${pending.length > 1 ? 's' : ''} en attente${urgent.length > 0 ? `, dont ${urgent.length} urgente${urgent.length > 1 ? 's' : ''}` : ''}. Consultez vos notifications pour plus de détails.`,
-          urgentActions: urgent.map(n => (n.data as any)?.message || 'Action requise').slice(0, 3),
+          urgentActions: urgent.map(n => (n.data as unknown)?.message || 'Action requise').slice(0, 3),
           insights: '',
           score: urgent.length > 3 ? 30 : urgent.length > 0 ? 60 : pending.length > 10 ? 70 : 90,
           stats: {
@@ -515,7 +516,7 @@ Sois concis et actionnable. Utilise des emojis pertinents.`;
       });
     }
   } catch (error) {
-    console.error('Erreur AI digest:', error);
+    logger.error('Erreur AI digest:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la génération du résumé IA' });
   }
 });

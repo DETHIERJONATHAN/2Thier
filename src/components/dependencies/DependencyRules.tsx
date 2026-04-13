@@ -5,7 +5,7 @@ import AdvancedDependencyEditor from './AdvancedDependencyEditor';
 interface DependencyRulesProps {
   fieldId: string;
   initialRules?: string[];
-  formValues?: Record<string, any>;
+  formValues?: Record<string, unknown>;
   onChange?: (rules: string[]) => void;
   onApply?: (results: DependencyResult[]) => void;
 }
@@ -19,7 +19,7 @@ const DependencyRules = ({ fieldId, initialRules = [], formValues = {}, onChange
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   
   // Fonction pour mettre à jour un champ - simulation pour les tests
-  const updateFormField = useCallback((fieldId: string, property: string, value: any) => {
+  const updateFormField = useCallback((fieldId: string, property: string, value: unknown) => {
     console.log(`[DependencyRules] Mise à jour du champ ${fieldId}, propriété ${property} = ${value}`);
     
     // Si onApply est fourni, on l'appelle avec les résultats des dépendances

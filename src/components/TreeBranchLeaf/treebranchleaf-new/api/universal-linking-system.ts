@@ -124,8 +124,8 @@ export function extractNodeIdsFromCondition(conditionSet: unknown): Set<string> 
   }
   
   // Pattern 4: nodeIds dans les actions
-  const obj = conditionSet as any;
-  const extractFromActions = (actions: any[]) => {
+  const obj = conditionSet as unknown;
+  const extractFromActions = (actions: unknown[]) => {
     if (!Array.isArray(actions)) return;
     for (const action of actions) {
       if (Array.isArray(action.nodeIds)) {
@@ -197,8 +197,8 @@ function extractNodeAndCapacityRefsFromCondition(conditionSet: unknown): { nodeI
   const sharedRefRegex = /@(?:value|calculated|select)\.(shared-ref-[a-z0-9-]+(?:-\d+)?)/gi;
   while ((match = sharedRefRegex.exec(str)) !== null) nodeIds.add(match[1]);
 
-  const obj = conditionSet as any;
-  const extractFromActions = (actions: any[]) => {
+  const obj = conditionSet as unknown;
+  const extractFromActions = (actions: unknown[]) => {
     if (!Array.isArray(actions)) return;
     for (const action of actions) {
       if (Array.isArray(action.nodeIds)) {
@@ -246,7 +246,7 @@ export function extractNodeIdsFromFormula(tokens: unknown): Set<string> {
   const ids = new Set<string>();
   if (!tokens) return ids;
   
-  let tokensArray: any[];
+  let tokensArray: unknown[];
   if (typeof tokens === 'string') {
     try {
       tokensArray = JSON.parse(tokens);
@@ -303,7 +303,7 @@ function extractNodeAndCapacityRefsFromFormula(tokens: unknown): { nodeIds: Set<
   const capacityRefs = new Set<string>();
   if (!tokens) return { nodeIds, capacityRefs };
 
-  let tokensArray: any[];
+  let tokensArray: unknown[];
   if (typeof tokens === 'string') {
     try {
       tokensArray = JSON.parse(tokens);
@@ -348,7 +348,7 @@ export function extractNodeIdsFromTable(tableData: unknown): Set<string> {
   const ids = new Set<string>();
   if (!tableData || typeof tableData !== 'object') return ids;
   
-  const table = tableData as any;
+  const table = tableData as unknown;
   
   // 🔑 CRITIQUE : Ne LIER une table QUE si elle est EXPLICITEMENT déclarée comme propriétaire
   // du nœud via la colonne "nodeId", PAS juste parce qu'un UUID apparaît dans les données !
@@ -443,7 +443,7 @@ async function setNodeLinkedField(
     
     await client.treeBranchLeafNode.update({
       where: { id: nodeId },
-      data: { [field]: uniqueValues } as any
+      data: { [field]: uniqueValues } as unknown
     });
   } catch (e) {
     // Silencieux - le noeud peut ne pas exister

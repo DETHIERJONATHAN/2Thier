@@ -50,10 +50,10 @@ interface DocumentSection {
   id: string;
   type: string;
   order: number;
-  config: Record<string, any>;
+  config: Record<string, unknown>;
   linkedNodeIds?: string[];
   linkedVariables?: string[];
-  translations?: Record<string, any>;
+  translations?: Record<string, unknown>;
 }
 
 interface LeadData {
@@ -115,7 +115,7 @@ interface RenderContext {
   lead: LeadData;
   organization?: OrganizationData;
   quote?: QuoteData;
-  tblData: Record<string, any>;
+  tblData: Record<string, unknown>;
   /** Map optionId → label pour résoudre les valeurs SELECT (UUID → texte lisible) */
   selectOptionsMap?: Record<string, string>;
   /** Signatures électroniques à intégrer dans le bloc signature du PDF */
@@ -190,7 +190,7 @@ export class DocumentPdfRenderer {
     const hasModularSections = (context.template.sections || []).some(s => s.type === 'MODULAR_PAGE');
     const pdfKitMargin = hasModularSections ? 0 : this.margin;
 
-    this.doc = new (PDFDocument as any)({
+    this.doc = new (PDFDocument as unknown)({
       size: 'A4',
       margins: {
         top: pdfKitMargin,
@@ -342,7 +342,7 @@ export class DocumentPdfRenderer {
   /**
    * Affiche les données TBL de manière récursive
    */
-  private renderTblDataRecursive(data: Record<string, any>, indent: number): void {
+  private renderTblDataRecursive(data: Record<string, unknown>, indent: number): void {
     const maxIndent = 3; // Limite de profondeur
     if (indent > maxIndent) return;
 
@@ -671,7 +671,7 @@ export class DocumentPdfRenderer {
     }
   }
 
-  private convertPageBuilderRect(position: Record<string, any>): PdfRect {
+  private convertPageBuilderRect(position: Record<string, unknown>): PdfRect {
     const rawX = (position.x ?? 0) * this.scaleX;
     const rawY = (position.y ?? 0) * this.scaleY;
     const rawWidth = (position.width ?? 100) * this.scaleX;
@@ -694,7 +694,7 @@ export class DocumentPdfRenderer {
 
   private drawBackgroundImage(buffer: Buffer, x: number, y: number, width: number, height: number): void {
     if (!buffer || width <= 0 || height <= 0) return;
-    const openImage = (this.doc as any).openImage?.(buffer);
+    const openImage = (this.doc as unknown).openImage?.(buffer);
     if (openImage) {
       const imageWidth = openImage.width;
       const imageHeight = openImage.height;
@@ -751,11 +751,11 @@ export class DocumentPdfRenderer {
    * Rend une page modulaire complète du Page Builder
    * Chaque MODULAR_PAGE crée une nouvelle page dans le PDF (sauf la première)
    */
-  private renderModularPage(config: Record<string, any>): void {
+  private renderModularPage(config: Record<string, unknown>): void {
     this.hasModularPage = true;
     console.log('📄 [PDF] ========================================');
     console.log('📄 [PDF] Rendu page modulaire:', config.name);
-    console.log('📄 [PDF] Pages actuelles dans le doc:', (this.doc as any).bufferedPageRange?.()?.count || 'N/A');
+    console.log('📄 [PDF] Pages actuelles dans le doc:', (this.doc as unknown).bufferedPageRange?.()?.count || 'N/A');
     console.log('📄 [PDF] isFirstModularPage:', this.isFirstModularPage);
     
     // 🔥 CORRECTION: Créer une nouvelle page pour chaque MODULAR_PAGE sauf la première
@@ -774,7 +774,7 @@ export class DocumentPdfRenderer {
     // On les convertit en coordonnées PDF (595.28x841.89 points)
 
     // Trier les modules: BACKGROUND d'abord (z-index arrière), puis par position Y puis X
-    const sortedModules = [...modules].sort((a: any, b: any) => {
+    const sortedModules = [...modules].sort((a: unknown, b: unknown) => {
       const aType = a.moduleId || a.moduleType || a.type;
       const bType = b.moduleId || b.moduleType || b.type;
       
@@ -792,7 +792,7 @@ export class DocumentPdfRenderer {
     });
 
     console.log(`📄 [PDF] Rendu de ${sortedModules.length} modules sur la page`);
-    console.log(`📄 [PDF] Ordre des modules:`, sortedModules.map((m: any) => m.moduleId || m.moduleType || m.type));
+    console.log(`📄 [PDF] Ordre des modules:`, sortedModules.map((m: Record<string, unknown>) => m.moduleId || m.moduleType || m.type));
 
     // Objectif: si le détail (table) descend, déplacer les modules placés sous la table
     // (conditions, totaux, signatures, footer, etc.) sur la page suivante plutôt que de tronquer.
@@ -801,13 +801,13 @@ export class DocumentPdfRenderer {
     const backgroundModuleIds = new Set(['BACKGROUND']);
     const flowModuleIds = new Set(['PRICING_TABLE']);
 
-    const getModuleType = (m: any) => m.moduleId || m.moduleType || m.type;
-    const getModuleY = (m: any) => Number(m?.position?.y ?? 0);
+    const getModuleType = (m: unknown) => m.moduleId || m.moduleType || m.type;
+    const getModuleY = (m: unknown) => Number(m?.position?.y ?? 0);
 
-    const backgroundModules = sortedModules.filter((m: any) => backgroundModuleIds.has(getModuleType(m)));
-    const nonBackgroundModules = sortedModules.filter((m: any) => !backgroundModuleIds.has(getModuleType(m)));
-    const flowModulesInOrder = nonBackgroundModules.filter((m: any) => flowModuleIds.has(getModuleType(m)));
-    let remainingModules = nonBackgroundModules.filter((m: any) => !flowModuleIds.has(getModuleType(m)));
+    const backgroundModules = sortedModules.filter((m: Record<string, unknown>) => backgroundModuleIds.has(getModuleType(m)));
+    const nonBackgroundModules = sortedModules.filter((m: Record<string, unknown>) => !backgroundModuleIds.has(getModuleType(m)));
+    const flowModulesInOrder = nonBackgroundModules.filter((m: Record<string, unknown>) => flowModuleIds.has(getModuleType(m)));
+    let remainingModules = nonBackgroundModules.filter((m: Record<string, unknown>) => !flowModuleIds.has(getModuleType(m)));
 
     const renderModularBackground = () => {
       // Fond de page si configuré (pleine page)
@@ -828,13 +828,13 @@ export class DocumentPdfRenderer {
       const flowY = getModuleY(flowModule);
 
       // Rendre tout ce qui est placé au-dessus (Y strictement inférieur)
-      const above = remainingModules.filter((m: any) => getModuleY(m) < flowY);
+      const above = remainingModules.filter((m: Record<string, unknown>) => getModuleY(m) < flowY);
       for (const m of above) {
         this.renderModuleAbsolute(m);
       }
 
       // Conserver le reste (Y >= flowY) pour l'après-table
-      const belowOrEqual = remainingModules.filter((m: any) => getModuleY(m) >= flowY);
+      const belowOrEqual = remainingModules.filter((m: Record<string, unknown>) => getModuleY(m) >= flowY);
 
       if (flowType !== 'PRICING_TABLE') {
         // Par sécurité, si on ajoute d'autres flows plus tard
@@ -889,7 +889,7 @@ export class DocumentPdfRenderer {
   }
 
   private renderModulePricingTablePaginated(
-    config: Record<string, any>,
+    config: Record<string, unknown>,
     x: number,
     y: number,
     width: number,
@@ -906,14 +906,14 @@ export class DocumentPdfRenderer {
     if (config.pricingLines && config.pricingLines.length > 0) {
       items = this.processPricingLines(config.pricingLines, config);
     } else if (config.items && config.items.length > 0) {
-      items = config.items.map((item: any) => ({
+      items = config.items.map((item: Record<string, unknown>) => ({
         description: this.substituteVariables(item.name || item.label || ''),
         quantity: item.quantity || 1,
         unitPrice: parseFloat(item.price || item.amount || item.unitPrice || 0),
         total: parseFloat(item.price || item.amount || 0) * (item.quantity || 1)
       }));
     } else if (config.rows && config.rows.length > 0) {
-      items = config.rows.map((row: any) => ({
+      items = config.rows.map((row: Record<string, unknown>) => ({
         description: this.substituteVariables(row.designation || row.label || ''),
         quantity: row.quantity || 1,
         unitPrice: parseFloat(row.unitPrice || 0),
@@ -1115,7 +1115,7 @@ export class DocumentPdfRenderer {
   /**
    * Rend un module à sa position absolue (conversion pixel Page Builder -> points PDF)
    */
-  private renderModuleAbsolute(module: any): void {
+  private renderModuleAbsolute(module: unknown): void {
     const moduleType = module.moduleId || module.moduleType || module.type;
     const config = module.config || {};
     const position = module.position || {};
@@ -1237,7 +1237,7 @@ export class DocumentPdfRenderer {
   // RENDERERS DE MODULES INDIVIDUELS
   // ============================================================
 
-  private renderModuleTitle(config: Record<string, any>, x: number, y: number, width: number, height?: number): void {
+  private renderModuleTitle(config: Record<string, unknown>, x: number, y: number, width: number, height?: number): void {
     const text = this.substituteVariables(config.text || 'Titre');
     const level = config.level || 'h1';
     const alignment = config.alignment || 'center';
@@ -1264,7 +1264,7 @@ export class DocumentPdfRenderer {
     console.log(`📄 [PDF] TITLE: text="${text}", fontSize=${fontSize}, height=${Math.round(actualHeight)}, color=${color}`);
     
     // Sauvegarder la position Y actuelle de PDFKit
-    const savedY = (this.doc as any).y;
+    const savedY = (this.doc as unknown).y;
     
     // IMPORTANT: Appliquer fillColor AVANT de commencer la chaîne text
     // PDFKit peut réinitialiser la couleur dans certains cas
@@ -1277,7 +1277,7 @@ export class DocumentPdfRenderer {
     this.doc.text(text, x, y + titleYOffset, {
       width: width,
       height: actualHeight,
-      align: alignment as any,
+      align: alignment as unknown,
       lineBreak: true,
       continued: false
     });
@@ -1285,10 +1285,10 @@ export class DocumentPdfRenderer {
     
     // CRUCIAL: Restaurer la position Y pour éviter que PDFKit pense devoir créer une page
     // On remet Y au début de la page pour être sûr
-    (this.doc as any).y = Math.min(savedY, this.margin + 100);
+    (this.doc as unknown).y = Math.min(savedY, this.margin + 100);
   }
 
-  private renderModuleSubtitle(config: Record<string, any>, x: number, y: number, width: number, height?: number): void {
+  private renderModuleSubtitle(config: Record<string, unknown>, x: number, y: number, width: number, height?: number): void {
     const rawText = this.substituteVariables(config.text || 'Sous-titre');
     const text = this.normalizeText(rawText);
     const alignment = config.alignment || 'center';
@@ -1312,7 +1312,7 @@ export class DocumentPdfRenderer {
 
     console.log(`📄 [PDF] SUBTITLE: text="${text}", fontSize=${fontSize}`);
 
-    const savedY = (this.doc as any).y;
+    const savedY = (this.doc as unknown).y;
     this.doc.fontSize(scaledFontSize);
     const subtitleTextHeight = this.doc.heightOfString(text, { width });
     const subtitleYOffset = calculateVerticalCenterOffset(actualHeight, subtitleTextHeight);
@@ -1324,15 +1324,15 @@ export class DocumentPdfRenderer {
       .text(text, x, y + subtitleYOffset, {
         width: width,
         height: actualHeight,
-        align: alignment as any,
+        align: alignment as unknown,
         lineBreak: true,
         continued: false
       });
     
-    (this.doc as any).y = Math.min(savedY, this.margin + 100);
+    (this.doc as unknown).y = Math.min(savedY, this.margin + 100);
   }
 
-  private renderModuleTextBlock(config: Record<string, any>, x: number, y: number, width: number, height?: number): void {
+  private renderModuleTextBlock(config: Record<string, unknown>, x: number, y: number, width: number, height?: number): void {
     // 🔥 Vérifier si le bloc peut tenir
     const availableHeight = this.getAvailableHeightOnPage(y);
     if (availableHeight < 10) {
@@ -1380,7 +1380,7 @@ export class DocumentPdfRenderer {
 
     console.log(`📄 [PDF] TEXT_BLOCK: text="${text.substring(0, 30)}...", color=${color}, fontSize=${fontSize}, hauteur disponible=${availableHeight.toFixed(0)}px`);
 
-    const savedY = (this.doc as any).y;
+    const savedY = (this.doc as unknown).y;
     const finalTextHeight = this.doc.heightOfString(text, { width: innerWidth });
     const textYOffset = calculateVerticalCenterOffset(innerHeight, finalTextHeight);
     const textX = x + padding;
@@ -1393,15 +1393,15 @@ export class DocumentPdfRenderer {
       .text(text, textX, textY, {
         width: innerWidth,
         height: actualHeight,
-        align: alignment as any,
+        align: alignment as unknown,
         lineBreak: true,
         continued: false
       });
     
-    (this.doc as any).y = Math.min(savedY, this.margin + 100);
+    (this.doc as unknown).y = Math.min(savedY, this.margin + 100);
   }
 
-  private renderModuleImage(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
+  private renderModuleImage(config: Record<string, unknown>, x: number, y: number, width: number, height: number): void {
     const imageUrl = config.image || config.url || config.src;
     
     console.log(`📄 [PDF] IMAGE: x=${Math.round(x)}, y=${Math.round(y)}, w=${Math.round(width)}, h=${Math.round(height)}`);
@@ -1488,7 +1488,7 @@ export class DocumentPdfRenderer {
       .text(text, x, y + height/2 - 5, { width: width, align: 'center' });
   }
 
-  private renderModuleBackground(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
+  private renderModuleBackground(config: Record<string, unknown>, x: number, y: number, width: number, height: number): void {
     // IMPORTANT: Si une image existe, on la rend TOUJOURS (peu importe config.type)
     // Le Page Builder peut sauvegarder type:"color" même avec une image
     const hasImage = !!config.image;
@@ -1592,7 +1592,7 @@ export class DocumentPdfRenderer {
     return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
   }
 
-  private renderModulePricingTable(config: Record<string, any>, x: number, y: number, width: number, _height?: number): void {
+  private renderModulePricingTable(config: Record<string, unknown>, x: number, y: number, width: number, _height?: number): void {
     // Version améliorée du tableau de prix avec support pricingLines
     const title = config.title || 'Tarifs';
     const currency = config.currency || '€';
@@ -1606,7 +1606,7 @@ export class DocumentPdfRenderer {
       console.log('📄 [PDF] PRICING_TABLE: Items résolus:', items);
     } else if (config.items && config.items.length > 0) {
       // Ancien format: items simples
-      items = config.items.map((item: any) => ({
+      items = config.items.map((item: Record<string, unknown>) => ({
         description: this.substituteVariables(item.name || item.label || ''),
         quantity: item.quantity || 1,
         unitPrice: parseFloat(item.price || item.amount || item.unitPrice || 0),
@@ -1614,7 +1614,7 @@ export class DocumentPdfRenderer {
       }));
     } else if (config.rows && config.rows.length > 0) {
       // Format legacy: rows
-      items = config.rows.map((row: any) => ({
+      items = config.rows.map((row: Record<string, unknown>) => ({
         description: this.substituteVariables(row.designation || row.label || ''),
         quantity: row.quantity || 1,
         unitPrice: parseFloat(row.unitPrice || 0),
@@ -1745,7 +1745,7 @@ export class DocumentPdfRenderer {
    * Affiche: Remise, Total HTVA, TVA, Total TVAC (si les sources sont configurées)
    */
   private renderPricingTotalsTBL(
-    config: Record<string, any>,
+    config: Record<string, unknown>,
     x: number,
     startY: number,
     width: number,
@@ -1795,7 +1795,7 @@ export class DocumentPdfRenderer {
       totalTVASource: config.totalTVASource || '(non configuré)',
       totalTVACSource: config.totalTVACSource || '(non configuré)',
       tblDataKeys: Object.keys(this.ctx.tblData || {}).slice(0, 20),
-      formulaResultsMap: (this.ctx as any).formulaResultsMap || {},
+      formulaResultsMap: (this.ctx as unknown).formulaResultsMap || {},
     });
 
     // Remise
@@ -1857,7 +1857,7 @@ export class DocumentPdfRenderer {
     return 'ok';
   }
 
-  private renderModuleTestimonial(config: Record<string, any>, x: number, y: number, width: number): void {
+  private renderModuleTestimonial(config: Record<string, unknown>, x: number, y: number, width: number): void {
     const quote = this.substituteVariables(config.quote || config.text || '');
     const author = config.author || '';
     const role = config.role || config.position || '';
@@ -1888,7 +1888,7 @@ export class DocumentPdfRenderer {
     }
   }
 
-  private renderModuleCompanyPresentation(config: Record<string, any>, x: number, y: number, width: number): void {
+  private renderModuleCompanyPresentation(config: Record<string, unknown>, x: number, y: number, width: number): void {
     const title = this.substituteVariables(config.title || 'Notre entreprise');
     const description = this.substituteVariables(config.description || config.text || '');
 
@@ -1907,7 +1907,7 @@ export class DocumentPdfRenderer {
     }
   }
 
-  private renderModuleFaq(config: Record<string, any>, x: number, y: number, width: number): void {
+  private renderModuleFaq(config: Record<string, unknown>, x: number, y: number, width: number): void {
     const title = config.title || 'FAQ';
     const items = config.items || [];
 
@@ -2030,7 +2030,7 @@ export class DocumentPdfRenderer {
   // ============================================================
   // DOCUMENT_HEADER - En-tête avec logo entreprise et infos client
   // ============================================================
-  private renderModuleDocumentHeader(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
+  private renderModuleDocumentHeader(config: Record<string, unknown>, x: number, y: number, width: number, height: number): void {
     // Entreprise
     const companyName = this.substituteVariables(config.companyName || '{org.name}');
     const companyAddress = this.substituteVariables(config.companyAddress || '{org.address}');
@@ -2156,7 +2156,7 @@ export class DocumentPdfRenderer {
   // ============================================================
   // DOCUMENT_INFO - Référence, date, validité
   // ============================================================
-  private renderModuleDocumentInfo(config: Record<string, any>, x: number, y: number, width: number, _height: number): void {
+  private renderModuleDocumentInfo(config: Record<string, unknown>, x: number, y: number, width: number, _height: number): void {
     const themeId = (config as any)._themeId as string | undefined;
     const layoutRaw = (config.layout || '').toString().trim();
     const layout = 'inline'; // 🔥 Forcer l'alignement en badges comme PageBuilder
@@ -2272,7 +2272,7 @@ export class DocumentPdfRenderer {
   // ============================================================
   // DOCUMENT_FOOTER - Pied de page avec infos entreprise
   // ============================================================
-  private renderModuleDocumentFooter(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
+  private renderModuleDocumentFooter(config: Record<string, unknown>, x: number, y: number, width: number, height: number): void {
     const layout = config.layout || 'centered';
     const fontSize = config.fontSize || 10;
     const maxY = y + (height || 40);
@@ -2471,7 +2471,7 @@ export class DocumentPdfRenderer {
   // ============================================================
   // SIGNATURE_BLOCK - Zone de signatures
   // ============================================================
-  private renderModuleSignatureBlock(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
+  private renderModuleSignatureBlock(config: Record<string, unknown>, x: number, y: number, width: number, height: number): void {
     // 🔥 Vérifier si le bloc peut tenir
     const availableHeight = this.getAvailableHeightOnPage(y);
     const minHeight = 60; // Réduit car le bloc est compact maintenant
@@ -2606,7 +2606,7 @@ export class DocumentPdfRenderer {
   // ============================================================
   // TOTALS_SUMMARY - Récapitulatif des totaux (HT/TVA/TTC)
   // ============================================================
-  private renderModuleTotalsSummary(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
+  private renderModuleTotalsSummary(config: Record<string, unknown>, x: number, y: number, width: number, height: number): void {
     // Clipping au niveau du module (comme l'overflow:hidden dans le Page Builder)
     this.doc.save();
     this.doc.rect(x, y, width, height).clip();
@@ -2726,7 +2726,7 @@ export class DocumentPdfRenderer {
   // ============================================================
   // PAYMENT_INFO - Informations de paiement
   // ============================================================
-  private renderModulePaymentInfo(config: Record<string, any>, x: number, y: number, width: number, _height: number): void {
+  private renderModulePaymentInfo(config: Record<string, unknown>, x: number, y: number, width: number, _height: number): void {
     // 🔥 Vérifier si le bloc peut tenir
     const availableHeight = this.getAvailableHeightOnPage(y);
     if (availableHeight < 30) {
@@ -2851,7 +2851,7 @@ export class DocumentPdfRenderer {
   // ============================================================
   // CONTACT_INFO - Informations de contact
   // ============================================================
-  private renderModuleContactInfo(config: Record<string, any>, x: number, y: number, width: number, _height: number): void {
+  private renderModuleContactInfo(config: Record<string, unknown>, x: number, y: number, width: number, _height: number): void {
     // 🔥 Vérifier si le bloc peut tenir
     const availableHeight = this.getAvailableHeightOnPage(y);
     if (availableHeight < 30) {
@@ -2938,7 +2938,7 @@ export class DocumentPdfRenderer {
   /**
    * Page de couverture
    */
-  private renderCoverPage(config: Record<string, any>): void {
+  private renderCoverPage(config: Record<string, unknown>): void {
     const primaryColor = this.theme.primaryColor || '#1890ff';
     
     // Fond coloré en haut
@@ -3089,7 +3089,7 @@ export class DocumentPdfRenderer {
   /**
    * Présentation de l'entreprise
    */
-  private renderCompanyPresentation(config: Record<string, any>): void {
+  private renderCompanyPresentation(config: Record<string, unknown>): void {
     this.checkPageBreak(150);
 
     const title = this.substituteVariables(
@@ -3129,7 +3129,7 @@ export class DocumentPdfRenderer {
   /**
    * Résumé du projet
    */
-  private renderProjectSummary(config: Record<string, any>): void {
+  private renderProjectSummary(config: Record<string, unknown>): void {
     this.checkPageBreak(200);
 
     const title = this.substituteVariables(
@@ -3167,7 +3167,7 @@ export class DocumentPdfRenderer {
   /**
    * Tableau des prix
    */
-  private renderPricingTable(config: Record<string, any>): void {
+  private renderPricingTable(config: Record<string, unknown>): void {
     this.checkPageBreak(250);
 
     const title = this.substituteVariables(
@@ -3178,7 +3178,7 @@ export class DocumentPdfRenderer {
 
     // 🆕 NOUVEAU SYSTÈME: Utiliser pricingLines configurées
     const pricingLines = config.pricingLines || [];
-    let items: any[] = [];
+    let items: unknown[] = [];
     
     if (pricingLines.length > 0) {
       // Transformer les pricingLines en items pour le rendu
@@ -3211,8 +3211,8 @@ export class DocumentPdfRenderer {
    * - Génère N lignes pour les repeaters
    * - Masque les lignes repeater qui n'ont aucune instance (0 copies)
    */
-  private processPricingLines(pricingLines: any[], _config: Record<string, any>): any[] {
-    const results: any[] = [];
+  private processPricingLines(pricingLines: unknown[], _config: Record<string, unknown>): unknown[] {
+    const results: unknown[] = [];
     const tblData = this.ctx.tblData || {};
     
     for (const line of pricingLines) {
@@ -3263,7 +3263,7 @@ export class DocumentPdfRenderer {
   /**
    * Vérifie si une ligne a des sources @repeat.xxx
    */
-  private hasRepeatSources(line: any): boolean {
+  private hasRepeatSources(line: unknown): boolean {
     const sources = [line.labelSource, line.quantitySource, line.unitPriceSource, line.totalSource];
     return sources.some(s => typeof s === 'string' && s.startsWith('@repeat.'));
   }
@@ -3271,7 +3271,7 @@ export class DocumentPdfRenderer {
   /**
    * Extrait le repeaterId depuis les sources @repeat.{repeaterId}.xxx d'une ligne
    */
-  private extractRepeaterIdFromSources(line: any): string | undefined {
+  private extractRepeaterIdFromSources(line: unknown): string | undefined {
     const sources = [line.labelSource, line.quantitySource, line.unitPriceSource, line.totalSource];
     for (const src of sources) {
       if (typeof src === 'string' && src.startsWith('@repeat.')) {
@@ -3287,7 +3287,7 @@ export class DocumentPdfRenderer {
    * sur le document PDF pour une ligne de pricing.
    * Retourne la police choisie pour pouvoir revenir au style normal après.
    */
-  private applyLineStyle(style: any, defaultFontSize?: number): { font: string; fontSize: number; color: string; underline: boolean } {
+  private applyLineStyle(style: unknown, defaultFontSize?: number): { font: string; fontSize: number; color: string; underline: boolean } {
     const bold = style?.bold === true;
     const italic = style?.italic === true;
     const underline = style?.underline === true;
@@ -3324,7 +3324,7 @@ export class DocumentPdfRenderer {
   /**
    * Dessine du texte souligné à une position donnée
    */
-  private drawUnderlinedText(text: string, x: number, y: number, options: any): void {
+  private drawUnderlinedText(text: string, x: number, y: number, options: unknown): void {
     this.doc.text(text, x, y, options);
     // Calculer la largeur du texte pour dessiner la ligne
     const textWidth = this.doc.widthOfString(text, options);
@@ -3358,7 +3358,7 @@ export class DocumentPdfRenderer {
    * Pour les repeaters, repeaterInstance.suffix permet de résoudre les refs
    * @repeat.X.Y en @value.Y-{suffix} avant résolution.
    */
-  private resolveLineValues(line: any, repeaterInstance?: any): any {
+  private resolveLineValues(line: unknown, repeaterInstance?: unknown): any {
     const suffix = repeaterInstance?.suffix;
     
     // Helper: résoudre une ref (convertit @repeat si nécessaire)
@@ -3388,7 +3388,7 @@ export class DocumentPdfRenderer {
     // Résoudre le label/description
     // 🆕 Support des multi-libellés (labelParts)
     if (line.labelParts && Array.isArray(line.labelParts) && line.labelParts.length > 0) {
-      const parts = line.labelParts.map((part: any) => {
+      const parts = line.labelParts.map((part: Record<string, unknown>) => {
         const prefix = part.prefix || '';
         let value = '';
         if (part.source) {
@@ -3491,7 +3491,7 @@ export class DocumentPdfRenderer {
    * Pour trouver le nombre d'instances, on collecte d'abord tous les templateChildIds
    * depuis les sources de la ligne, puis on cherche les suffixes dans tblData.
    */
-  private getRepeaterInstances(repeaterId: string, tblData: Record<string, any>, line?: any): any[] {
+  private getRepeaterInstances(repeaterId: string, tblData: Record<string, unknown>, line?: unknown): unknown[] {
     // 1. Collecter tous les templateChildIds depuis les sources de la ligne
     const templateChildIds = new Set<string>();
     const sources = [line?.labelSource, line?.quantitySource, line?.unitPriceSource, line?.totalSource];
@@ -3540,7 +3540,7 @@ export class DocumentPdfRenderer {
    * - SimpleCondition: { fieldRef, operator, compareValue } (PricingLinesEditor)
    * - Legacy rules: { rules: [{ source, operator, value }], operator: 'AND'|'OR' }
    */
-  private evaluateCondition(condition: any): boolean {
+  private evaluateCondition(condition: unknown): boolean {
     if (!condition) return true;
 
     // Format SimpleCondition (PricingLinesEditor)
@@ -3634,7 +3634,7 @@ export class DocumentPdfRenderer {
   /**
    * Rendu du tableau de prix
    */
-  private renderPriceTable(items: any[], _config: Record<string, any>): void {
+  private renderPriceTable(items: unknown[], _config: Record<string, unknown>): void {
     const colWidths = {
       description: this.contentWidth * 0.5,
       quantity: this.contentWidth * 0.1,
@@ -3725,7 +3725,7 @@ export class DocumentPdfRenderer {
   /**
    * Totaux du tableau de prix
    */
-  private renderPriceTotals(config: Record<string, any>): void {
+  private renderPriceTotals(config: Record<string, unknown>): void {
     const quote = this.ctx.quote || {};
     const totalsX = this.pageWidth - this.margin - 200;
 
@@ -3783,7 +3783,7 @@ export class DocumentPdfRenderer {
   /**
    * Bloc de texte libre
    */
-  private renderTextBlock(config: Record<string, any>): void {
+  private renderTextBlock(config: Record<string, unknown>): void {
     this.checkPageBreak(100);
 
     // Titre optionnel
@@ -3813,7 +3813,7 @@ export class DocumentPdfRenderer {
   /**
    * Conditions générales
    */
-  private renderTermsConditions(config: Record<string, any>): void {
+  private renderTermsConditions(config: Record<string, unknown>): void {
     this.checkPageBreak(150);
 
     const title = this.substituteVariables(
@@ -3851,7 +3851,7 @@ export class DocumentPdfRenderer {
   /**
    * Bloc de signature
    */
-  private renderSignatureBlock(config: Record<string, any>): void {
+  private renderSignatureBlock(config: Record<string, unknown>): void {
     this.checkPageBreak(150);
 
     const title = this.substituteVariables(
@@ -3988,7 +3988,7 @@ export class DocumentPdfRenderer {
   /**
    * Informations de contact
    */
-  private renderContactInfo(config: Record<string, any>): void {
+  private renderContactInfo(config: Record<string, unknown>): void {
     this.checkPageBreak(100);
 
     const title = this.substituteVariables(
@@ -4037,7 +4037,7 @@ export class DocumentPdfRenderer {
   /**
    * Spécifications techniques (données TBL)
    */
-  private renderTechnicalSpecs(config: Record<string, any>): void {
+  private renderTechnicalSpecs(config: Record<string, unknown>): void {
     this.checkPageBreak(150);
 
     const title = this.substituteVariables(
@@ -4053,7 +4053,7 @@ export class DocumentPdfRenderer {
   /**
    * Timeline / Calendrier
    */
-  private renderTimeline(config: Record<string, any>): void {
+  private renderTimeline(config: Record<string, unknown>): void {
     this.checkPageBreak(150);
 
     const title = this.substituteVariables(
@@ -4085,7 +4085,7 @@ export class DocumentPdfRenderer {
   /**
    * Image
    */
-  private renderImage(config: Record<string, any>): void {
+  private renderImage(config: Record<string, unknown>): void {
     // TODO: Implémenter le chargement d'images distantes
     // Pour l'instant, on affiche juste un placeholder
     if (config.url || config.src) {
@@ -4101,7 +4101,7 @@ export class DocumentPdfRenderer {
   /**
    * Contenu personnalisé
    */
-  private renderCustomContent(config: Record<string, any>): void {
+  private renderCustomContent(config: Record<string, unknown>): void {
     if (config.content) {
       const content = this.substituteVariables(config.content);
       // Rendu basique du contenu (sans HTML)
@@ -4208,7 +4208,7 @@ export class DocumentPdfRenderer {
   /**
    * Extraire les données de prix depuis TBL
    */
-  private extractPricingFromTbl(): any[] {
+  private extractPricingFromTbl(): unknown[] {
     // TODO: Parser les données TBL pour trouver les éléments de prix
     // Pour l'instant, retourner un tableau vide
     return [];
@@ -4285,7 +4285,7 @@ export class DocumentPdfRenderer {
 
     // 🔥 SYSTÈME DYNAMIQUE: Vérifier d'abord dans formulaResultsMap (pré-résolu par interpretReference)
     // Couvre TOUS les types: node-formula:, condition:, @calculated., @value., @table., etc.
-    const formulaResultsMap = (this.ctx as any).formulaResultsMap || {};
+    const formulaResultsMap = (this.ctx as unknown).formulaResultsMap || {};
     if (formulaResultsMap[ref] !== undefined) {
       const rawVal = formulaResultsMap[ref];
       console.log(`📄 [PDF] ✅ Résolu via formulaResultsMap: "${ref}" → ${rawVal}`);
@@ -4311,7 +4311,7 @@ export class DocumentPdfRenderer {
     // Variables org.xxx
     if (ref.startsWith('org.')) {
       const key = ref.replace('org.', '');
-      const orgAny = org as any;
+      const orgAny = org as unknown;
 
       // Synonymes / compat PageBuilder
       if (key === 'tva') return String(orgAny.tva ?? orgAny.vatNumber ?? '');
@@ -4339,7 +4339,7 @@ export class DocumentPdfRenderer {
       console.log(`📄 [PDF] Cherche TBL ref: "${nodeRef}"`);
       
       // Helper: résoudre les valeurs SELECT (UUID → label lisible)
-      const resolveSelectLabel = (rawValue: any): string => {
+      const resolveSelectLabel = (rawValue: unknown): string => {
         const formatted = this.formatValue(rawValue);
         // Si la valeur ressemble à un UUID, chercher dans selectOptionsMap
         if (this.ctx.selectOptionsMap && typeof rawValue === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(rawValue)) {
@@ -4386,7 +4386,7 @@ export class DocumentPdfRenderer {
     // 🆕 Variables node-formula:xxx ou formula:xxx
     if (ref.startsWith('node-formula:') || ref.startsWith('formula:')) {
       // 🔥 FIX TOTALS-PDF: Utiliser formulaResultsMap pour obtenir directement le résultat
-      const formulaResultsMap = (this.ctx as any).formulaResultsMap || {};
+      const formulaResultsMap = (this.ctx as unknown).formulaResultsMap || {};
       
       // Chercher avec la ref exacte ET avec l'autre format (node-formula: ↔ formula:)
       const formulaId = ref.replace(/^(node-formula:|formula:)/, '');
@@ -4422,7 +4422,7 @@ export class DocumentPdfRenderer {
     // 🆕 Variables @calculated.xxx ou calculatedValue:xxx — aussi pré-résolu
     if (ref.startsWith('calculatedValue:') || ref.startsWith('@calculated.')) {
       // Vérifier d'abord dans formulaResultsMap (pré-résolu par la route)
-      const formulaResultsMap = (this.ctx as any).formulaResultsMap || {};
+      const formulaResultsMap = (this.ctx as unknown).formulaResultsMap || {};
       if (formulaResultsMap[ref] !== undefined) {
         console.log(`📄 [PDF] ✅ Calculated résolu via formulaResultsMap: ${ref} → ${formulaResultsMap[ref]}`);
         return this.formatValue(formulaResultsMap[ref]);
@@ -4479,7 +4479,7 @@ export class DocumentPdfRenderer {
   /**
    * Récupère une valeur traduite
    */
-  private getTranslatedValue(value: any, fallback: string): string {
+  private getTranslatedValue(value: unknown, fallback: string): string {
     if (!value) return fallback;
     if (typeof value === 'string') return value;
     if (typeof value === 'object') {
@@ -4495,13 +4495,13 @@ export class DocumentPdfRenderer {
    */
   private evaluateSingleConditionRule(rule: ConditionRule): boolean {
     const fieldRef = rule.fieldRef;
-    let fieldValue: any = null;
+    let fieldValue: unknown = null;
     
     // Format {lead.xxx}, {quote.xxx}, {org.xxx}
     const curlyMatch = fieldRef.match(/^\{(lead|quote|org)\.([a-zA-Z0-9_.]+)\}$/);
     if (curlyMatch) {
       const [, source, key] = curlyMatch;
-      let data: any = null;
+      let data: unknown = null;
       if (source === 'lead') data = this.ctx.lead;
       else if (source === 'quote') data = this.ctx.quote;
       else if (source === 'org') data = this.ctx.organization;
@@ -4557,7 +4557,7 @@ export class DocumentPdfRenderer {
    * Évalue les conditions d'un module et retourne le résultat
    * @returns { shouldRender: boolean, content?: string }
    */
-  private evaluateModuleConditions(config: Record<string, any>): { shouldRender: boolean; content?: string } {
+  private evaluateModuleConditions(config: Record<string, unknown>): { shouldRender: boolean; content?: string } {
     const conditionalConfig = config._conditionalDisplay as ConditionalConfig | undefined;
     
     if (!conditionalConfig || !conditionalConfig.enabled || conditionalConfig.rules.length === 0) {
@@ -4643,7 +4643,7 @@ export class DocumentPdfRenderer {
   /**
    * Formate une valeur
    */
-  private formatValue(value: any): string {
+  private formatValue(value: unknown): string {
     if (value === null || value === undefined) return '-';
     if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
     if (Array.isArray(value)) return value.join(', ');
@@ -4688,7 +4688,7 @@ export class DocumentPdfRenderer {
   // ============================================================
   // KPI_BANNER - Bandeau KPI / ROI graphique
   // ============================================================
-  private renderModuleKpiBanner(config: Record<string, any>, x: number, y: number, width: number, height: number): void {
+  private renderModuleKpiBanner(config: Record<string, unknown>, x: number, y: number, width: number, height: number): void {
     console.log(`🎨 [KPI-ICON-DEBUG] BANNER CALLED! icon keys: ${Object.keys(config).filter(k => k.includes('icon')).map(k => `${k}="${config[k]}"`).join(', ')}`);
     this.doc.save();
     this.doc.rect(x, y, width, height).clip();
@@ -4701,7 +4701,7 @@ export class DocumentPdfRenderer {
     const bannerStyle = config.style || 'gradient';
 
     // Helper robuste pour lire les toggles (gère bool, string, undefined)
-    const toBool = (val: any, def: boolean): boolean => {
+    const toBool = (val: unknown, def: boolean): boolean => {
       if (val === undefined || val === null) return def;
       if (typeof val === 'boolean') return val;
       if (typeof val === 'string') return val !== 'false' && val !== '0';
@@ -5090,7 +5090,7 @@ export class DocumentPdfRenderer {
 
     // Fallback : si pas de champs plats, essayer tableau complet
     if (allKpis.length === 0 && Array.isArray(config.kpis)) {
-      for (const kpi of (config.kpis as any[])) {
+      for (const kpi of (config.kpis as unknown[])) {
         if (!kpi || kpi.enabled === false) continue;
         if (!kpi.label && !kpi.value && !kpi.binding) continue;
         const rawVal = kpi.binding || kpi.value || '';
@@ -5130,7 +5130,7 @@ export class DocumentPdfRenderer {
         .stroke();
     } else {
       // Dégradé simulé
-      const grad = (this.doc as any).linearGradient?.(x, y, x + width, y);
+      const grad = (this.doc as unknown).linearGradient?.(x, y, x + width, y);
       if (grad) {
         grad.stop(0, gradientFrom, 1).stop(1, gradientTo, 1);
         this.doc.rect(x, y, width, height).fill(grad);
@@ -5406,7 +5406,7 @@ export class DocumentPdfRenderer {
   }
 
   private ensureDocumentIsA4(): void {
-    const page = (this.doc as any).page;
+    const page = (this.doc as unknown).page;
     if (!page) return;
 
     const actualWidth = page.width ?? this.pageWidth;

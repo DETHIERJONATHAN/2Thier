@@ -1,6 +1,7 @@
 import type { Request as ExpressRequest, Response, NextFunction } from 'express';
 import { db } from '../../lib/database';
 import type { AuthenticatedRequest } from './auth';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 
@@ -24,7 +25,7 @@ export async function impersonationMiddleware(
     return next();
   }
 
-  console.log(
+  logger.info(
     `[Impersonation] Middleware triggered for super_admin ${originalUser.userId}. Headers: user=${impersonateUserId}, org=${impersonateOrgId}`
   );
 
@@ -46,7 +47,7 @@ export async function impersonationMiddleware(
       // L'organisation à usurper est soit celle fournie, soit nulle pour le moment.
       authReq.impersonatedOrganizationId = impersonateOrgId;
 
-      console.log(
+      logger.info(
         `[Impersonation] Stored impersonatedUser: ${authReq.impersonatedUser.id}`
       );
     } else if (impersonateOrgId) {
@@ -56,14 +57,14 @@ export async function impersonationMiddleware(
     }
 
     if (authReq.impersonatedOrganizationId) {
-      console.log(
+      logger.info(
         `[Impersonation] Stored impersonatedOrganizationId: ${authReq.impersonatedOrganizationId}`
       );
     }
 
     next();
   } catch (error) {
-    console.error("[Impersonation] Erreur:", error);
+    logger.error("[Impersonation] Erreur:", error);
     res
       .status(500)
       .json({ error: "Une erreur est survenue durant l'usurpation." });

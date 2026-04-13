@@ -15,7 +15,7 @@ import * as path from 'path';
 /**
  * Génère le HTML d'une section en fonction de son type
  */
-function renderSection(section: any): string {
+function renderSection(section: unknown): string {
   const content = section.content || {};
   // Note: Le champ s'appelle "type" dans la BD (pas "sectionType")
   const sectionType = section.type;
@@ -46,7 +46,7 @@ function renderSection(section: any): string {
   }
 }
 
-function renderHeader(content: any): string {
+function renderHeader(content: unknown): string {
   const logo = content.logo || {};
   const menu = content.menu || {};
   const cta = content.cta || {};
@@ -58,7 +58,7 @@ function renderHeader(content: any): string {
           ${logo.image?.url ? `<img src="${logo.image.url}" alt="${logo.text || 'Logo'}" style="height: ${logo.size?.height || '40px'};">` : `<span style="font-size: ${logo.text?.fontSize || '24px'}; font-weight: bold; color: ${logo.text?.color || '#000000'};">${logo.text?.value || 'Logo'}</span>`}
         </div>
         <nav class="menu" style="display: flex; gap: ${menu.spacing?.gap || '30px'};">
-          ${(menu.items || []).map((item: any) => `
+          ${(menu.items || []).map((item: Record<string, unknown>) => `
             <a href="${item.link || '#'}" style="color: ${menu.text?.color || '#333333'}; text-decoration: none; font-size: ${menu.text?.fontSize || '16px'};">
               ${item.label || 'Menu'}
             </a>
@@ -74,7 +74,7 @@ function renderHeader(content: any): string {
   `;
 }
 
-function renderHero(content: any): string {
+function renderHero(content: unknown): string {
   const title = content.title || {};
   const subtitle = content.subtitle || {};
   const cta = content.cta || {};
@@ -100,7 +100,7 @@ function renderHero(content: any): string {
   `;
 }
 
-function renderServices(content: any): string {
+function renderServices(content: unknown): string {
   const title = content.title || {};
   const services = content.services || [];
   
@@ -113,7 +113,7 @@ function renderServices(content: any): string {
           </h2>
         ` : ''}
         <div class="services-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: ${content.grid?.gap || '30px'};">
-          ${services.map((service: any) => `
+          ${services.map((service: Record<string, unknown>) => `
             <div class="service-card" style="background-color: ${service.background?.color || '#f9f9f9'}; padding: ${service.spacing?.padding || '30px'}; border-radius: ${service.border?.radius || '8px'}; text-align: center;">
               ${service.icon ? `<div class="service-icon" style="font-size: ${service.icon?.size || '48px'}; color: ${service.icon?.color || '#007bff'}; margin-bottom: 20px;">${service.icon.value || '🔧'}</div>` : ''}
               <h3 style="font-size: ${service.title?.fontSize || '24px'}; color: ${service.title?.color || '#000000'}; margin-bottom: 15px;">
@@ -130,31 +130,31 @@ function renderServices(content: any): string {
   `;
 }
 
-function renderAbout(_content: any): string {
+function renderAbout(_content: unknown): string {
   return `<section class="about-section"><!-- Section About --></section>`;
 }
 
-function renderStats(_content: any): string {
+function renderStats(_content: unknown): string {
   return `<section class="stats-section"><!-- Section Stats --></section>`;
 }
 
-function renderCTA(_content: any): string {
+function renderCTA(_content: unknown): string {
   return `<section class="cta-section"><!-- Section CTA --></section>`;
 }
 
-function renderTestimonials(_content: any): string {
+function renderTestimonials(_content: unknown): string {
   return `<section class="testimonials-section"><!-- Section Testimonials --></section>`;
 }
 
-function renderFAQ(_content: any): string {
+function renderFAQ(_content: unknown): string {
   return `<section class="faq-section"><!-- Section FAQ --></section>`;
 }
 
-function renderContact(_content: any): string {
+function renderContact(_content: unknown): string {
   return `<section class="contact-section"><!-- Section Contact --></section>`;
 }
 
-function renderFooter(content: any): string {
+function renderFooter(content: unknown): string {
   const text = content.text || {};
   const social = content.social || [];
   
@@ -168,7 +168,7 @@ function renderFooter(content: any): string {
         ` : ''}
         ${social.length > 0 ? `
           <div class="social-links" style="display: flex; justify-content: center; gap: ${content.social?.spacing || '20px'};">
-            ${social.map((link: any) => `
+            ${social.map((link: Record<string, unknown>) => `
               <a href="${link.url || '#'}" target="${link.openInNewTab !== false ? '_blank' : '_self'}" rel="${link.openInNewTab !== false ? 'noopener noreferrer' : ''}" style="color: ${content.social?.color || '#ffffff'}; font-size: ${content.social?.size || '24px'};">
                 ${link.icon || link.platform || '🔗'}
               </a>
@@ -256,8 +256,8 @@ export async function renderWebsite(req: WebsiteRequest, res: Response) {
     // Générer un rendu SSR basique avec les sections
     const sections = website.sections || [];
     const sectionsHtml = sections
-      .sort((a: any, b: any) => a.order - b.order)
-      .map((section: any) => renderSection(section))
+      .sort((a: unknown, b: unknown) => a.order - b.order)
+      .map((section: Record<string, unknown>) => renderSection(section))
       .join('\n');
 
     const fallbackHtml = `

@@ -8,7 +8,7 @@
  * @param {any} value - La valeur à vérifier
  * @returns {boolean} true si la valeur est non vide, false sinon
  */
-export function IS_REQUIRED(value: any): boolean {
+export function IS_REQUIRED(value: unknown): boolean {
     if (value === undefined || value === null) return false;
     if (typeof value === 'string') return value.trim().length > 0;
     if (Array.isArray(value)) return value.length > 0;
@@ -21,7 +21,7 @@ export function IS_REQUIRED(value: any): boolean {
  * @param {any} value - La valeur à vérifier
  * @returns {boolean} true si la valeur est un nombre, false sinon
  */
-export function IS_NUMBER(value: any): boolean {
+export function IS_NUMBER(value: unknown): boolean {
     if (typeof value === 'number' && !isNaN(value)) return true;
     if (typeof value === 'string') {
         const parsed = parseFloat(value);
@@ -35,7 +35,7 @@ export function IS_NUMBER(value: any): boolean {
  * @param {any} value - La valeur à vérifier
  * @returns {boolean} true si la valeur est du texte, false sinon
  */
-export function IS_TEXT(value: any): boolean {
+export function IS_TEXT(value: unknown): boolean {
     return typeof value === 'string';
 }
 
@@ -44,7 +44,7 @@ export function IS_TEXT(value: any): boolean {
  * @param {any} value - La valeur à vérifier
  * @returns {boolean} true si la valeur est une date valide, false sinon
  */
-export function IS_DATE(value: any): boolean {
+export function IS_DATE(value: unknown): boolean {
     if (value instanceof Date) return !isNaN(value.getTime());
     if (typeof value === 'string' || typeof value === 'number') {
         const date = new Date(value);
@@ -58,7 +58,7 @@ export function IS_DATE(value: any): boolean {
  * @param {any} value - La valeur à vérifier
  * @returns {boolean} true si la valeur est un booléen, false sinon
  */
-export function IS_BOOLEAN(value: any): boolean {
+export function IS_BOOLEAN(value: unknown): boolean {
     return typeof value === 'boolean' || value === 'true' || value === 'false';
 }
 
@@ -67,7 +67,7 @@ export function IS_BOOLEAN(value: any): boolean {
  * @param {any} value - La valeur à vérifier
  * @returns {boolean} true si la valeur est une adresse email valide, false sinon
  */
-export function IS_EMAIL(value: any): boolean {
+export function IS_EMAIL(value: unknown): boolean {
     if (typeof value !== 'string') return false;
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     return emailRegex.test(value);
@@ -78,7 +78,7 @@ export function IS_EMAIL(value: any): boolean {
  * @param {any} value - La valeur à vérifier
  * @returns {boolean} true si la valeur est un numéro de téléphone valide, false sinon
  */
-export function IS_PHONE(value: any): boolean {
+export function IS_PHONE(value: unknown): boolean {
     if (typeof value !== 'string') return false;
     // Accepte divers formats internationaux de numéros de téléphone
     const phoneRegex = /^(\+\d{1,3}[ -]?)?\(?\d{1,4}\)?[ -]?\d{1,4}[ -]?\d{1,4}[ -]?\d{1,9}$/;
@@ -90,7 +90,7 @@ export function IS_PHONE(value: any): boolean {
  * @param {any} value - La valeur à vérifier
  * @returns {boolean} true si la valeur est un IBAN valide, false sinon
  */
-export function IS_IBAN(value: any): boolean {
+export function IS_IBAN(value: unknown): boolean {
     if (typeof value !== 'string') return false;
     // Suppression des espaces et caractères spéciaux
     const iban = value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
@@ -113,7 +113,7 @@ export function IS_IBAN(value: any): boolean {
  * @param {string} country - Le code pays (FR, BE, DE, etc.)
  * @returns {boolean} true si la valeur est un numéro de TVA valide, false sinon
  */
-export function IS_TVA(value: any, country: string = 'FR'): boolean {
+export function IS_TVA(value: unknown, country: string = 'FR'): boolean {
     if (typeof value !== 'string') return false;
     
     // Format de base: code pays + chiffres
@@ -139,7 +139,7 @@ export function IS_TVA(value: any, country: string = 'FR'): boolean {
  * @param {string} country - Le code pays (FR, BE, DE, etc.)
  * @returns {boolean} true si la valeur est un code postal valide, false sinon
  */
-export function IS_POSTAL_CODE(value: any, country: string = 'FR'): boolean {
+export function IS_POSTAL_CODE(value: unknown, country: string = 'FR'): boolean {
     if (typeof value !== 'string' && typeof value !== 'number') return false;
     
     const postalValue = String(value).trim();
@@ -166,7 +166,7 @@ export function IS_POSTAL_CODE(value: any, country: string = 'FR'): boolean {
  * @param {number} max - La borne supérieure
  * @returns {boolean} true si la valeur est entre min et max (inclus), false sinon
  */
-export function BETWEEN(value: any, min: any, max: any): boolean {
+export function BETWEEN(value: unknown, min: unknown, max: unknown): boolean {
     const numValue = Number(value);
     const numMin = Number(min);
     const numMax = Number(max);
@@ -181,7 +181,7 @@ export function BETWEEN(value: any, min: any, max: any): boolean {
  * @param {any} value - La valeur dont on veut calculer la longueur
  * @returns {number} La longueur de la valeur
  */
-export function LENGTH(value: any): number {
+export function LENGTH(value: unknown): number {
     if (value === null || value === undefined) return 0;
     if (typeof value === 'string') return value.length;
     if (Array.isArray(value)) return value.length;
@@ -194,7 +194,7 @@ export function LENGTH(value: any): number {
  * @param {any} value - La valeur à vérifier
  * @returns {boolean} true si la valeur est null ou undefined, false sinon
  */
-export function IS_NULL(value: any): boolean {
+export function IS_NULL(value: unknown): boolean {
     return value === null || value === undefined;
 }
 
@@ -203,7 +203,7 @@ export function IS_NULL(value: any): boolean {
  * @param {any} value - La valeur à vérifier
  * @returns {boolean} true si la valeur est vide, false sinon
  */
-export function IS_EMPTY(value: any): boolean {
+export function IS_EMPTY(value: unknown): boolean {
     if (value === null || value === undefined) return true;
     if (typeof value === 'string') return value.trim().length === 0;
     if (Array.isArray(value)) return value.length === 0;
@@ -217,7 +217,7 @@ export function IS_EMPTY(value: any): boolean {
  * @param {Array} list - La liste dans laquelle rechercher
  * @returns {boolean} true si la valeur est dans la liste, false sinon
  */
-export function IN(value: any, list: any[]): boolean {
+export function IN(value: unknown, list: unknown[]): boolean {
     if (!Array.isArray(list)) return false;
     return list.includes(value);
 }
@@ -228,7 +228,7 @@ export function IN(value: any, list: any[]): boolean {
  * @param {Array} list - La liste dans laquelle rechercher
  * @returns {boolean} true si la valeur n'est pas dans la liste, false sinon
  */
-export function NOT_IN(value: any, list: any[]): boolean {
+export function NOT_IN(value: unknown, list: unknown[]): boolean {
     return !IN(value, list);
 }
 
@@ -238,7 +238,7 @@ export function NOT_IN(value: any, list: any[]): boolean {
  * @param {string|RegExp} pattern - Le motif d'expression régulière
  * @returns {boolean} true si la valeur correspond au motif, false sinon
  */
-export function MATCH(value: any, pattern: string | RegExp): boolean {
+export function MATCH(value: unknown, pattern: string | RegExp): boolean {
     if (typeof value !== 'string') return false;
     
     let regex: RegExp;

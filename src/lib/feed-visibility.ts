@@ -109,7 +109,7 @@ export interface SocialSettingsData {
   gdprDataExportEnabled: boolean;
   gdprRetentionDays: number;
   // Advanced (extensibilité)
-  customReactions: any | null;
+  customReactions: unknown | null;
 }
 
 export type FeedMode = 'personal' | 'org' | 'public';
@@ -195,8 +195,8 @@ export async function getSocialContext(
 export function buildWallFeedWhere(
   ctx: SocialContext,
   mode: FeedMode
-): Record<string, any> {
-  const base: any = { isPublished: true };
+): Record<string, unknown> {
+  const base: unknown = { isPublished: true };
 
   // SuperAdmin voit tout
   if (ctx.isSuperAdmin && !ctx.myOrgId) {
@@ -215,7 +215,7 @@ export function buildWallFeedWhere(
     // 3. Posts de mes amis (ALL + publishAsOrg=false)
     // 4. Posts publics de ma propre Colony (ALL + orgId=myOrg)
     // 5. Posts publics des Colonies suivies (ALL + orgId in followedOrgs)
-    const orConditions: any[] = [
+    const orConditions: unknown[] = [
       // Mes posts personnels
       { authorId: ctx.userId, publishAsOrg: false },
     ];
@@ -272,7 +272,7 @@ export function buildWallFeedWhere(
       return buildWallFeedWhere(ctx, 'personal');
     }
 
-    const orConditions: any[] = [
+    const orConditions: unknown[] = [
       // Interne Colony
       { visibility: 'IN', organizationId: ctx.myOrgId },
       // Public Colony
@@ -313,15 +313,15 @@ export function buildMediaFeedWhere(
   ctx: SocialContext,
   mode: FeedMode,
   mediaType: 'story' | 'reel'
-): Record<string, any> {
-  const base: any = {};
+): Record<string, unknown> {
+  const base: unknown = {};
   const blockedOrgFilter = ctx.blockedOrgIds.length > 0
     ? { organizationId: { notIn: ctx.blockedOrgIds } }
     : {};
 
   if (mode === 'personal') {
     // Stories/Reels personnels + amis + Colonies suivies publiques
-    const orConditions: any[] = [
+    const orConditions: unknown[] = [
       { authorId: ctx.userId, publishAsOrg: false },
     ];
 
@@ -389,7 +389,7 @@ export function buildMediaFeedWhere(
 export function buildSparkFeedWhere(
   ctx: SocialContext,
   mode: FeedMode
-): Record<string, any> {
+): Record<string, unknown> {
   // Sparks suivent la même logique que les posts du mur
   return buildWallFeedWhere(ctx, mode);
 }
@@ -401,7 +401,7 @@ export function buildExploreFeedWhere(
   ctx: SocialContext,
   _mode: FeedMode,
   scope?: 'friends' | 'org' | 'all' | 'private'
-): Record<string, any> {
+): Record<string, unknown> {
   const blockedOrgFilter = ctx.blockedOrgIds.length > 0
     ? { organizationId: { notIn: ctx.blockedOrgIds } }
     : {};
@@ -530,7 +530,7 @@ export async function getOrgSocialSettings(orgId: string | null): Promise<Social
   if (!settings) return DEFAULT_SETTINGS;
 
   // Spread defaults first, then override with DB values (null → keep default via ?? loop)
-  const result: Record<string, any> = { ...DEFAULT_SETTINGS };
+  const result: Record<string, unknown> = { ...DEFAULT_SETTINGS };
   for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof SocialSettingsData)[]) {
     const dbVal = (settings as any)[key];
     if (dbVal !== undefined && dbVal !== null) {

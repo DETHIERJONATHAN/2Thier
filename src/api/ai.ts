@@ -82,7 +82,7 @@ router.post('/generate', async (req, res) => {
       raw: text // Pour debug
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[AI] Erreur:', error);
     res.status(500).json({
       success: false,
@@ -126,7 +126,7 @@ function parseNonJSONResponse(text: string, context: string): any {
 /**
  * Formater les suggestions selon le contexte
  */
-function formatSuggestions(data: any, context: string): any[] {
+function formatSuggestions(data: unknown, context: string): unknown[] {
   switch (context) {
     case 'title':
     case 'subtitle':
@@ -274,7 +274,7 @@ router.post('/analyze-section', async (req, res) => {
 
     res.json(validatedAnalysis);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[AI Analyze] Erreur:', error);
     
     // Retourner analyse par défaut en cas d'erreur
@@ -285,11 +285,11 @@ router.post('/analyze-section', async (req, res) => {
 /**
  * Valide et complète une analyse
  */
-function validateAnalysis(analysis: any): any {
+function validateAnalysis(analysis: unknown): any {
   return {
     score: analysis.score || 70,
     suggestions: Array.isArray(analysis.suggestions) 
-      ? analysis.suggestions.map((s: any) => ({
+      ? analysis.suggestions.map((s: Record<string, unknown>) => ({
           id: s.id || `suggestion-${Date.now()}-${Math.random()}`,
           category: s.category || 'design',
           type: s.type || 'improvement',
@@ -317,7 +317,7 @@ function validateAnalysis(analysis: any): any {
 /**
  * Génère une analyse par défaut
  */
-function generateFallbackAnalysis(sectionType: string, content: any): any {
+function generateFallbackAnalysis(sectionType: string, content: unknown): any {
   const itemCount = content?.values?.length || 
                     content?.stats?.length || 
                     content?.items?.length || 6;
@@ -435,7 +435,7 @@ Format de réponse : JSON avec { metaTitle, metaDescription, keywords: [], slug,
       seo: seoData
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[AI SEO] Erreur:', error);
     res.status(500).json({
       success: false,
@@ -485,7 +485,7 @@ Retourne le contenu amélioré au format JSON identique à l'original.`;
       original: content
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[AI Improve] Erreur:', error);
     res.status(500).json({
       success: false,
@@ -554,7 +554,7 @@ Format de réponse : JSON array avec :
       layouts: layouts.slice(0, 3) // Max 3 suggestions
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[AI Layout] Erreur:', error);
     // Fallback en cas d'erreur
     res.json({
@@ -629,7 +629,7 @@ Format : JSON array avec :
       palettes: palettes.slice(0, 3)
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[AI Palette] Erreur:', error);
     res.json({
       success: true,
@@ -641,7 +641,7 @@ Format : JSON array avec :
 /**
  * Génère des layouts de fallback
  */
-function generateFallbackLayouts(itemCount: number): any[] {
+function generateFallbackLayouts(itemCount: number): unknown[] {
   const layouts = [];
 
   if (itemCount <= 3) {
@@ -687,7 +687,7 @@ function generateFallbackLayouts(itemCount: number): any[] {
 /**
  * Génère des palettes de fallback
  */
-function generateFallbackPalettes(baseColor: string): any[] {
+function generateFallbackPalettes(baseColor: string): unknown[] {
   return [
     {
       name: 'Palette Professionnelle',
@@ -816,7 +816,7 @@ router.post('/measure-image', async (req, res) => {
       }
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     const duration = Date.now() - startTime;
     console.error('❌ [AI Measure] Erreur:', error);
 
@@ -893,7 +893,7 @@ router.post('/measure-image/apply', async (req, res) => {
       }
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ [AI Measure Apply] Erreur:', error);
     return res.status(500).json({
       success: false,
@@ -919,7 +919,7 @@ router.get('/measure-image/status', async (_req, res) => {
       degraded: status.degraded,
       timestamp: new Date().toISOString()
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(500).json({
       success: false,
       available: false,

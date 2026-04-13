@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspens
 import '../../../../styles/tbl-green-asterisk.css';
 
 // 🚀 PERF: Debounce utility
-function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
+function debounce<T extends (...args: unknown[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
   let timeout: NodeJS.Timeout | null = null;
   return (...args: Parameters<T>) => {
     if (timeout) clearTimeout(timeout);
@@ -139,8 +139,8 @@ const TBL: React.FC<TBLProps> = ({
   const [reviewHasSubcontractors, setReviewHasSubcontractors] = useState(false);
   const [reviewSubcontractorNames, setReviewSubcontractorNames] = useState<string[]>([]);
   // 🔍 REVIEW MODE: Snapshot des valeurs originales du devis (capturé au premier chargement)
-  const originalFormDataRef = useRef<Record<string, any> | null>(null);
-  const [originalFormData, setOriginalFormData] = useState<Record<string, any>>({});
+  const originalFormDataRef = useRef<Record<string, unknown> | null>(null);
+  const [originalFormData, setOriginalFormData] = useState<Record<string, unknown>>({});
   const onReviewCheck = useCallback((fieldId: string, checked: boolean) => {
     setReviewChecked(prev => ({ ...prev, [fieldId]: checked }));
     if (!checked) setReviewComments(prev => { const n = { ...prev }; delete n[fieldId]; return n; });
@@ -163,7 +163,7 @@ const TBL: React.FC<TBLProps> = ({
   const [submittingCorrection, setSubmittingCorrection] = useState(false);
   const [correctionSubmitted, setCorrectionSubmitted] = useState(false);
   // Track quels champs le commercial a modifié par rapport à la valeur technicien
-  const rectificationInitialValues = useRef<Record<string, any>>({});
+  const rectificationInitialValues = useRef<Record<string, unknown>>({});
 
   const screens = useBreakpoint();
   const isMobile = !screens.lg;
@@ -212,7 +212,7 @@ const TBL: React.FC<TBLProps> = ({
 
   // ✍️ Signature électronique
   const [signatureModalVisible, setSignatureModalVisible] = useState(false);
-  const [signatureStatus, setSignatureStatus] = useState<{ totalSigned: number; totalPending: number; signatures: any[] } | null>(null);
+  const [signatureStatus, setSignatureStatus] = useState<{ totalSigned: number; totalPending: number; signatures: unknown[] } | null>(null);
   const [signedPdfPreviewOpen, setSignedPdfPreviewOpen] = useState(false);
   const [signedPdfPreviewId, setSignedPdfPreviewId] = useState<string | null>(null);
 
@@ -314,11 +314,11 @@ const TBL: React.FC<TBLProps> = ({
       if (!draftIdToClear && api && currentTreeId) {
         if (isLeadDraftNow && leadId) {
           const existing = await api.get(`/api/treebranchleaf/submissions?treeId=${currentTreeId}&leadId=${leadId}&status=draft`);
-          const draftsArray = Array.isArray(existing) ? existing : (existing as any)?.data || [];
+          const draftsArray = Array.isArray(existing) ? existing : (existing as unknown)?.data || [];
           draftIdToClear = (draftsArray as Array<{ id?: string }>)[0]?.id || null;
         } else if (isGlobalDraftNow && currentUserId) {
           const existing = await api.get(`/api/treebranchleaf/submissions?treeId=${currentTreeId}&userId=${currentUserId}&status=default-draft`);
-          const draftsArray = Array.isArray(existing) ? existing : (existing as any)?.data || [];
+          const draftsArray = Array.isArray(existing) ? existing : (existing as unknown)?.data || [];
           draftIdToClear = (draftsArray as Array<{ id?: string; status?: string }>).find((d) => d.status === 'default-draft')?.id || null;
         }
       }
@@ -456,19 +456,19 @@ const TBL: React.FC<TBLProps> = ({
           changedFieldId: 'NULL',
           evaluationMode: 'open'  // 🎯 Forcer recalcul complet des DISPLAY
         });
-        leadDraftId = (resp as any)?.submission?.id || null;
+        leadDraftId = (resp as unknown)?.submission?.id || null;
         // 🔥 FIX GRD: Broadcaster les valeurs calculées (DISPLAY fields) pour ce nouveau brouillon
         // Sans ce broadcast, les DISPLAY fields (GRD, etc.) restent null car le hook
         // useNodeCalculatedValue bloque le GET quand submissionId change (submissionIdChanged guard)
         broadcastCalculatedRefresh({
           reason: 'lead-selection-transfer',
           evaluatedSubmissionId: leadDraftId,
-          submissionData: (resp as any)?.submission?.TreeBranchLeafSubmissionData,
-          freshlyComputedNodeIds: (resp as any)?.freshlyComputedNodeIds
+          submissionData: (resp as unknown)?.submission?.TreeBranchLeafSubmissionData,
+          freshlyComputedNodeIds: (resp as unknown)?.freshlyComputedNodeIds
         });
       } else {
         const existing = await api.get(`/api/treebranchleaf/submissions?treeId=${effectiveTreeId}&leadId=${selectedLead.id}&status=draft`);
-        const draftsArray = Array.isArray(existing) ? existing : (existing as any)?.data || [];
+        const draftsArray = Array.isArray(existing) ? existing : (existing as unknown)?.data || [];
         leadDraftId = (draftsArray as Array<{ id?: string }>)[0]?.id || null;
         if (!leadDraftId) {
           // 🆕 Créer un nouveau brouillon pour ce lead
@@ -481,13 +481,13 @@ const TBL: React.FC<TBLProps> = ({
             changedFieldId: 'NULL',
             evaluationMode: 'open'  // 🎯 Forcer recalcul complet des DISPLAY
           });
-          leadDraftId = (created as any)?.submission?.id || null;
+          leadDraftId = (created as unknown)?.submission?.id || null;
           // 🔥 FIX GRD: Broadcaster les valeurs calculées pour le nouveau brouillon
           broadcastCalculatedRefresh({
             reason: 'lead-selection-new-draft',
             evaluatedSubmissionId: leadDraftId,
-            submissionData: (created as any)?.submission?.TreeBranchLeafSubmissionData,
-            freshlyComputedNodeIds: (created as any)?.freshlyComputedNodeIds
+            submissionData: (created as unknown)?.submission?.TreeBranchLeafSubmissionData,
+            freshlyComputedNodeIds: (created as unknown)?.freshlyComputedNodeIds
           });
         } else {
           // 🔥 FIX 01/02/2026: Forcer recalcul des DISPLAY fields pour le brouillon existant
@@ -506,9 +506,9 @@ const TBL: React.FC<TBLProps> = ({
           broadcastCalculatedRefresh({
             reason: 'lead-selection-refresh',
             evaluatedSubmissionId: leadDraftId,
-            recalcCount: (refreshed as any)?.submission?.TreeBranchLeafSubmissionData?.length,
-            submissionData: (refreshed as any)?.submission?.TreeBranchLeafSubmissionData,
-            freshlyComputedNodeIds: (refreshed as any)?.freshlyComputedNodeIds
+            recalcCount: (refreshed as unknown)?.submission?.TreeBranchLeafSubmissionData?.length,
+            submissionData: (refreshed as unknown)?.submission?.TreeBranchLeafSubmissionData,
+            freshlyComputedNodeIds: (refreshed as unknown)?.freshlyComputedNodeIds
           });
         }
       }
@@ -535,7 +535,7 @@ const TBL: React.FC<TBLProps> = ({
       if (api && leadDraftId) {
         try {
           const submissionDataResponse = await api.get(`/api/treebranchleaf/submissions/${leadDraftId}/fields`);
-          const fieldsMap = (submissionDataResponse as any)?.fields || {};
+          const fieldsMap = (submissionDataResponse as unknown)?.fields || {};
           const restoredData: Record<string, string> = {};
 
           Object.entries(fieldsMap).forEach(([nodeId, fieldData]: [string, any]) => {
@@ -738,7 +738,7 @@ const TBL: React.FC<TBLProps> = ({
           //   1) refetchRef.current() (ce handler)
           //   2) le listener dans useTBLDataPrismaComplete
           //   3) potentiellement le hook hierarchical-fixed
-          if ((detail as any)?.reason === 'delete-copy-group') {
+          if ((detail as unknown)?.reason === 'delete-copy-group') {
             return;
           }
           
@@ -821,7 +821,7 @@ const TBL: React.FC<TBLProps> = ({
   const pdfProductOptions = useMemo(() => {
     const opts: Array<{value: string, label: string, icon?: string, color?: string}> = [];
     const seenValues = new Set<string>();
-    for (const node of (rawNodes as any[])) {
+    for (const node of (rawNodes as unknown[])) {
       if (node.hasProduct && node.product_sourceNodeId === node.id && Array.isArray(node.product_options) && node.product_options.length > 0) {
         for (const opt of node.product_options) {
           if (opt.value !== 'all' && !seenValues.has(opt.value)) {
@@ -852,9 +852,9 @@ const TBL: React.FC<TBLProps> = ({
     }
     setSubmittingReview(true);
     try {
-      const allTechNodes = (rawNodes || []).filter((n: any) => n.technicianVisible === true);
+      const allTechNodes = (rawNodes || []).filter((n: Record<string, unknown>) => n.technicianVisible === true);
       const snapshot = originalFormDataRef.current || {};
-      const reviews = allTechNodes.map((node: any) => ({
+      const reviews = allTechNodes.map((node: Record<string, unknown>) => ({
         nodeId: node.id,
         originalValue: snapshot[node.id] != null ? String(snapshot[node.id]) : null,
         reviewedValue: formData[node.id] != null ? String(formData[node.id]) : null,
@@ -875,7 +875,7 @@ const TBL: React.FC<TBLProps> = ({
           ? `${checkedFields.length} problème${checkedFields.length > 1 ? 's' : ''} signalé${checkedFields.length > 1 ? 's' : ''} — Le lead est renvoyé au commercial pour correction.`
           : 'Tous les champs ont été vérifiés et validés. Le chantier peut continuer.',
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[TBL Review] Erreur analyse:', err);
       message.error(err?.message || 'Erreur lors de l\'analyse');
     } finally {
@@ -903,11 +903,11 @@ const TBL: React.FC<TBLProps> = ({
     if (!reviewMode || !reviewEventId) return;
     (async () => {
       try {
-        const res = await api.get(`/api/chantier-workflow/events/${reviewEventId}/has-subcontractors`) as any;
+        const res = await api.get(`/api/chantier-workflow/events/${reviewEventId}/has-subcontractors`) as unknown;
         const data = res?.data || res;
         if (data?.hasSubcontractors) {
           setReviewHasSubcontractors(true);
-          setReviewSubcontractorNames((data.subcontractors || []).map((s: any) => s.company || s.name));
+          setReviewSubcontractorNames((data.subcontractors || []).map((s: Record<string, unknown>) => s.company || s.name));
         }
       } catch (err) {
         console.warn('[TBL Review] Impossible de vérifier sous-traitants:', err);
@@ -921,14 +921,14 @@ const TBL: React.FC<TBLProps> = ({
     (async () => {
       try {
         console.log('🔶 [TBL Rectification] Chargement modifications technicien pour event:', reviewEventId);
-        const res = await api.get(`/api/chantier-workflow/events/${reviewEventId}/review-fields`) as any;
+        const res = await api.get(`/api/chantier-workflow/events/${reviewEventId}/review-fields`) as unknown;
         const data = res?.data || res;
-        const reviews: any[] = data?.reviews || [];
+        const reviews: unknown[] = data?.reviews || [];
         
         // Ne garder que les champs modifiés par le technicien
-        const modifiedReviews = reviews.filter((r: any) => r.isModified && r.reviewType === 'TECHNICAL');
+        const modifiedReviews = reviews.filter((r: Record<string, unknown>) => r.isModified && r.reviewType === 'TECHNICAL');
         
-        const fields: RectificationFieldData[] = modifiedReviews.map((r: any) => ({
+        const fields: RectificationFieldData[] = modifiedReviews.map((r: Record<string, unknown>) => ({
           nodeId: r.nodeId,
           fieldLabel: r.fieldLabel,
           originalValue: r.originalValue || null,
@@ -964,7 +964,7 @@ const TBL: React.FC<TBLProps> = ({
     if (meaningfulKeys.length < 5) return;
     
     // 1. Capturer les valeurs initiales (AVANT injection technicien)
-    const snapshot: Record<string, any> = {};
+    const snapshot: Record<string, unknown> = {};
     for (const nodeId of Object.keys(rectificationFieldMap)) {
       snapshot[nodeId] = formData[nodeId] ?? null;
     }
@@ -973,7 +973,7 @@ const TBL: React.FC<TBLProps> = ({
     // 2. Injecter les valeurs du technicien dans formData
     //    → Le champ affichera la valeur technicien 
     //    → Les formules recalculeront dessus
-    const techUpdates: Record<string, any> = {};
+    const techUpdates: Record<string, unknown> = {};
     for (const field of rectificationFields) {
       if (field.technicianValue != null && field.technicianValue !== '') {
         techUpdates[field.nodeId] = field.technicianValue;
@@ -1045,7 +1045,7 @@ const TBL: React.FC<TBLProps> = ({
       setSubmittingCorrection(true);
       const res = await api.post(`/api/chantier-workflow/events/${reviewEventId}/submit-commercial-correction`, {
         corrections,
-      }) as any;
+      }) as unknown;
 
       if (res?.success) {
         setCorrectionSubmitted(true);
@@ -1138,9 +1138,9 @@ const TBL: React.FC<TBLProps> = ({
     const normalizedRoot = stripRevisionSuffix(rootName) || 'Devis';
 
     const response = await api.get(`/api/treebranchleaf/submissions?leadId=${currentLeadId}&status=completed`);
-    const existingSubmissions = (response as any)?.data || response || [];
+    const existingSubmissions = (response as unknown)?.data || response || [];
     const existingNames = (Array.isArray(existingSubmissions) ? existingSubmissions : [])
-      .map((s: any) => s?.summary?.name || s?.name || '')
+      .map((s: Record<string, unknown>) => s?.summary?.name || s?.name || '')
       .filter((n: string) => typeof n === 'string' && n.trim());
 
     const escapedRoot = normalizedRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1207,7 +1207,7 @@ const TBL: React.FC<TBLProps> = ({
         evaluationMode: 'change'  // 🚀 FIX R16: Même moteur que brouillon - recalcul ciblé par triggers
       });
 
-      const newId = (resp as any)?.submission?.id;
+      const newId = (resp as unknown)?.submission?.id;
       if (!newId) return;
 
       // � FIX R16: Plus besoin de fenêtre 3s en mode 'open' - le trigger index gère tout
@@ -1257,7 +1257,7 @@ const TBL: React.FC<TBLProps> = ({
       evaluationMode: 'open'  // ✅ Recalcul complet des DISPLAY pour l'enregistrement
     });
 
-    const newId = (resp as any)?.submission?.id;
+    const newId = (resp as unknown)?.submission?.id;
     if (newId) {
       setSubmissionId(newId);
       setDevisName(nextName);
@@ -1464,7 +1464,7 @@ const TBL: React.FC<TBLProps> = ({
         // 1) Charger les infos du lead (header)
         try {
           const response = await api.get(`/api/leads/${effectiveLeadId}`);
-          const lead = (response as any)?.success ? (response as any)?.data : response;
+          const lead = (response as unknown)?.success ? (response as unknown)?.data : response;
           if (lead && (lead as any).id) {
             setClientData({
               id: (lead as any).id,
@@ -1496,7 +1496,7 @@ const TBL: React.FC<TBLProps> = ({
         let leadDraftId: string | null = null;
         try {
           const existing = await api.get(`/api/treebranchleaf/submissions?treeId=${effectiveTreeId}&leadId=${effectiveLeadId}&status=draft`);
-          const draftsArray = Array.isArray(existing) ? existing : (existing as any)?.data || [];
+          const draftsArray = Array.isArray(existing) ? existing : (existing as unknown)?.data || [];
           leadDraftId = (draftsArray as Array<{ id?: string }>)[0]?.id || null;
         } catch (e) {
           console.warn('⚠️ [TBL] Impossible de lister les brouillons du lead:', e);
@@ -1512,7 +1512,7 @@ const TBL: React.FC<TBLProps> = ({
             changedFieldId: 'NULL',
             evaluationMode: 'open'  // 🎯 Forcer recalcul complet des DISPLAY
           });
-          leadDraftId = (created as any)?.submission?.id || null;
+          leadDraftId = (created as unknown)?.submission?.id || null;
         }
 
         // 3) Mettre TBL en mode brouillon lead + restaurer les champs
@@ -1531,7 +1531,7 @@ const TBL: React.FC<TBLProps> = ({
         if (leadDraftId) {
           try {
             const submissionDataResponse = await api.get(`/api/treebranchleaf/submissions/${leadDraftId}/fields`);
-            const fieldsMap = (submissionDataResponse as any)?.fields || {};
+            const fieldsMap = (submissionDataResponse as unknown)?.fields || {};
             const restoredData: Record<string, string> = {};
             Object.entries(fieldsMap).forEach(([nodeId, fieldData]: [string, any]) => {
               const src = typeof fieldData?.calculatedBy === 'string' ? fieldData.calculatedBy.toLowerCase() : null;
@@ -2379,7 +2379,7 @@ const TBL: React.FC<TBLProps> = ({
           const grouped: Record<string, { option: string; fields: { fieldId: string; label: string }[] }> = {};
           for (const it of items) {
             const key = `${it.parentFieldId}::${it.parentOption}`;
-            if (!grouped[key]) grouped[key] = { option: it.parentOption, fields: [] } as any;
+            if (!grouped[key]) grouped[key] = { option: it.parentOption, fields: [] } as unknown;
             grouped[key].fields.push({ fieldId: it.fieldId, label: it.label });
           }
           console.group('🧪 TBL VERIFY - Champs conditionnels injectés par parent');
@@ -2417,7 +2417,7 @@ const TBL: React.FC<TBLProps> = ({
           try {
             const sSet = (useFixed ? (newData.sectionsByTab || {}) : (oldData.sectionsByTab || {}));
             const sectionsList = Object.values(sSet).flat();
-            const found = sectionsList.find((s: any) => s.id === sectionId);
+            const found = sectionsList.find((s: Record<string, unknown>) => s.id === sectionId);
             console.log('🔎 [TBL] section metadata for', sectionId, found?.metadata || found);
             return found?.metadata || found;
           } catch (e) { console.error('[TBL] TBL_PRINT_SECTION_METADATA failed', e); }
@@ -2601,7 +2601,7 @@ const TBL: React.FC<TBLProps> = ({
 
       const url = `/api/treebranchleaf/submissions?treeId=${effectiveTreeId}&status=default-draft&userId=${currentUserId}`;
       const existingDrafts = await api.get(url);
-      const draftsArray = Array.isArray(existingDrafts) ? existingDrafts : (existingDrafts as any)?.data || [];
+      const draftsArray = Array.isArray(existingDrafts) ? existingDrafts : (existingDrafts as unknown)?.data || [];
       let defaultDraft = (draftsArray as Array<{ id?: string; status?: string }>).find((d) => d.status === 'default-draft' && d.id);
       if (!defaultDraft?.id) {
         const created = await api.post('/api/tbl/submissions/create-and-evaluate', {
@@ -2610,7 +2610,7 @@ const TBL: React.FC<TBLProps> = ({
           status: 'default-draft',
           providedName: 'Brouillon'
         });
-        const createdId = (created as any)?.submission?.id;
+        const createdId = (created as unknown)?.submission?.id;
         if (!createdId) return null;
         defaultDraft = { id: createdId, status: 'default-draft' };
       }
@@ -2659,7 +2659,7 @@ const TBL: React.FC<TBLProps> = ({
 
   // ⚡ Debounce pour éviter les requêtes multiples (200ms)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const immediateEvaluateRef = useRef<(...args: any[]) => void>();
+  const immediateEvaluateRef = useRef<(...args: unknown[]) => void>();
   // 🔥 FIX A: Accumuler TOUS les changedFieldIds pendant la fenêtre de debounce
   // AVANT: seul le dernier capturedFieldId était envoyé → les champs modifiés avant étaient perdus
   const accumulatedChangedFieldIdsRef = useRef<Set<string>>(new Set());
@@ -2820,12 +2820,12 @@ const TBL: React.FC<TBLProps> = ({
       // console.log removed for performance
       
       // 🔗 NOUVEAU : Si le champ est une référence partagée (alias), ajouter aussi la clé shared-ref-*
-      let fieldDef: any = null;
+      let fieldDef: unknown = null;
       try {
         // Chercher le champ dans la configuration pour voir s'il a un sharedReferenceId
         for (const tab of tabs) {
           for (const section of tab.sections) {
-            const match = section.fields.find((sf: any) => sf.id === fieldId);
+            const match = section.fields.find((sf: Record<string, unknown>) => sf.id === fieldId);
             if (match) {
               fieldDef = match;
               break;
@@ -2845,8 +2845,8 @@ const TBL: React.FC<TBLProps> = ({
         if (fieldId.startsWith('shared-ref-')) {
           for (const tab of tabs) {
             for (const section of tab.sections) {
-              const aliases = section.fields.filter((sf: any) => sf.sharedReferenceId === fieldId);
-              aliases.forEach((alias: any) => {
+              const aliases = section.fields.filter((sf: Record<string, unknown>) => sf.sharedReferenceId === fieldId);
+              aliases.forEach((alias: Record<string, unknown>) => {
                 console.log(`🔗 [TBL] Mise à jour alias ${alias.id} depuis shared-ref ${fieldId}`);
                 next[alias.id] = normalizedValue;
               });
@@ -2893,7 +2893,7 @@ const TBL: React.FC<TBLProps> = ({
         const aliasId = sharedRefAliasMap.get(realFieldId);
         if (aliasId) realFieldId = aliasId;
       }
-      const fieldType = String((fieldConfig as any)?.type || '').toLowerCase();
+      const fieldType = String((fieldConfig as unknown)?.type || '').toLowerCase();
       // Log supprimé pour performance
 
       // Garder en mémoire le dernier champ réellement modifié (utile pour flush/versioning)
@@ -2967,10 +2967,10 @@ const TBL: React.FC<TBLProps> = ({
         
         // 🔒 VALIDATION: Vérifier si ce champ est source d'un repeater
         // 🔍 DEBUG: Afficher tous les repeaters avec countSourceNodeId
-        const allRepeaters = (rawNodes || []).filter((n: any) => n.type === 'leaf_repeater');
+        const allRepeaters = (rawNodes || []).filter((n: Record<string, unknown>) => n.type === 'leaf_repeater');
         
         const repeatersUsingThisField = (rawNodes || []).filter(
-          (node: any) => node.repeater_countSourceNodeId === fieldId
+          (node: unknown) => node.repeater_countSourceNodeId === fieldId
         );
         
         // Si ce champ est lié à un repeater, forcer min=1 (l'original ne peut pas être supprimé)
@@ -2991,10 +2991,10 @@ const TBL: React.FC<TBLProps> = ({
           const currentTreeId = tree?.id || rawNodes?.[0]?.treeId || '';
           
           // Déclencher le preload pour chaque repeater concerné (en arrière-plan)
-          repeatersUsingThisField.forEach((repeater: any) => {
+          repeatersUsingThisField.forEach((repeater: Record<string, unknown>) => {
             console.log(`🚀 [PRELOAD] Appel /api/repeat/${repeater.id}/preload-copies avec targetCount=${numericValue}, treeId=${currentTreeId}`);
             api.post(`/api/repeat/${repeater.id}/preload-copies`, { targetCount: numericValue })
-              .then((result: any) => {
+              .then((result: unknown) => {
                 console.log(`✅ [PRELOAD] Repeater ${repeater.id}: ${result.createdCopies} copies créées (total: ${result.totalCopies})`, result.newNodeIds);
                 // Déclencher un refresh de l'arbre - TOUJOURS pour synchroniser
                 if (typeof window !== 'undefined' && currentTreeId) {
@@ -3013,7 +3013,7 @@ const TBL: React.FC<TBLProps> = ({
                   }));
                 }
               })
-              .catch((err: any) => {
+              .catch((err: unknown) => {
                 console.error(`❌ [PRELOAD] Erreur pour repeater ${repeater.id}:`, err);
               });
           });
@@ -3082,7 +3082,7 @@ const TBL: React.FC<TBLProps> = ({
 
       // 🏗️ Pré-sélectionner les produits depuis le formulaire TBL
       if (pdfProductOptions.length > 0) {
-        const productSourceNode = (rawNodes as any[]).find((n: any) => n.hasProduct && n.product_sourceNodeId === n.id);
+        const productSourceNode = (rawNodes as unknown[]).find((n: Record<string, unknown>) => n.hasProduct && n.product_sourceNodeId === n.id);
         if (productSourceNode) {
           const mergedData = (typeof window !== 'undefined' && window.TBL_FORM_DATA) ? { ...formData, ...window.TBL_FORM_DATA } : formData;
           const sourceValue = mergedData[productSourceNode.id];
@@ -3110,10 +3110,10 @@ const TBL: React.FC<TBLProps> = ({
       setAvailableTemplates(templates);
       // Pré-sélectionner : documents par défaut + documents liés aux produits sélectionnés
       const autoSelected = templates
-        .filter((t: any) => t.isDefault || (t.productValue && selectedPdfProducts.includes(t.productValue)))
-        .map((t: any) => t.id);
+        .filter((t: Record<string, unknown>) => t.isDefault || (t.productValue && selectedPdfProducts.includes(t.productValue)))
+        .map((t: Record<string, unknown>) => t.id);
       // Si aucun critère, sélectionner tous
-      setSelectedTemplateIds(autoSelected.length > 0 ? autoSelected : templates.map((t: any) => t.id));
+      setSelectedTemplateIds(autoSelected.length > 0 ? autoSelected : templates.map((t: Record<string, unknown>) => t.id));
       
       if (templates.length === 0) {
         message.info('Aucun template de document disponible pour cet arbre');
@@ -3186,7 +3186,7 @@ const TBL: React.FC<TBLProps> = ({
         message.success('Document créé ! La génération PDF est en cours...');
         setPdfModalVisible(false);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Erreur génération PDF:', error);
       message.error(error?.response?.data?.error || 'Erreur lors de la génération du document');
     } finally {
@@ -3340,7 +3340,7 @@ const TBL: React.FC<TBLProps> = ({
           if (sigRes?.success) setSignatureStatus({ totalSigned: sigRes.totalSigned, totalPending: sigRes.totalPending, signatures: sigRes.signatures });
         } catch { /* noop */ }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Erreur envoi email:', error);
       message.error(error?.response?.data?.error || error?.message || 'Erreur lors de l\'envoi de l\'email');
     } finally {
@@ -3883,7 +3883,7 @@ const TBL: React.FC<TBLProps> = ({
         : submissionResponse;
 
       const submissionObj = (submission && typeof submission === 'object' && 'submission' in (submission as Record<string, unknown>))
-        ? ((submission as Record<string, unknown>).submission as any)
+        ? ((submission as Record<string, unknown>).submission as unknown)
         : submission;
       // console.log('🔍 [TBL] Réponse API complète:', submission);
       
@@ -3936,7 +3936,7 @@ const TBL: React.FC<TBLProps> = ({
           const payload = (fieldsResponse && typeof fieldsResponse === 'object' && 'success' in fieldsResponse)
             ? ((fieldsResponse as any).data ?? fieldsResponse)
             : fieldsResponse;
-          const fieldsMap = (payload as any)?.fields || {};
+          const fieldsMap = (payload as unknown)?.fields || {};
 
           Object.entries(fieldsMap).forEach(([nodeId, fieldData]: [string, unknown]) => {
             const field = fieldData as { rawValue?: unknown; value?: unknown; calculatedBy?: unknown; operationSource?: unknown };
@@ -3957,8 +3957,8 @@ const TBL: React.FC<TBLProps> = ({
           });
 
           // Réhydrater aussi le lead si le payload /fields le contient
-          const leadIdFromFields = (payload as any)?.leadId as string | undefined;
-          const leadFromFields = (payload as any)?.lead as any;
+          const leadIdFromFields = (payload as unknown)?.leadId as string | undefined;
+          const leadFromFields = (payload as unknown)?.lead as unknown;
           if (leadIdFromFields) {
             hydratedLeadId = leadIdFromFields;
             setLeadId(leadIdFromFields);
@@ -3995,8 +3995,8 @@ const TBL: React.FC<TBLProps> = ({
       }
 
       if (loadedCount > 0) {
-        const loadedDevisName = (submissionObj as any)?.summary?.name || (submissionObj as any)?.name || `Devis ${devisId.slice(0, 8)}`;
-        const loadedStatus = String((submissionObj as any)?.status || '').toLowerCase();
+        const loadedDevisName = (submissionObj as unknown)?.summary?.name || (submissionObj as unknown)?.name || `Devis ${devisId.slice(0, 8)}`;
+        const loadedStatus = String((submissionObj as unknown)?.status || '').toLowerCase();
         // ✅ Nouveau workflow: un devis enregistré (completed) est chargé tel quel.
         // Les modifications sont locales, et une version -N est créée à l'enregistrement/sortie.
 
@@ -4007,7 +4007,7 @@ const TBL: React.FC<TBLProps> = ({
             if (k.startsWith('__')) kept[k] = prev[k];
           });
           const next: TBLFormData = { ...kept, ...formattedData };
-          const leadIdForSystem = hydratedLeadId || (submissionObj as any)?.leadId;
+          const leadIdForSystem = hydratedLeadId || (submissionObj as unknown)?.leadId;
           if (leadIdForSystem) {
             next.__leadId = leadIdForSystem;
           }
@@ -4051,7 +4051,7 @@ const TBL: React.FC<TBLProps> = ({
           pendingRevisionForSubmissionIdRef.current = null;
           setDevisName(loadedDevisName);
         }
-        if ((submissionObj as any)?.createdAt) {
+        if ((submissionObj as unknown)?.createdAt) {
           setDevisCreatedAt(new Date((submissionObj as any).createdAt));
         }
 
@@ -4060,7 +4060,7 @@ const TBL: React.FC<TBLProps> = ({
         // Cela rend le chargement instantané comme en mode TBL normal.
         autosaveSuspendedRef.current = true;
         try {
-          const effectiveClientId = hydratedLeadId || (submissionObj as any)?.leadId || null;
+          const effectiveClientId = hydratedLeadId || (submissionObj as unknown)?.leadId || null;
           if (effectiveClientId) {
             lastClientIdRef.current = effectiveClientId;
           }
@@ -4106,7 +4106,7 @@ const TBL: React.FC<TBLProps> = ({
             // ======== CHEMIN FALLBACK: Pas de données stockées → recalculer ========
             console.log(`🔄 [TBL LOAD] Fallback: recalcul DISPLAY via create-and-evaluate pour devis ${devisId}...`);
             const evaluationResponse = await api.post('/api/tbl/submissions/create-and-evaluate', {
-              treeId: effectiveTreeId || (submissionObj as any)?.treeId,
+              treeId: effectiveTreeId || (submissionObj as unknown)?.treeId,
               submissionId: devisId,
               formData: normalizePayload(formattedData),
               clientId: effectiveClientId,
@@ -4419,7 +4419,7 @@ const TBL: React.FC<TBLProps> = ({
                         block={actionButtonBlock}
                         style={{ backgroundColor: '#52c41a', borderColor: '#52c41a', color: '#fff' }}
                         onClick={() => {
-                          const signedSig = signatureStatus.signatures.find((s: any) => s.status === 'SIGNED');
+                          const signedSig = signatureStatus.signatures.find((s: Record<string, unknown>) => s.status === 'SIGNED');
                           if (signedSig) {
                             setSignedPdfPreviewId(signedSig.id);
                             setSignedPdfPreviewOpen(true);
@@ -5742,11 +5742,11 @@ interface TBLTabContentWithSectionsProps {
   formData: TBLFormData;
   onChange: (fieldId: string, value: string | number | boolean | string[] | null | undefined) => void;
   treeId?: string; // ID de l'arbre pour les appels backend
-  tree?: any; // Arbre structuré
+  tree?: unknown; // Arbre structuré
   rawNodes?: Array<{ id: string; parentId: string | null; type: string; label: string; order: number }>; // 🔥 NOUVEAU: Nœuds bruts pour Cascader
   disabled?: boolean;
-  validationState?: any;
-  validationActions?: any;
+  validationState?: unknown;
+  validationActions?: unknown;
   tabSubTabs?: { key: string; label: string }[] | undefined;
   tabId?: string;
   submissionId?: string | null;
@@ -5764,7 +5764,7 @@ interface TBLTabContentWithSectionsProps {
   onReviewComment?: (fieldId: string, comment: string) => void;
   submittingReview?: boolean;
   onSubmitReview?: () => void;
-  originalFormData?: Record<string, any>;
+  originalFormData?: Record<string, unknown>;
   reviewSubcontractAmount?: string;
   onReviewSubcontractAmountChange?: (value: string) => void;
   reviewHasSubcontractors?: boolean;
@@ -5858,7 +5858,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
     }
   }, [onChange]);
 
-  const getFieldSubTabs = (item: any): string[] => {
+  const getFieldSubTabs = (item: unknown): string[] => {
     if (!item) return [];
     const rawKeys = Array.isArray(item.subTabKeys) && item.subTabKeys.length
       ? item.subTabKeys
@@ -5915,7 +5915,7 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
     
     // 3️⃣ Détecter si des champs n'ont pas de sous-onglet assigné (ou ont un sous-onglet non reconnu)
     const recognizedKeys = new Set(orderedTabs.map(t => t.key));
-    const detectDefault = (field: any) => {
+    const detectDefault = (field: unknown) => {
       const fieldSubTabs = getFieldSubTabs(field);
       // Champ sans sous-onglet = besoin de "Général"
       if (fieldSubTabs.length === 0) {

@@ -112,7 +112,7 @@ async function planCascade(organizationId: string): Promise<CascadeLeg[]> {
  * 4. Si no-answer → Bridge PSTN vers GSM
  * 5. Webhooks mettent à jour les call legs
  */
-export async function initiateCallWithCascade(options: CascadeOptions, req?: Request): Promise<any> {
+export async function initiateCallWithCascade(options: CascadeOptions, req?: Request): Promise<unknown> {
   const { organizationId, fromNumber, toNumber, leadId } = options;
 
   try {
@@ -191,7 +191,7 @@ export async function initiateCallWithCascade(options: CascadeOptions, req?: Req
       }))
     };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ [TelnyxCascade] Erreur initiation cascade:', error.response?.data || error.message);
     throw error;
   }

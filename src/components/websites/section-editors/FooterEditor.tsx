@@ -14,8 +14,8 @@ import { SectionHeaderEditor } from '../SectionHeaderEditor';
 const { TextArea } = Input;
 
 interface FooterEditorProps {
-  section: any;
-  onSave: (content: any) => void;
+  section: unknown;
+  onSave: (content: unknown) => void;
   onCancel: () => void;
 }
 
@@ -82,7 +82,7 @@ export const FooterEditor: React.FC<FooterEditorProps> = ({ section, onSave, onC
     setLinkGroups(linkGroups.filter((_, i) => i !== index));
   };
 
-  const handleLinkGroupChange = (groupIndex: number, field: string, value: any) => {
+  const handleLinkGroupChange = (groupIndex: number, field: string, value: unknown) => {
     const newGroups = [...linkGroups];
     newGroups[groupIndex][field] = value;
     setLinkGroups(newGroups);
@@ -96,7 +96,7 @@ export const FooterEditor: React.FC<FooterEditorProps> = ({ section, onSave, onC
 
   const handleRemoveLink = (groupIndex: number, linkIndex: number) => {
     const newGroups = [...linkGroups];
-    newGroups[groupIndex].links = newGroups[groupIndex].links.filter((_: any, i: number) => i !== linkIndex);
+    newGroups[groupIndex].links = newGroups[groupIndex].links.filter((_: unknown, i: number) => i !== linkIndex);
     setLinkGroups(newGroups);
   };
 
@@ -120,7 +120,7 @@ export const FooterEditor: React.FC<FooterEditorProps> = ({ section, onSave, onC
     setSocialLinks(newLinks);
   };
 
-  const handleSubmit = (values: any) => {
+  const handleSubmit = (values: unknown) => {
     onSave({
       name: values.name,
       content: {
@@ -155,7 +155,7 @@ export const FooterEditor: React.FC<FooterEditorProps> = ({ section, onSave, onC
       }
       return isImage && isLt2M;
     },
-    onChange: (info: any) => {
+    onChange: (info: unknown) => {
       setLogoFile(info.fileList);
     },
     maxCount: 1
@@ -231,7 +231,7 @@ export const FooterEditor: React.FC<FooterEditorProps> = ({ section, onSave, onC
                 onClick={() => handleRemoveLinkGroup(groupIndex)}
               />
             </Space>
-            {group.links.map((link: any, linkIndex: number) => (
+            {group.links.map((link: unknown, linkIndex: number) => (
               <Space key={linkIndex} style={{ display: 'flex', marginBottom: 4 }}>
                 <Input
                   placeholder="Label"

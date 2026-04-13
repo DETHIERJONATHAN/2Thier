@@ -95,7 +95,7 @@ const ConditionEditorModal = ({ open, onClose, onSave, initialConfig, nodeId }: 
     setRules(newRules);
   };
 
-  const handleRuleChange = (index: number, field: keyof ConditionRule, value: any) => {
+  const handleRuleChange = (index: number, field: keyof ConditionRule, value: unknown) => {
     const newRules = [...rules];
     newRules[index] = { ...newRules[index], [field]: value };
     setRules(newRules);

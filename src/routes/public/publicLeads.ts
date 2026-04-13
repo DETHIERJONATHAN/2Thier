@@ -1,6 +1,7 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { prisma } from '../../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = express.Router();
 
@@ -210,10 +211,10 @@ router.post('/leads', publicLeadLimiter, validatePublicLead, async (req, res) =>
         entityType: 'lead',
         entityId: newLead.id,
         eventType: 'lead_received',
-        data: { aiQualityScore, source: utmSource ?? 'public_form', title: 'Nouveau lead public reçu' } as any,
+        data: { aiQualityScore, source: utmSource ?? 'public_form', title: 'Nouveau lead public reçu' } as unknown,
         createdAt: new Date(),
       },
-    }).catch(err => console.error('⚠️ [PUBLIC-API] TimelineEvent non créé:', err));
+    }).catch(err => logger.error('⚠️ [PUBLIC-API] TimelineEvent non créé:', err));
 
     // Réponse de succès
     res.status(201).json({
@@ -232,7 +233,7 @@ router.post('/leads', publicLeadLimiter, validatePublicLead, async (req, res) =>
     });
 
   } catch (error) {
-    console.error('❌ [PUBLIC-API] Erreur création lead:', error);
+    logger.error('❌ [PUBLIC-API] Erreur création lead:', error);
     
     res.status(500).json({
       success: false,
@@ -280,7 +281,7 @@ router.get('/stats', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [PUBLIC-API] Erreur stats:', error);
+    logger.error('❌ [PUBLIC-API] Erreur stats:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors du chargement des statistiques'
@@ -321,7 +322,7 @@ router.get('/categories', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [PUBLIC-API] Erreur catégories:', error);
+    logger.error('❌ [PUBLIC-API] Erreur catégories:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors du chargement des catégories'
@@ -345,7 +346,7 @@ router.get('/health', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Health check error:', error);
+    logger.error('Health check error:', error);
     res.status(503).json({
       success: false,
       status: 'unhealthy',

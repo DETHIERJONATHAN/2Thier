@@ -432,21 +432,21 @@ function adaptConditionSetForCopiedNode(conditionSet: unknown, suffix: string): 
       return /-\d+$/.test(value) ? value : `${value}${suffix}`;
     };
 
-    const suffixIds = (cs: any): any => {
+    const suffixIds = (cs: unknown): any => {
       if (!cs || typeof cs !== 'object') return cs;
-      const out: any = Array.isArray(cs) ? cs.map(suffixIds) : { ...cs };
+      const out: unknown = Array.isArray(cs) ? cs.map(suffixIds) : { ...cs };
 
       if (!Array.isArray(cs) && out.id) {
         out.id = applySuffix(out.id);
       }
 
       if (out.branches && Array.isArray(out.branches)) {
-        out.branches = out.branches.map((branch: any) => {
-          const b: any = { ...branch };
+        out.branches = out.branches.map((branch: Record<string, unknown>) => {
+          const b: unknown = { ...branch };
           if (b.id) b.id = applySuffix(b.id);
           if (b.actions && Array.isArray(b.actions)) {
-            b.actions = b.actions.map((action: any) => {
-              const a: any = { ...action };
+            b.actions = b.actions.map((action: Record<string, unknown>) => {
+              const a: unknown = { ...action };
               if (a.id) a.id = applySuffix(a.id);
               return a;
             });
@@ -456,11 +456,11 @@ function adaptConditionSetForCopiedNode(conditionSet: unknown, suffix: string): 
       }
 
       if (out.fallback && typeof out.fallback === 'object') {
-        const fb: any = { ...out.fallback };
+        const fb: unknown = { ...out.fallback };
         if (fb.id) fb.id = applySuffix(fb.id);
         if (fb.actions && Array.isArray(fb.actions)) {
-          fb.actions = fb.actions.map((action: any) => {
-            const a: any = { ...action };
+          fb.actions = fb.actions.map((action: Record<string, unknown>) => {
+            const a: unknown = { ...action };
             if (a.id) a.id = applySuffix(a.id);
             return a;
           });

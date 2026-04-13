@@ -64,7 +64,7 @@ const ValidationZone: React.FC<ValidationZoneProps> = ({
       
       // Vérifier d'abord si nous avons des données JSON (de nos palettes)
       let data = e.dataTransfer.getData('application/json');
-      let itemData: any = null;
+      let itemData: unknown = null;
       
       if (data) {
         try {

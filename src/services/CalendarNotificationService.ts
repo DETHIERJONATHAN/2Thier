@@ -37,7 +37,7 @@ export class CalendarNotificationService {
             message: `Vous êtes invité(e) à l'événement "${eventData.eventTitle}" le ${new Date(eventData.eventDate).toLocaleDateString('fr-FR')}`
           },
           status: 'PENDING'
-        } as any
+        } as unknown
       });
 
       // Push notification
@@ -79,7 +79,7 @@ export class CalendarNotificationService {
             message: `Rappel: "${eventData.eventTitle}" dans ${reminderMinutes} minutes`
           },
           status: 'PENDING'
-        } as any
+        } as unknown
       });
 
       // Push notification
@@ -123,7 +123,7 @@ export class CalendarNotificationService {
       }));
 
       await prisma.notification.createMany({
-        data: notifications as any
+        data: notifications as unknown
       });
 
       // Push to all participants
@@ -168,7 +168,7 @@ export class CalendarNotificationService {
       }));
 
       await prisma.notification.createMany({
-        data: notifications as any
+        data: notifications as unknown
       });
 
       // Push to all participants

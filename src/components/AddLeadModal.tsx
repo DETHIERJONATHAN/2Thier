@@ -47,14 +47,14 @@ export default function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadMo
         });
         
         console.log('[FRONTEND] Réponse API après création du lead:', response);
-      } catch (apiError: any) {
+      } catch (apiError: unknown) {
         console.error('[FRONTEND] Erreur API détaillée:', apiError);
         throw new Error(apiError.message || "Erreur lors de l'ajout du lead");
       }
       NotificationManager.success("Lead ajouté avec succès !");
       onLeadAdded();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de l\'ajout du lead:', error);
       NotificationManager.error(error.message || "Erreur lors de l'ajout du lead");
     } finally {

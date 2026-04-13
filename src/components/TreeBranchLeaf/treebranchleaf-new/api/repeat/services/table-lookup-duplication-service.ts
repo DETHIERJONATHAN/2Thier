@@ -84,7 +84,7 @@ export class TableLookupDuplicationService {
                 multiple: false,  // Single select par défaut
                 searchable: true,  // Searchable par défaut
                 allowCustom: false,  // No custom values
-                options: [] as any,  // Empty options (used only for 'fixed' source)
+                options: [] as unknown,  // Empty options (used only for 'fixed' source)
                 maxSelections: null,
                 apiEndpoint: null,
                 keyColumn: null,
@@ -120,7 +120,7 @@ export class TableLookupDuplicationService {
    */
   private async duplicateTableAndSelectConfig(
     prisma: PrismaClient,
-    originalSelectConfig: any, 
+    originalSelectConfig: unknown, 
     copiedNodeId: string, 
     suffix: string
   ): Promise<void> {
@@ -447,7 +447,7 @@ export class TableLookupDuplicationService {
           if (isTableOwnedByThisNode) {
             // ✅ Ce nœud est le VRAI propriétaire de la table
             // 🔥 FIX 01/02/2026: Retirer capabilities qui n'existe pas dans Prisma
-            const tableInstances: Record<string, any> = {};
+            const tableInstances: Record<string, unknown> = {};
             tableInstances[copiedTableId] = {};
 
             await prisma.treeBranchLeafNode.update({

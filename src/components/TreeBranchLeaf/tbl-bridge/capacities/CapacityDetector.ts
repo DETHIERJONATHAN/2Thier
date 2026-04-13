@@ -24,15 +24,15 @@ export interface TreeBranchLeafNode {
   isRequired?: boolean;
   isVisible?: boolean;
   isActive?: boolean;
-  fieldConfig?: any;
-  conditionConfig?: any;
-  formulaConfig?: any;
-  tableConfig?: any;
-  apiConfig?: any;
-  linkConfig?: any;
+  fieldConfig?: unknown;
+  conditionConfig?: unknown;
+  formulaConfig?: unknown;
+  tableConfig?: unknown;
+  apiConfig?: unknown;
+  linkConfig?: unknown;
   defaultValue?: string | null;
   calculatedValue?: string | null;
-  metadata?: any;
+  metadata?: unknown;
   createdAt: Date;
   updatedAt: Date;
   
@@ -54,7 +54,7 @@ export interface TreeBranchLeafNode {
   
   // Champs hérités
   children?: TreeBranchLeafNode[];
-  properties?: any;
+  properties?: unknown;
   nodeId?: string;
 }
 
@@ -63,7 +63,7 @@ export interface TreeBranchLeafNodeFormula {
   nodeId: string;
   organizationId?: string | null;
   name: string;
-  tokens: any;
+  tokens: unknown;
   description?: string | null;
   isDefault: boolean;
   order: number;
@@ -76,7 +76,7 @@ export interface TreeBranchLeafNodeCondition {
   nodeId: string;
   organizationId?: string | null;
   name: string;
-  conditionSet: any;
+  conditionSet: unknown;
   description?: string | null;
   isDefault: boolean;
   order: number;
@@ -91,10 +91,10 @@ export interface TreeBranchLeafNodeTable {
   name: string;
   description?: string | null;
   type: string;
-  columns: any;
-  rows: any;
-  data: any;
-  meta: any;
+  columns: unknown;
+  rows: unknown;
+  data: unknown;
+  meta: unknown;
   isDefault: boolean;
   order: number;
   createdAt: Date;

@@ -38,7 +38,7 @@ interface ChantierEvent {
   subcontractAmount?: number | null;
   subcontractLocked: boolean;
   reviewStatus?: string | null;
-  reviewData?: any;
+  reviewData?: unknown;
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -54,7 +54,7 @@ interface ReviewField {
   unit?: string;
   originalValue: string | null;
   fieldLabel: string;
-  options?: any;
+  options?: unknown;
 }
 
 interface TechFieldReview {
@@ -206,7 +206,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
         }
       }
 
-      const payload: Record<string, any> = {
+      const payload: Record<string, unknown> = {
         type: values.type,
         status: values.status,
         problemNote: values.problemNote,
@@ -228,7 +228,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
       }
       setModalVisible(false);
       fetchEvents();
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err?.errorFields) return;
       message.error(err?.message || 'Erreur');
     } finally {
@@ -301,7 +301,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
         modificationNote: reviewEdits[f.nodeId]?.modified ? reviewEdits[f.nodeId]?.note : null,
       }));
 
-      const payload: any = { reviews, reviewType: 'TECHNICAL' };
+      const payload: unknown = { reviews, reviewType: 'TECHNICAL' };
       if (reviewSubAmount.trim()) {
         payload.subcontractAmount = Number(reviewSubAmount);
       }
@@ -310,7 +310,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
       message.success(res.message || 'Revue soumise');
       setReviewModalVisible(false);
       fetchEvents();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur soumission revue');
     } finally {
       setReviewSubmitting(false);
@@ -342,7 +342,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
       cancelText: 'Annuler',
       async onOk() {
         try {
-          const payload: Record<string, any> = { status: 'COMPLETED' };
+          const payload: Record<string, unknown> = { status: 'COMPLETED' };
           if (subAmount.trim()) {
             payload.subcontractAmount = Number(subAmount);
           }
@@ -389,7 +389,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
           await api.put(`/api/chantier-workflow/events/${eventId}`, { status: 'PROBLEM', problemNote: problemText.trim() });
           message.warning('Problème signalé — commercial et admin notifiés');
           fetchEvents();
-        } catch (err: any) {
+        } catch (err: unknown) {
           if (err?.message === 'empty') throw err;
           message.error('Erreur signalement');
         }
@@ -449,7 +449,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                     {/* En-tête : type + statut */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <Tag color={typeInfo?.color}>{typeInfo?.label || event.type}</Tag>
-                      <Badge status={statusInfo?.badgeStatus as any || 'default'} text={statusInfo?.label || event.status} />
+                      <Badge status={statusInfo?.badgeStatus as unknown || 'default'} text={statusInfo?.label || event.status} />
                     </div>
 
                     {/* Infos calendrier */}
@@ -501,7 +501,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                           <Text style={{ color: '#52c41a', fontSize: 12 }}>✅ Revue technique : toutes les données confirmées</Text>
                         ) : (
                           <Text style={{ color: '#fa8c16', fontSize: 12 }}>
-                            ⚠️ Revue technique : {(event.reviewData as any)?.modifiedFields || '?'} modification(s) détectée(s)
+                            ⚠️ Revue technique : {(event.reviewData as unknown)?.modifiedFields || '?'} modification(s) détectée(s)
                           </Text>
                         )}
                       </div>

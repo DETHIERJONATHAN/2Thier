@@ -5,6 +5,7 @@ import { db } from '../lib/database';
 import path from 'path';
 import fs from 'fs';
 import { uploadExpressFile, deleteFile } from '../lib/storage';
+import { logger } from '../lib/logger';
 
 const prisma = db;
 const router = Router();
@@ -32,7 +33,7 @@ const sanitizeText = (value: unknown): string | null | undefined => {
 };
 
 // Helper: upload file to GCS via storage module
-const saveUploadedFileToStorage = async (file: any, folder: string, filename: string): Promise<string> => {
+const saveUploadedFileToStorage = async (file: unknown, folder: string, filename: string): Promise<string> => {
   const ext = path.extname(file.name);
   const finalName = `${filename}_${Date.now()}${ext}`;
   const key = `${folder}/${finalName}`;
@@ -41,10 +42,10 @@ const saveUploadedFileToStorage = async (file: any, folder: string, filename: st
 };
 
 // Le middleware d'authentification est appliqué à toutes les routes de ce routeur
-router.use(authMiddleware, impersonationMiddleware as any);
+router.use(authMiddleware, impersonationMiddleware as unknown);
 
 // GET /api/profile - Récupérer le profil de l'utilisateur
-router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<unknown> => {
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -93,13 +94,13 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<any> =
 
     return res.json(formattedUser);
   } catch (error) {
-    console.error("Error fetching user profile:", error);
+    logger.error("Error fetching user profile:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // POST /api/profile/avatar - Upload a new avatar
-router.post('/avatar', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+router.post('/avatar', async (req: AuthenticatedRequest, res: Response): Promise<unknown> => {
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -164,13 +165,13 @@ router.post('/avatar', async (req: AuthenticatedRequest, res: Response): Promise
       avatarUrl: buildAvatarUrl(req, updatedUser.avatarUrl)
     });
   } catch (error) {
-    console.error("Erreur lors du téléversement de l'avatar:", error);
+    logger.error("Erreur lors du téléversement de l'avatar:", error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
 
 // POST /api/profile/cover - Upload a new cover photo
-router.post('/cover', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+router.post('/cover', async (req: AuthenticatedRequest, res: Response): Promise<unknown> => {
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -200,13 +201,13 @@ router.post('/cover', async (req: AuthenticatedRequest, res: Response): Promise<
 
     res.json({ coverUrl: buildAvatarUrl(req, updatedUser.coverUrl) });
   } catch (error) {
-    console.error("Erreur lors du téléversement de la couverture:", error);
+    logger.error("Erreur lors du téléversement de la couverture:", error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
 
 // PUT /api/profile/cover-position - Save cover photo vertical position
-router.put('/cover-position', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+router.put('/cover-position', async (req: AuthenticatedRequest, res: Response): Promise<unknown> => {
   try {
     const userId = req.user?.userId;
     if (!userId) return res.status(400).json({ error: "User ID not found" });
@@ -223,13 +224,13 @@ router.put('/cover-position', async (req: AuthenticatedRequest, res: Response): 
 
     res.json({ positionY: posY });
   } catch (error) {
-    console.error("Erreur cover-position:", error);
+    logger.error("Erreur cover-position:", error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
 
 // GET /api/profile/permissions - Get current user's permissions
-router.get('/permissions', (async (req: any, res: Response) => {
+router.get('/permissions', (async (req: unknown, res: Response) => {
     try {
         const userId = req.user?.userId;
         const organizationId = req.user?.organizationId;
@@ -281,13 +282,13 @@ router.get('/permissions', (async (req: any, res: Response) => {
         res.json({ permissions });
 
     } catch (error) {
-        console.error("Failed to fetch permissions:", error);
+        logger.error("Failed to fetch permissions:", error);
         res.status(500).json({ error: 'Internal server error' });
     }
-}) as any);
+}) as unknown);
 
 // PUT /api/profile - Update current user's profile
-router.put('/', (async (req: any, res: Response) => {
+router.put('/', (async (req: unknown, res: Response) => {
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -366,13 +367,13 @@ router.put('/', (async (req: any, res: Response) => {
     });
 
   } catch (error) {
-    console.error('Error updating profile:', error);
+    logger.error('Error updating profile:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
-}) as any);
+}) as unknown);
 
 // GET /api/profile/user/:userId - View another user's public profile
-router.get('/user/:userId', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+router.get('/user/:userId', async (req: AuthenticatedRequest, res: Response): Promise<unknown> => {
   try {
     const { userId } = req.params;
     if (!userId) {
@@ -412,13 +413,13 @@ router.get('/user/:userId', async (req: AuthenticatedRequest, res: Response): Pr
       } : null
     });
   } catch (error) {
-    console.error('Error fetching user profile:', error);
+    logger.error('Error fetching user profile:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // GET /api/profile/photos - Fetch user photos grouped by category
-router.get('/photos', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+router.get('/photos', async (req: AuthenticatedRequest, res: Response): Promise<unknown> => {
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -440,13 +441,13 @@ router.get('/photos', async (req: AuthenticatedRequest, res: Response): Promise<
 
     return res.json({ photos, grouped });
   } catch (error) {
-    console.error("Error fetching user photos:", error);
+    logger.error("Error fetching user photos:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // GET /api/profile/media - Fetch all user media (photos + videos) from WallPosts
-router.get('/media', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+router.get('/media', async (req: AuthenticatedRequest, res: Response): Promise<unknown> => {
   try {
     const userId = req.user?.userId;
     const targetUserId = (req.query.userId as string) || userId;
@@ -459,7 +460,7 @@ router.get('/media', async (req: AuthenticatedRequest, res: Response): Promise<a
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
 
     // Fetch WallPosts with media from this user
-    const where: any = {
+    const where: unknown = {
       authorId: targetUserId,
       isPublished: true,
       NOT: { mediaUrls: { equals: null } },
@@ -517,13 +518,13 @@ router.get('/media', async (req: AuthenticatedRequest, res: Response): Promise<a
 
     return res.json({ media });
   } catch (error) {
-    console.error("Error fetching user media:", error);
+    logger.error("Error fetching user media:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // DELETE /api/profile/photos/:id - Delete a user photo
-router.delete('/photos/:id', async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+router.delete('/photos/:id', async (req: AuthenticatedRequest, res: Response): Promise<unknown> => {
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -544,7 +545,7 @@ router.delete('/photos/:id', async (req: AuthenticatedRequest, res: Response): P
     await prisma.userPhoto.delete({ where: { id: req.params.id } });
     return res.json({ success: true });
   } catch (error) {
-    console.error("Error deleting photo:", error);
+    logger.error("Error deleting photo:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

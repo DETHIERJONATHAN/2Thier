@@ -27,7 +27,7 @@ interface PointageClockInProps {
   chantierLatitude?: number | null;
   chantierLongitude?: number | null;
   geoFenceRadius?: number | null;
-  api: any;
+  api: unknown;
   onSuccess: () => void;
   /** Pre-selected technician ID */
   technicianId?: string;
@@ -170,7 +170,7 @@ const PointageClockIn: React.FC<PointageClockInProps> = ({
           setCameraReady(true);
         };
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Camera]', err);
       if (err.name === 'NotAllowedError') {
         setCameraError('⛔ Permission caméra refusée. Activez la caméra dans les paramètres du navigateur.');
@@ -255,7 +255,7 @@ const PointageClockIn: React.FC<PointageClockInProps> = ({
         onSuccess();
         resetState();
       }, 1500);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur lors du pointage');
       setStep('review');
     } finally {

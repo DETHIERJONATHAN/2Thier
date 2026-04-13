@@ -89,7 +89,7 @@ export const ValuesRenderer: React.FC<ValuesRendererProps> = ({ content }) => {
         </div>
 
         {/* Grille de valeurs avec configuration grid */}
-        <Row gutter={[parseInt(gap), parseInt(gap)]} justify={justifyContent as any}>
+        <Row gutter={[parseInt(gap), parseInt(gap)]} justify={justifyContent as unknown}>
           {items.map((item, index) => (
             <Col {...getColSpan()} key={index}>
               <Card 
@@ -107,7 +107,7 @@ export const ValuesRenderer: React.FC<ValuesRendererProps> = ({ content }) => {
                   size="middle" 
                   style={{ 
                     width: '100%',
-                    alignItems: iconAlign as any
+                    alignItems: iconAlign as unknown
                   }}
                 >
                   <div>

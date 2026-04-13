@@ -50,7 +50,7 @@ function fieldForLeaf(node: TreeBranchLeafNode, readOnly?: boolean) {
 
 function renderNode(node: TreeBranchLeafNode, depth: number, readOnly?: boolean): React.ReactNode {
   // 🔥 Check displayAlways metadata - if false, hide this section unless it has a value
-  const metadata = (node.metadata as any) || {};
+  const metadata = (node.metadata as unknown) || {};
   const displayAlways = metadata.displayAlways === true;
   
   console.log(`[SimplePreview] renderNode called: label="${node.label}", type="${node.type}", displayAlways=${displayAlways}, metadata:`, metadata);
@@ -111,7 +111,7 @@ const SimplePreview: React.FC<Props> = ({ nodes, readOnly }) => {
       id: n.id,
       label: n.label,
       type: n.type,
-      displayAlways: (n.metadata as any)?.displayAlways
+      displayAlways: (n.metadata as unknown)?.displayAlways
     })));
   }, [nodes]);
 

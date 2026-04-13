@@ -385,7 +385,7 @@ const FacturePage: React.FC = () => {
     try {
       setExportingCsv(true);
       const res = await api.get('/api/expenses/export/csv', { responseType: 'blob' });
-      const blob = new Blob([res as any], { type: 'text/csv;charset=utf-8' });
+      const blob = new Blob([res as unknown], { type: 'text/csv;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -612,7 +612,7 @@ const FacturePage: React.FC = () => {
       setShowCreateModal(false);
       resetForm();
       loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur lors de la création');
     } finally {
       setCreating(false);
@@ -624,7 +624,7 @@ const FacturePage: React.FC = () => {
       await api.post(`/api/invoices/${id}/mark-paid`);
       message.success('Facture marquée comme payée');
       loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur');
     }
   };
@@ -634,7 +634,7 @@ const FacturePage: React.FC = () => {
       await api.post(`/api/invoices/${id}/mark-sent`);
       message.success('Facture marquée comme envoyée');
       loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur');
     }
   };
@@ -662,7 +662,7 @@ const FacturePage: React.FC = () => {
         taxRate: full.taxRate ?? inv.taxRate ?? 21,
         notes: full.notes || inv.notes || '',
         lines: (full.lines && full.lines.length > 0)
-          ? full.lines.map((l: any) => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice }))
+          ? full.lines.map((l: Record<string, unknown>) => ({ description: l.description, quantity: l.quantity, unitPrice: l.unitPrice }))
           : (inv.lines && inv.lines.length > 0)
             ? inv.lines.map(l => ({ ...l }))
             : [{ description: '', quantity: 1, unitPrice: 0 }],
@@ -686,7 +686,7 @@ const FacturePage: React.FC = () => {
       setPeppolManualInvoice(null);
       setPeppolManualRecipient('');
       loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur');
     }
   };
@@ -726,7 +726,7 @@ const FacturePage: React.FC = () => {
             partnerName: emailPreviewInvoice.clientName,
             partnerVat: emailPreviewInvoice.clientVat || undefined,
           });
-        } catch (peppolErr: any) {
+        } catch (peppolErr: unknown) {
           message.warning(`Email envoyé mais Peppol a échoué: ${peppolErr?.message || 'Erreur'}`);
         }
       }
@@ -738,7 +738,7 @@ const FacturePage: React.FC = () => {
       } else {
         message.error(res.message);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur lors de l\'envoi');
     } finally {
       setEmailSending(false);
@@ -754,7 +754,7 @@ const FacturePage: React.FC = () => {
       a.download = `${(inv.invoiceNumber || 'facture').replace(/\s+/g, '_')}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur téléchargement PDF');
     }
   };
@@ -775,7 +775,7 @@ const FacturePage: React.FC = () => {
           }
           message.success('Facture supprimée');
           loadData();
-        } catch (err: any) {
+        } catch (err: unknown) {
           message.error(err?.message || 'Erreur');
         }
       },
@@ -798,7 +798,7 @@ const FacturePage: React.FC = () => {
       setPeppolModalInvoice(null);
       setPeppolEndpoint('');
       loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur d\'envoi Peppol');
     } finally {
       setPeppolSending(false);
@@ -810,7 +810,7 @@ const FacturePage: React.FC = () => {
       await api.post(`/api/peppol/retry/${invoiceId}`);
       message.success('Envoi Peppol relancé ! Vérification automatique toutes les 2 min.');
       loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur lors du retry Peppol');
     }
   };
@@ -1033,7 +1033,7 @@ const FacturePage: React.FC = () => {
       setEditInvoiceId(null);
       resetForm();
       loadData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err?.message || 'Erreur lors de la mise à jour');
     } finally {
       setCreating(false);
@@ -1173,8 +1173,8 @@ const FacturePage: React.FC = () => {
           {/* Tabs */}
           <div style={{
             display: 'flex', gap: 0, flex: 1,
-            overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any,
-            scrollbarWidth: 'none' as any,
+            overflowX: 'auto', WebkitOverflowScrolling: 'touch' as unknown,
+            scrollbarWidth: 'none' as unknown,
           }}>
             {TABS.map(tab => {
               const active = activeTab === tab.key;
@@ -3071,7 +3071,7 @@ const FacturePage: React.FC = () => {
                 <div style={{ textAlign: 'center', padding: 40 }}>
                   <div style={{ marginBottom: 16 }}>
                     {scanPreview && scanPreview !== 'PDF' && (
-                      <img src={scanPreview} alt="ticket" style={{
+                      <img src={scanPreview} alt="ticket" loading="lazy" style={{
                         maxWidth: '100%', maxHeight: 200, borderRadius: 8, opacity: 0.6,
                       }} />
                     )}

@@ -4,8 +4,11 @@ import { z } from 'zod';
 import { requirePermission } from '../middlewares/requirePermission';
 import { v4 as uuidv4 } from 'uuid';
 import { emailService } from '../services/EmailService';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = express.Router();
+router.use(authenticateToken);
 
 // --- Schémas de validation Zod ---
 
@@ -39,7 +42,7 @@ router.get('/invitations', requirePermission('manage_users'), async (req, res) =
     });
     res.json({ success: true, data: invitations });
   } catch (error) {
-    console.error('[USERS] Erreur lors de la récupération des invitations:', error);
+    logger.error('[USERS] Erreur lors de la récupération des invitations:', error);
     res.status(500).json({ success: false, message: "Erreur serveur lors de la récupération des invitations." });
   }
 });
@@ -86,12 +89,12 @@ router.post('/invite', requirePermission('manage_users'), async (req, res) => {
         roleName: invitation.role?.label ?? invitation.role?.name ?? 'Utilisateur'
       });
     } catch (emailError) {
-      console.error("Erreur lors de l'envoi de l'invitation par email:", emailError);
+      logger.error("Erreur lors de l'envoi de l'invitation par email:", emailError);
     }
 
     res.status(201).json({ success: true, message: 'Invitation envoyée avec succès.', data: invitation });
   } catch (error) {
-    console.error("Erreur lors de la création de l'invitation :", error);
+    logger.error("Erreur lors de la création de l'invitation :", error);
     res.status(500).json({ success: false, message: "Erreur interne du serveur." });
     }
 });
@@ -106,7 +109,7 @@ router.delete('/invitations/:id', requirePermission('manage_users'), async (req,
         });
         res.json({ success: true, message: "Invitation révoquée." });
   } catch (error) {
-    console.error('Erreur lors de la révocation d\'invitation:', error);
+    logger.error('Erreur lors de la révocation d\'invitation:', error);
     res.status(500).json({ success: false, message: "Erreur lors de la révocation." });
     }
 });
@@ -135,7 +138,7 @@ router.get('/', requirePermission('manage_users'), async (req, res) => {
     });
     res.json({ success: true, data: users });
   } catch (error) {
-    console.error('[USERS] Erreur lors de la récupération des utilisateurs:', error);
+    logger.error('[USERS] Erreur lors de la récupération des utilisateurs:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -161,7 +164,7 @@ router.get('/free', requirePermission('manage_users'), async (req, res) => {
     });
     res.json({ success: true, data: freeUsers });
   } catch (error) {
-    console.error('Erreur lors de la récupération des utilisateurs libres:', error);
+    logger.error('Erreur lors de la récupération des utilisateurs libres:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur lors de la récupération des utilisateurs libres' });
   }
 });
@@ -180,7 +183,7 @@ router.patch('/user-organizations/:userOrgId', requirePermission('manage_users')
         });
         res.json({ success: true, data: updatedRelation });
   } catch (error) {
-    console.error('Erreur lors de la mise à jour du statut de userOrganization:', error);
+    logger.error('Erreur lors de la mise à jour du statut de userOrganization:', error);
     res.status(500).json({ success: false, message: "Erreur lors de la mise à jour du statut." });
     }
 });
@@ -195,7 +198,7 @@ router.get('/:id/organizations', requirePermission('super_admin'), async (req, r
         });
         res.json({ success: true, data: userOrgs });
   } catch (error) {
-    console.error('Erreur lors de la récupération des organisations utilisateur:', error);
+    logger.error('Erreur lors de la récupération des organisations utilisateur:', error);
     res.status(500).json({ success: false, message: "Erreur serveur." });
     }
 });
@@ -249,7 +252,7 @@ router.post('/:id/organizations', requirePermission('super_admin'), async (req, 
 
         res.json({ success: true, message: "Organisations mises à jour." });
   } catch (error) {
-    console.error('Erreur lors de la mise à jour des organisations utilisateur:', error);
+    logger.error('Erreur lors de la mise à jour des organisations utilisateur:', error);
     res.status(500).json({ success: false, message: "Erreur serveur." });
     }
 });

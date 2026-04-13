@@ -28,6 +28,7 @@ import { generateInvoicePdf, orgSelectForPdf } from './invoices';
 import { sendPushToUser } from './push';
 import UniversalNotificationService from '../services/UniversalNotificationService';
 import { getPostalService } from '../services/PostalEmailService.js';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -102,7 +103,7 @@ async function notifyIncomingInvoices(
         actionUrl: '/facture?tab=incoming',
         tags: ['peppol', 'incoming'],
         metadata: { count, invoices: invoices.map(i => i.invoiceNumber) },
-      }).catch(err => console.error('[Peppol-Notify] Erreur notification in-app:', err.message));
+      }).catch(err => logger.error('[Peppol-Notify] Erreur notification in-app:', err.message));
     }
 
     // 2. Push notification — pour chaque admin
@@ -114,7 +115,7 @@ async function notifyIncomingInvoices(
         tag: `peppol-incoming-${Date.now()}`,
         url: '/facture?tab=incoming',
         type: 'peppol_incoming',
-      }).catch(err => console.error('[Peppol-Notify] Erreur push:', err.message));
+      }).catch(err => logger.error('[Peppol-Notify] Erreur push:', err.message));
     }
 
     // 3. Email @zhiive.com — pour chaque admin qui a un EmailAccount
@@ -160,7 +161,7 @@ async function notifyIncomingInvoices(
           subject: `${title} — ${orgName}`,
           body: htmlBody,
           isHtml: true,
-        }).catch(err => console.error(`[Peppol-Notify] Erreur email zhiive ${zhiiveEmail}:`, err.message));
+        }).catch(err => logger.error(`[Peppol-Notify] Erreur email zhiive ${zhiiveEmail}:`, err.message));
       }
     }
 
@@ -172,11 +173,11 @@ async function notifyIncomingInvoices(
         subject: `${title} — ${orgName}`,
         body: htmlBody,
         isHtml: true,
-      }).catch(err => console.error(`[Peppol-Notify] Erreur email colony ${org.email}:`, err.message));
+      }).catch(err => logger.error(`[Peppol-Notify] Erreur email colony ${org.email}:`, err.message));
     }
 
   } catch (err) {
-    console.error('[Peppol-Notify] ❌ Erreur envoi notifications:', (err as Error).message);
+    logger.error('[Peppol-Notify] ❌ Erreur envoi notifications:', (err as Error).message);
   }
 }
 
@@ -217,7 +218,7 @@ router.get('/config', authenticateToken, async (req: Request, res: Response) => 
 
     res.json({ success: true, data: config });
   } catch (error) {
-    console.error('[Peppol] Erreur GET /config:', error);
+    logger.error('[Peppol] Erreur GET /config:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -273,7 +274,7 @@ router.put('/config', authenticateToken, isAdmin, async (req: Request, res: Resp
 
     res.json({ success: true, data: config });
   } catch (error) {
-    console.error('[Peppol] Erreur PUT /config:', error);
+    logger.error('[Peppol] Erreur PUT /config:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -373,7 +374,7 @@ router.post('/register', authenticateToken, isAdmin, async (req: Request, res: R
       data: { registrationStatus: finalStatus, odooCompanyId },
     });
   } catch (error) {
-    console.error('[Peppol] Erreur POST /register:', error);
+    logger.error('[Peppol] Erreur POST /register:', error);
     res.status(500).json({ success: false, message: `Erreur d'enregistrement Peppol: ${(error as Error).message}` });
   }
 });
@@ -467,7 +468,7 @@ router.get('/status', authenticateToken, async (req: Request, res: Response) => 
       },
     });
   } catch (error) {
-    console.error('[Peppol] Erreur GET /status:', error);
+    logger.error('[Peppol] Erreur GET /status:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -496,7 +497,7 @@ router.post('/send-verification-code', authenticateToken, isAdmin, async (req: R
 
     res.json({ success: true, message: 'SMS de vérification envoyé' });
   } catch (error) {
-    console.error('[Peppol] Erreur POST /send-verification-code:', error);
+    logger.error('[Peppol] Erreur POST /send-verification-code:', error);
     res.status(500).json({ success: false, message: `Erreur d'envoi SMS: ${(error as Error).message}` });
   }
 });
@@ -551,7 +552,7 @@ router.post('/verify-code', authenticateToken, isAdmin, async (req: Request, res
           : 'Code vérifié',
     });
   } catch (error) {
-    console.error('[Peppol] Erreur POST /verify-code:', error);
+    logger.error('[Peppol] Erreur POST /verify-code:', error);
     res.status(500).json({ success: false, message: `Erreur de vérification: ${(error as Error).message}` });
   }
 });
@@ -807,7 +808,7 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
             organizationId,
           });
         } catch (err) {
-          console.warn(`[Peppol] Erreur copie email vers ${recipient}:`, (err as Error).message);
+          logger.warn(`[Peppol] Erreur copie email vers ${recipient}:`, (err as Error).message);
         }
       }
 
@@ -849,12 +850,12 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
             });
           }
         } catch (clientErr) {
-          console.warn(`[Peppol] Erreur envoi facture au client ${clientEmail}:`, (clientErr as Error).message);
+          logger.warn(`[Peppol] Erreur envoi facture au client ${clientEmail}:`, (clientErr as Error).message);
         }
       }
     } catch (emailErr) {
       // Non bloquant — l'envoi Peppol a réussi même si l'email échoue
-      console.warn('[Peppol] Erreur envoi copie email:', (emailErr as Error).message);
+      logger.warn('[Peppol] Erreur envoi copie email:', (emailErr as Error).message);
     }
 
     res.json({
@@ -866,7 +867,7 @@ router.post('/send/:invoiceId', authenticateToken, isAdmin, async (req: Request,
       },
     });
   } catch (error) {
-    console.error('[Peppol] Erreur POST /send/:invoiceId:', error);
+    logger.error('[Peppol] Erreur POST /send/:invoiceId:', error);
 
     // Marquer l'erreur sur la facture
     if (invoiceId) {
@@ -915,7 +916,7 @@ router.get('/send/:invoiceId/status', authenticateToken, async (req: Request, re
 
     res.json({ success: true, data: invoice });
   } catch (error) {
-    console.error('[Peppol] Erreur GET /send/:id/status:', error);
+    logger.error('[Peppol] Erreur GET /send/:id/status:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1012,7 +1013,7 @@ router.post('/retry/:invoiceId', authenticateToken, isAdmin, async (req: Request
     // Re-trigger l'envoi Peppol via le wizard Odoo 17
     const wizardSuccess = await bridge.sendViaWizard(invoice.peppolOdooInvoiceId, config.odooCompanyId!);
     if (!wizardSuccess) {
-      console.warn(`[Peppol] Retry wizard partiel pour invoice ${invoiceId}`);
+      logger.warn(`[Peppol] Retry wizard partiel pour invoice ${invoiceId}`);
     }
 
     // Remettre en PROCESSING avec compteur reset
@@ -1038,7 +1039,7 @@ router.post('/retry/:invoiceId', authenticateToken, isAdmin, async (req: Request
       },
     });
   } catch (error) {
-    console.error('[Peppol] Erreur POST /retry/:invoiceId:', error);
+    logger.error('[Peppol] Erreur POST /retry/:invoiceId:', error);
     res.status(500).json({ success: false, message: `Erreur de retry: ${(error as Error).message}` });
   }
 });
@@ -1128,7 +1129,7 @@ router.post('/fetch-incoming', authenticateToken, isAdmin, async (req: Request, 
           : 'Aucune facture entrante trouvée',
     });
   } catch (error) {
-    console.error('[Peppol] Erreur POST /fetch-incoming:', error);
+    logger.error('[Peppol] Erreur POST /fetch-incoming:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1154,7 +1155,7 @@ router.get('/incoming', authenticateToken, async (req: Request, res: Response) =
 
     res.json({ success: true, data: invoices });
   } catch (error) {
-    console.error('[Peppol] Erreur GET /incoming:', error);
+    logger.error('[Peppol] Erreur GET /incoming:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1204,7 +1205,7 @@ router.put('/incoming/:id', authenticateToken, isAdmin, async (req: Request, res
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('[Peppol] Erreur PUT /incoming/:id:', error);
+    logger.error('[Peppol] Erreur PUT /incoming/:id:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1260,7 +1261,7 @@ router.post('/incoming/:id/accept', authenticateToken, isAdmin, async (req: Requ
 
     res.json({ success: true, data: { incoming: updated, expense } });
   } catch (error) {
-    console.error('[Peppol] Erreur POST /incoming/:id/accept:', error);
+    logger.error('[Peppol] Erreur POST /incoming/:id/accept:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1284,7 +1285,7 @@ router.post('/verify-endpoint', authenticateToken, async (req: Request, res: Res
 
     res.json({ success: true, data: { valid: isValid } });
   } catch (error) {
-    console.error('[Peppol] Erreur POST /verify-endpoint:', error);
+    logger.error('[Peppol] Erreur POST /verify-endpoint:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1298,7 +1299,7 @@ router.get('/health', authenticateToken, async (_req: Request, res: Response) =>
 
     res.json({ success: true, data: health });
   } catch (error) {
-    console.error('[Peppol] Erreur GET /health:', error);
+    logger.error('[Peppol] Erreur GET /health:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1337,13 +1338,13 @@ router.post('/vat-lookup', authenticateToken, async (req: Request, res: Response
           },
         });
       } catch (e) {
-        console.warn('[Peppol] Impossible de sauvegarder previousAccessPoint:', e);
+        logger.warn('[Peppol] Impossible de sauvegarder previousAccessPoint:', e);
       }
     }
 
     res.json({ success: true, data: result });
   } catch (error) {
-    console.error('[Peppol] Erreur POST /vat-lookup:', error);
+    logger.error('[Peppol] Erreur POST /vat-lookup:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la recherche' });
   }
 });
@@ -1361,7 +1362,7 @@ router.post('/peppol-check', authenticateToken, async (req: Request, res: Respon
 
     res.json({ success: true, data: peppol });
   } catch (error) {
-    console.error('[Peppol] Erreur POST /peppol-check:', error);
+    logger.error('[Peppol] Erreur POST /peppol-check:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la vérification Peppol' });
   }
 });
@@ -1495,7 +1496,7 @@ router.post('/auto-register', authenticateToken, isAdmin, async (req: Request, r
       },
     });
   } catch (error) {
-    console.error('[Peppol] Erreur POST /auto-register:', error);
+    logger.error('[Peppol] Erreur POST /auto-register:', error);
     res.status(500).json({ success: false, message: `Erreur d'enregistrement: ${(error as Error).message}` });
   }
 });
@@ -1541,7 +1542,7 @@ router.post('/deregister', authenticateToken, isAdmin, async (req: Request, res:
       const result = await bridge.deregisterPeppol(config.odooCompanyId);
 
       if (!result.success) {
-        console.warn(`[Peppol] Désinscription Odoo partielle pour org ${organizationId}`);
+        logger.warn(`[Peppol] Désinscription Odoo partielle pour org ${organizationId}`);
       }
     }
 
@@ -1557,7 +1558,7 @@ router.post('/deregister', authenticateToken, isAdmin, async (req: Request, res:
     });
 
     const userId = getUserId(req);
-    console.log(`[Peppol] Organisation ${organizationId} désinscrite de Peppol par utilisateur ${userId}`);
+    logger.info(`[Peppol] Organisation ${organizationId} désinscrite de Peppol par utilisateur ${userId}`);
 
     res.json({
       success: true,
@@ -1565,7 +1566,7 @@ router.post('/deregister', authenticateToken, isAdmin, async (req: Request, res:
       message: 'Désinscription Peppol effectuée. Vous ne recevrez plus de factures via Peppol.',
     });
   } catch (error) {
-    console.error('[Peppol] Erreur POST /deregister:', error);
+    logger.error('[Peppol] Erreur POST /deregister:', error);
     res.status(500).json({ success: false, message: `Erreur de désinscription: ${(error as Error).message}` });
   }
 });
@@ -1635,7 +1636,7 @@ router.post('/complete-migration', authenticateToken, isAdmin, async (req: Reque
       },
     });
   } catch (error) {
-    console.error('[Peppol] Erreur POST /complete-migration:', error);
+    logger.error('[Peppol] Erreur POST /complete-migration:', error);
     res.status(500).json({ success: false, message: `Erreur de migration: ${(error as Error).message}` });
   }
 });

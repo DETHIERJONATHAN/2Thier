@@ -3,6 +3,7 @@ import { db } from '../lib/database';
 import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { encrypt } from '../utils/crypto';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -126,7 +127,7 @@ router.get('/users-emails', async (req, res) => {
 
     return res.status(200).json(usersEmailData);
   } catch (error) {
-    console.error('Erreur lors de la récupération des utilisateurs et emails:', error);
+    logger.error('Erreur lors de la récupération des utilisateurs et emails:', error);
     return res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des utilisateurs et emails'
@@ -229,7 +230,7 @@ router.post('/update-email-config', async (req, res) => {
       message: "Configuration email mise à jour avec succès"
     });
   } catch (error) {
-    console.error('Erreur lors de la mise à jour de la configuration email:', error);
+    logger.error('Erreur lors de la mise à jour de la configuration email:', error);
     return res.status(500).json({
       success: false,
       message: 'Erreur lors de la mise à jour de la configuration email'
@@ -299,7 +300,7 @@ router.get('/users-services', async (req, res) => {
     return res.status(200).json(usersWithServices);
     
   } catch (error) {
-    console.error('Erreur lors de la récupération des utilisateurs et services:', error);
+    logger.error('Erreur lors de la récupération des utilisateurs et services:', error);
     return res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des utilisateurs et services'
@@ -395,7 +396,7 @@ router.post('/unified-password', async (req, res) => {
       message: "Mot de passe unifié défini avec succès pour CRM et Email"
     });
   } catch (error) {
-    console.error('Erreur lors de la définition du mot de passe unifié:', error);
+    logger.error('Erreur lors de la définition du mot de passe unifié:', error);
     return res.status(500).json({
       success: false,
       message: 'Erreur lors de la définition du mot de passe unifié'

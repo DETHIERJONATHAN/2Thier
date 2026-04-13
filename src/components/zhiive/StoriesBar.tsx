@@ -25,8 +25,8 @@ interface Story {
 }
 
 interface StoriesBarProps {
-  api: any;
-  currentUser?: any;
+  api: unknown;
+  currentUser?: unknown;
 }
 
 const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
@@ -395,7 +395,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
               {storyFile?.type.startsWith('video/') ? (
                 <video src={storyPreview} style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 12 }} controls muted />
               ) : (
-                <img src={storyPreview} alt="Preview" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 12 }} />
+                <img src={storyPreview} alt="Preview" loading="lazy" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 12 }} />
               )}
               <div
                 onClick={removeStoryFile}
@@ -513,7 +513,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
                 viewingStory.mediaType === 'VIDEO' ? (
                   <video src={viewingStory.mediaUrl} controls autoPlay muted style={{ width: '100%', borderRadius: 12, maxHeight: 400 }} />
                 ) : (
-                  <img src={viewingStory.mediaUrl} alt="" draggable={false} style={{ width: '100%', borderRadius: 12, maxHeight: 400, objectFit: 'cover', userSelect: 'none' }} />
+                  <img src={viewingStory.mediaUrl} alt="" loading="lazy" draggable={false} style={{ width: '100%', borderRadius: 12, maxHeight: 400, objectFit: 'cover', userSelect: 'none' }} />
                 )
               ) : (
                 <div style={{ padding: 40, background: SF.gradientPrimary, borderRadius: 12, color: 'white', fontSize: 18, fontWeight: 600 }}>

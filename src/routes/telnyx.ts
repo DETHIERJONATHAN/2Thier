@@ -21,9 +21,9 @@ router.use((req, res, next) => {
 		return next();
 	}
 
-	return authMiddleware(req as any, res as any, (err?: any) => {
+	return authMiddleware(req as unknown, res as unknown, (err?: unknown) => {
 		if (err) return next(err);
-		return impersonationMiddleware(req as any, res as any, next as any);
+		return impersonationMiddleware(req as unknown, res as unknown, next as unknown);
 	});
 });
 

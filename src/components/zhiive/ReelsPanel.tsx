@@ -34,8 +34,8 @@ interface Reel {
 }
 
 interface ReelsPanelProps {
-  api: any;
-  currentUser: any;
+  api: unknown;
+  currentUser: unknown;
 }
 
 const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
@@ -133,7 +133,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     try {
       setLoading(true);
       const data = await api.get(`/api/zhiive/reels?limit=20&mode=${feedMode}`);
-      const videos = (data?.reels || []).map((p: any) => ({
+      const videos = (data?.reels || []).map((p: Record<string, unknown>) => ({
         id: p.id,
         authorId: p.authorId || '',
         authorName: p.authorName || 'Bee',
@@ -393,8 +393,8 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       const loadedComments = Array.isArray(data) ? data : (data?.comments || []);
       setComments(loadedComments);
       // Charger les likes de l'utilisateur pour ces commentaires
-      const commentIds = loadedComments.map((c: any) => c.id);
-      const allIds = [...commentIds, ...loadedComments.flatMap((c: any) => (c.replies || []).map((r: any) => r.id))];
+      const commentIds = loadedComments.map((c: Record<string, unknown>) => c.id);
+      const allIds = [...commentIds, ...loadedComments.flatMap((c: unknown) => (c.replies || []).map((r: Record<string, unknown>) => r.id))];
       if (allIds.length > 0) {
         try {
           const likesData = await api.post('/api/zhiive/comments/liked', { commentIds: allIds });
@@ -412,7 +412,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
     const text = parentCommentId ? replyText : commentText;
     if (!text.trim() || !commentReelId) return;
     try {
-      const body: Record<string, any> = { content: text.trim() };
+      const body: Record<string, unknown> = { content: text.trim() };
       if (parentCommentId) body.parentCommentId = parentCommentId;
       // 🐝 publishAsOrg piloté par le système d'identité centralisé
       if (identity.publishAsOrg) body.publishAsOrg = true;
@@ -435,7 +435,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
   const handleDeleteReel = async (reelId: string) => {
     try {
       await api.delete(`/api/wall/posts/${reelId}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err?.status !== 404 && err?.response?.status !== 404) {
         showToast(t('reels.deleteFailed'), 'err');
         return;
@@ -579,7 +579,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         onScroll={handleScroll}
         style={{
           height: '100%', overflowY: 'auto', scrollSnapType: 'y mandatory',
-          scrollbarWidth: 'none', msOverflowStyle: 'none' as any,
+          scrollbarWidth: 'none', msOverflowStyle: 'none' as unknown,
         }}
       >
         {reels.map((reel, index) => (
@@ -981,7 +981,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         <div style={{ maxHeight: 400, overflowY: 'auto', padding: '12px 16px' }}>
           {commentLoading ? (
             <div style={{ textAlign: 'center', padding: 30 }}><Spin /></div>
-          ) : comments.length > 0 ? comments.map((c: any) => {
+          ) : comments.length > 0 ? comments.map((c: Record<string, unknown>) => {
             const cIsOrg = c.publishAsOrg && c.organization;
             const cAvatar = cIsOrg ? (c.organization?.logoUrl || null) : c.author?.avatarUrl;
             const cName = cIsOrg ? c.organization.name : [c.author?.firstName, c.author?.lastName].filter(Boolean).join(' ') || 'Bee';
@@ -1015,7 +1015,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                   {/* Replies */}
                   {c.replies && c.replies.length > 0 && (
                     <div style={{ marginTop: 8, marginLeft: 8 }}>
-                      {c.replies.map((reply: any) => {
+                      {c.replies.map((reply: Record<string, unknown>) => {
                         const rrIsOrg = reply.publishAsOrg && reply.organization;
                         const rrAvatar = rrIsOrg ? (reply.organization?.logoUrl || null) : reply.author?.avatarUrl;
                         const rrName = rrIsOrg ? reply.organization.name : [reply.author?.firstName, reply.author?.lastName].filter(Boolean).join(' ');

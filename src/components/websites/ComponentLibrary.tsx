@@ -27,7 +27,7 @@ interface ComponentItem {
   category: string;
   type: string;
   preview: string;
-  template: any;
+  template: unknown;
 }
 
 /**

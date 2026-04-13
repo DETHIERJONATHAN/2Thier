@@ -178,7 +178,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
         return `string (${value.length}chars)`;
       }
       if (typeof value === 'object') {
-        const keys = Object.keys(value as any);
+        const keys = Object.keys(value as unknown);
         return `object {${keys.join(', ')}}`;
       }
       return typeof value;
@@ -310,13 +310,13 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
   /**
    * Handler de changement d'image avec déclenchement IA optionnel
    */
-  const handleImageChange = useCallback((info: any) => {
+  const handleImageChange = useCallback((info: unknown) => {
     if (info.fileList.length > 0) {
       const file = info.fileList[0];
       if (file.originFileObj) {
         const reader = new FileReader();
         reader.onload = async (e) => {
-          let imageData: any = e.target?.result;
+          let imageData: unknown = e.target?.result;
           
           // Traiter les thumbnails si configurés
           if (imageThumbnails && typeof imageThumbnails === 'object') {
@@ -454,7 +454,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
               }
             }];
             
-            setCapturedPhotos(enrichedPhotos as any);
+            setCapturedPhotos(enrichedPhotos as unknown);
             setIsAnalyzingReference(false);
             setShowMeasurementCanvas(true);
             
@@ -476,7 +476,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
             setShowMeasurementCanvas(true);
           }
           
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error('[TBLImageFieldWithAI] ❌ Erreur analyse Métré A4 V10 (upload):', error);
           message.warning({ content: `Erreur: ${error.message}`, key: 'ultra-fusion' });
           
@@ -492,7 +492,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
         
       } else {
         // 📷 Mode classique (pas de mesure) - comportement original
-        let imageData: any = imageDataUrl;
+        let imageData: unknown = imageDataUrl;
         
         // Traiter les thumbnails si configurés
         if (imageThumbnails && typeof imageThumbnails === 'object') {
@@ -675,7 +675,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
           mimeType: 'image/jpeg',
           metadata: {
             ...photo.metadata,
-            qualityScore: result.allPhotoScores?.find((d: any) => d.index === idx)?.score || photo.metadata?.qualityScore || 85,
+            qualityScore: result.allPhotoScores?.find((d: Record<string, unknown>) => d.index === idx)?.score || photo.metadata?.qualityScore || 85,
             sharpness: photo.metadata?.sharpness || 85,
             referenceDetected: idx === bestPhotoIndex && !!result.fusedCorners,
             fusedCorners: idx === bestPhotoIndex ? result.fusedCorners : null,
@@ -684,7 +684,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
         };
       });
 
-      setCapturedPhotos(enrichedPhotos as any);
+      setCapturedPhotos(enrichedPhotos as unknown);
 
       if (result.fusedCorners) {
         if (result.fallbackMode === 'largeTagOnly') {
@@ -707,7 +707,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
 
       setIsAnalyzingReference(false);
       setShowMeasurementCanvas(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[TBLImageFieldWithAI] ❌ Erreur analyse Métré A4 V10:', error);
       message.warning({ content: `Erreur: ${error.message}`, key: 'ultra-fusion' });
 
@@ -902,8 +902,8 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
     // Si pas en cache, fallback sur value (objet ou string)
     if (!nextAnnotated) {
       console.log('[TBLImageFieldWithAI] 📥 Fallback sur value...');
-      const annotatedFromValue = typeof value === 'object' ? (value as any)?.annotated : undefined;
-      const originalFromValue = typeof value === 'object' ? (value as any)?.original : undefined;
+      const annotatedFromValue = typeof value === 'object' ? (value as unknown)?.annotated : undefined;
+      const originalFromValue = typeof value === 'object' ? (value as unknown)?.original : undefined;
       nextAnnotated = annotatedFromValue || (typeof value === 'string' ? value : originalFromValue);
       if (annotatedFromValue) console.log('[TBLImageFieldWithAI] ✅ Utilise value.annotated');
       else if (typeof value === 'string') console.log('[TBLImageFieldWithAI] ✅ Utilise value (string)');
@@ -1080,7 +1080,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
                   <Button
                     icon={<CheckCircleOutlined />}
                     onClick={() => {
-                      const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.referenceDetected || (p.metadata as any)?.fusedCorners);
+                      const bestPhoto = capturedPhotos.find(p => (p.metadata as unknown)?.referenceDetected || (p.metadata as unknown)?.fusedCorners);
                       const photoToUse = bestPhoto || capturedPhotos[0];
                       
                       const base64 = photoToUse.imageBase64?.includes(',') 
@@ -1097,8 +1097,8 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
                       
                       console.log('[TBLImageFieldWithAI] 📐 Revoir analyse Métré A4 V10:', {
                         totalPhotos: capturedPhotos.length,
-                        bestPhotoHasReference: !!(bestPhoto?.metadata as any)?.referenceDetected,
-                        hasFusedCorners: !!(bestPhoto?.metadata as any)?.fusedCorners
+                        bestPhotoHasReference: !!(bestPhoto?.metadata as unknown)?.referenceDetected,
+                        hasFusedCorners: !!(bestPhoto?.metadata as unknown)?.fusedCorners
                       });
                       
                       setShowMeasurementCanvas(true);
@@ -1219,16 +1219,16 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
             {/* 🎯 Afficher la meilleure photo (avec tracés si dispo) */}
             {(() => {
               // Priorité: image annotée (tracés référence/mesure) quand disponible
-              const annotatedFromValue = typeof value === 'object' ? (value as any)?.annotated : undefined;
-              const originalFromValue = typeof value === 'object' ? (value as any)?.original : undefined;
+              const annotatedFromValue = typeof value === 'object' ? (value as unknown)?.annotated : undefined;
+              const originalFromValue = typeof value === 'object' ? (value as unknown)?.original : undefined;
               let imgSrc = annotatedImageUrl || annotatedFromValue || (typeof value === 'string' ? value : originalFromValue);
               let hasReference = false;
               
               // Si on a des photos capturées, utiliser celle avec référence
               if (capturedPhotos.length > 0) {
-                const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.referenceDetected || (p.metadata as any)?.fusedCorners);
+                const bestPhoto = capturedPhotos.find(p => (p.metadata as unknown)?.referenceDetected || (p.metadata as unknown)?.fusedCorners);
                 const photoToShow = bestPhoto || capturedPhotos[0];
-                hasReference = !!(bestPhoto?.metadata as any)?.referenceDetected || !!(bestPhoto?.metadata as any)?.fusedCorners;
+                hasReference = !!(bestPhoto?.metadata as unknown)?.referenceDetected || !!(bestPhoto?.metadata as unknown)?.fusedCorners;
                 
                 const base64 = photoToShow.imageBase64;
                 imgSrc = imgSrc || (base64?.startsWith('data:') 
@@ -1438,15 +1438,15 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
             measureKeys={aiMeasure_keys?.map(k => k.key) || ['largeur_cm', 'hauteur_cm']}
             // 🎯 Passer les corners fusionnés si disponibles
             fusedCorners={(() => {
-              const bestPhoto = capturedPhotos.find(p => (p.metadata as any)?.referenceDetected || (p.metadata as any)?.fusedCorners) || capturedPhotos[0];
-              const fusedCornersFromMetadata = (bestPhoto?.metadata as any)?.fusedCorners;
+              const bestPhoto = capturedPhotos.find(p => (p.metadata as unknown)?.referenceDetected || (p.metadata as unknown)?.fusedCorners) || capturedPhotos[0];
+              const fusedCornersFromMetadata = (bestPhoto?.metadata as unknown)?.fusedCorners;
               if (fusedCornersFromMetadata) {
                 console.log('🎯 [TBLImageFieldWithAI] fusedCorners trouvés et passés à ImageMeasurementPreview:', fusedCornersFromMetadata);
                 return fusedCornersFromMetadata;
               }
               return undefined;
             })()}
-            homographyReady={!!capturedPhotos.find(p => (p.metadata as any)?.fusedCorners)}
+            homographyReady={!!capturedPhotos.find(p => (p.metadata as unknown)?.fusedCorners)}
           />
         </>
       )}
@@ -1463,8 +1463,8 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
         destroyOnClose
       >
         {(() => {
-          const annotatedFromValue = typeof value === 'object' ? (value as any)?.annotated : undefined;
-          const originalFromValue = typeof value === 'object' ? (value as any)?.original : undefined;
+          const annotatedFromValue = typeof value === 'object' ? (value as unknown)?.annotated : undefined;
+          const originalFromValue = typeof value === 'object' ? (value as unknown)?.original : undefined;
           let imgSrc = annotatedImageUrl || annotatedFromValue || (typeof value === 'string' ? value : originalFromValue);
           
           // Si on a des photos capturées, utiliser la première
@@ -1536,7 +1536,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
               />
               
               {/* Infos sur l'image */}
-              {capturedPhotos.some(p => (p.metadata as any)?.referenceDetected || (p.metadata as any)?.fusedCorners) && (
+              {capturedPhotos.some(p => (p.metadata as unknown)?.referenceDetected || (p.metadata as unknown)?.fusedCorners) && (
                 <div style={{ 
                   marginTop: 12, 
                   padding: '8px 16px', 

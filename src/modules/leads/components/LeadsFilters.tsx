@@ -6,8 +6,8 @@ const { Option } = Select;
 const { RangePicker } = DatePicker;
 
 interface LeadsFiltersProps {
-  filters: any;
-  setFilters: (filters: any) => void;
+  filters: unknown;
+  setFilters: (filters: unknown) => void;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
 }

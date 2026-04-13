@@ -7,7 +7,7 @@ const { Text } = Typography;
 
 interface BackendValueDisplayProps {
   nodeId: string;
-  formData: any;
+  formData: unknown;
   displayConfig?: TBLField['metadata']['displayConfig'];
   label?: string;
 }

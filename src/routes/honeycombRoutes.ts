@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authMiddleware } from '../middlewares/auth';
 import Parser from 'rss-parser';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -139,7 +140,7 @@ function detectFeedType(contentType: string, body: string): FeedType {
 function parseJsonFeed(body: string, siteUrl: string): { title?: string; items: FeedItem[] } {
   try {
     const parsed = JSON.parse(body);
-    let feedItems: any[] = [];
+    let feedItems: unknown[] = [];
     let feedTitle: string | undefined;
 
     // ── JSON Feed spec (jsonfeed.org) ──
@@ -165,7 +166,7 @@ function parseJsonFeed(body: string, siteUrl: string): { title?: string; items: 
     }
 
     const baseUrl = new URL(siteUrl).origin;
-    const items: FeedItem[] = feedItems.slice(0, MAX_ITEMS_PER_FEED).map((item: any) => {
+    const items: FeedItem[] = feedItems.slice(0, MAX_ITEMS_PER_FEED).map((item: Record<string, unknown>) => {
       // Title: various possible fields
       const title = (typeof item.title === 'string' ? item.title : item.title?.rendered || item.name || item.headline || '');
       // Link
@@ -197,7 +198,7 @@ function parseJsonFeed(body: string, siteUrl: string): { title?: string; items: 
 
     return { title: feedTitle, items };
   } catch (e) {
-    console.log(`[Honeycomb] ⚠️ JSON Feed parse error:`, e);
+    logger.info(`[Honeycomb] ⚠️ JSON Feed parse error:`, e);
     return { items: [] };
   }
 }
@@ -262,7 +263,7 @@ async function discoverFeedUrl(siteUrl: string, prefetchedHtml?: string): Promis
             const body = await feedResp.text();
             const feedType = detectFeedType(ct, body);
             if (feedType) {
-              console.log(`[Honeycomb] ✅ Found ${feedType} feed via HTML <link>: ${feedUrl}`);
+              logger.info(`[Honeycomb] ✅ Found ${feedType} feed via HTML <link>: ${feedUrl}`);
               return { url: feedUrl, type: feedType };
             }
           }
@@ -280,7 +281,7 @@ async function discoverFeedUrl(siteUrl: string, prefetchedHtml?: string): Promis
             const body = await feedResp.text();
             const feedType = detectFeedType(ct, body);
             if (feedType) {
-              console.log(`[Honeycomb] ✅ Found ${feedType} feed via <a> link: ${feedUrl}`);
+              logger.info(`[Honeycomb] ✅ Found ${feedType} feed via <a> link: ${feedUrl}`);
               return { url: feedUrl, type: feedType };
             }
           }
@@ -293,7 +294,7 @@ async function discoverFeedUrl(siteUrl: string, prefetchedHtml?: string): Promis
   // skip expensive probe strategies (2-4) which fire 23+ requests and trigger rate-limiting.
   // If a feed isn't advertised in <head>, probing random paths almost never finds one.
   if (prefetchedHtml) {
-    console.log(`[Honeycomb] ⏭️ HTML analyzed, no feed advertised — skipping probes for: ${siteUrl}`);
+    logger.info(`[Honeycomb] ⏭️ HTML analyzed, no feed advertised — skipping probes for: ${siteUrl}`);
     return null;
   }
 
@@ -307,7 +308,7 @@ async function discoverFeedUrl(siteUrl: string, prefetchedHtml?: string): Promis
         const body = await resp.text();
         const feedType = detectFeedType(ct, body);
         if (feedType) {
-          console.log(`[Honeycomb] ✅ Found ${feedType} feed via probe: ${feedUrl}`);
+          logger.info(`[Honeycomb] ✅ Found ${feedType} feed via probe: ${feedUrl}`);
           return { url: feedUrl, type: feedType };
         }
       }
@@ -323,7 +324,7 @@ async function discoverFeedUrl(siteUrl: string, prefetchedHtml?: string): Promis
         const ct = resp.headers.get('content-type') || '';
         const body = await resp.text();
         if (looksLikeJsonFeed(ct, body)) {
-          console.log(`[Honeycomb] ✅ Found JSON feed via probe: ${feedUrl}`);
+          logger.info(`[Honeycomb] ✅ Found JSON feed via probe: ${feedUrl}`);
           return { url: feedUrl, type: 'json' };
         }
         // Also check for WP REST API style (array of posts)
@@ -331,7 +332,7 @@ async function discoverFeedUrl(siteUrl: string, prefetchedHtml?: string): Promis
           try {
             const parsed = JSON.parse(body);
             if (Array.isArray(parsed) && parsed.length > 0 && (parsed[0].title || parsed[0].name)) {
-              console.log(`[Honeycomb] ✅ Found JSON API via probe: ${feedUrl}`);
+              logger.info(`[Honeycomb] ✅ Found JSON API via probe: ${feedUrl}`);
               return { url: feedUrl, type: 'json' };
             }
           } catch { /* not valid JSON */ }
@@ -344,12 +345,12 @@ async function discoverFeedUrl(siteUrl: string, prefetchedHtml?: string): Promis
   try {
     const feed = await rssParser.parseURL(siteUrl);
     if (feed && feed.items && feed.items.length > 0) {
-      console.log(`[Honeycomb] ✅ Site URL is itself an RSS feed: ${siteUrl}`);
+      logger.info(`[Honeycomb] ✅ Site URL is itself an RSS feed: ${siteUrl}`);
       return { url: siteUrl, type: 'rss' };
     }
   } catch { /* not a feed */ }
 
-  console.log(`[Honeycomb] ⚠️ No feed found for: ${siteUrl}`);
+  logger.info(`[Honeycomb] ⚠️ No feed found for: ${siteUrl}`);
   return null;
 }
 
@@ -374,7 +375,7 @@ async function scrapeArticlesFromHtml(siteUrl: string, prefetchedHtml?: string):
     // Anti-bot detection: if the HTML is very small, the site blocked us
     // Still try to extract ALL links as a last resort — better than nothing
     if (html.length < MIN_HTML_SIZE_FOR_SCRAPING) {
-      console.log(`[Honeycomb] ⚠️ Tiny HTML (${html.length} bytes) — likely anti-bot: ${siteUrl}`);
+      logger.info(`[Honeycomb] ⚠️ Tiny HTML (${html.length} bytes) — likely anti-bot: ${siteUrl}`);
       const navItems: FeedItem[] = [];
       const navSeenUrls = new Set<string>();
       const baseUrl = new URL(siteUrl).origin;
@@ -435,7 +436,7 @@ async function scrapeArticlesFromHtml(siteUrl: string, prefetchedHtml?: string):
       const withoutImages = navItems.filter(i => !i.imageUrl);
       const finalItems = [...withImages, ...withoutImages].slice(0, MAX_ITEMS_PER_FEED);
 
-      console.log(`[Honeycomb] 🔗 Anti-bot fallback: extracted ${finalItems.length} nav items from ${siteUrl}`);
+      logger.info(`[Honeycomb] 🔗 Anti-bot fallback: extracted ${finalItems.length} nav items from ${siteUrl}`);
       return finalItems;
     }
 
@@ -587,16 +588,16 @@ async function scrapeArticlesFromHtml(siteUrl: string, prefetchedHtml?: string):
         items.push({ title: decodeHtmlEntities(text), link: href });
       }
       if (items.length > 0) {
-        console.log(`[Honeycomb] 🔗 Nav-link fallback: ${items.length} items from ${siteUrl}`);
+        logger.info(`[Honeycomb] 🔗 Nav-link fallback: ${items.length} items from ${siteUrl}`);
       }
     }
 
     if (items.length > 0) {
-      console.log(`[Honeycomb] ✅ Scraped ${items.length} items from HTML: ${siteUrl}`);
+      logger.info(`[Honeycomb] ✅ Scraped ${items.length} items from HTML: ${siteUrl}`);
     }
     return items;
   } catch {
-    console.log(`[Honeycomb] ⚠️ HTML scraping failed for: ${siteUrl}`);
+    logger.info(`[Honeycomb] ⚠️ HTML scraping failed for: ${siteUrl}`);
     return [];
   }
 }
@@ -759,23 +760,23 @@ async function fetchFeedForBookmark(bookmark: {
         const csp = (mainResp.headers.get('content-security-policy') || '').toLowerCase();
         if (xfo === 'deny' || xfo === 'sameorigin') {
           iframeBlocked = true;
-          console.log(`[Honeycomb] 🔍 ${bookmark.url} blocks iframes (X-Frame-Options: ${xfo})`);
+          logger.info(`[Honeycomb] 🔍 ${bookmark.url} blocks iframes (X-Frame-Options: ${xfo})`);
         } else if (csp.includes('frame-ancestors') && !csp.includes('frame-ancestors *') && !csp.includes('frame-ancestors *;')) {
           iframeBlocked = true;
-          console.log(`[Honeycomb] 🔍 ${bookmark.url} blocks iframes (CSP frame-ancestors)`);
+          logger.info(`[Honeycomb] 🔍 ${bookmark.url} blocks iframes (CSP frame-ancestors)`);
         }
         if (mainResp.ok) {
           siteHtml = await mainResp.text();
-          console.log(`[Honeycomb] 📥 ${bookmark.url} HTML size: ${siteHtml.length} bytes`);
+          logger.info(`[Honeycomb] 📥 ${bookmark.url} HTML size: ${siteHtml.length} bytes`);
           // Anti-bot detection: if a major site (large domain) returns tiny HTML,
           // it's rate-limiting us → it will also block iframes
           if (siteHtml.length < MIN_HTML_SIZE_FOR_SCRAPING) {
             antiBotDetected = true;
-            console.log(`[Honeycomb] 🤖 ${bookmark.url} anti-bot detected (${siteHtml.length} bytes) → will open externally`);
+            logger.info(`[Honeycomb] 🤖 ${bookmark.url} anti-bot detected (${siteHtml.length} bytes) → will open externally`);
           }
         }
       }
-    } catch (e) { console.log(`[Honeycomb] ⚠️ Fetch error for ${bookmark.url}:`, e); }
+    } catch (e) { logger.info(`[Honeycomb] ⚠️ Fetch error for ${bookmark.url}:`, e); }
 
     // Discover feed URL dynamically (reuse the HTML we already fetched)
     const discovered = await discoverFeedUrl(bookmark.url, siteHtml || undefined);
@@ -809,9 +810,9 @@ async function fetchFeedForBookmark(bookmark: {
     } else {
       // ── No structured feed — fallback to visual HTML scraping ──
       // Reuse the HTML we already fetched — no extra request!
-      console.log(`[Honeycomb] 🔄 No feed for ${bookmark.url}, trying visual HTML scraping (HTML: ${(siteHtml || '').length} bytes)...`);
+      logger.info(`[Honeycomb] 🔄 No feed for ${bookmark.url}, trying visual HTML scraping (HTML: ${(siteHtml || '').length} bytes)...`);
       const scrapedItems = await scrapeArticlesFromHtml(bookmark.url, siteHtml || undefined);
-      console.log(`[Honeycomb] 📊 Scraping result for ${bookmark.url}: ${scrapedItems.length} items${scrapedItems.length > 0 ? ' — ' + scrapedItems.map(i => i.title).join(', ') : ''}`);
+      logger.info(`[Honeycomb] 📊 Scraping result for ${bookmark.url}: ${scrapedItems.length} items${scrapedItems.length > 0 ? ' — ' + scrapedItems.map(i => i.title).join(', ') : ''}`);
       
       if (scrapedItems.length > 0) {
         result.items = scrapedItems;
@@ -839,14 +840,14 @@ async function fetchFeedForBookmark(bookmark: {
     if (shouldOpenExternal) {
       result.openExternal = true;
       const reason = iframeBlocked ? 'iframe blocked' : 'anti-bot';
-      console.log(`[Honeycomb] 🚫 ${bookmark.url} → openExternal (${reason} + no feed)`);
+      logger.info(`[Honeycomb] 🚫 ${bookmark.url} → openExternal (${reason} + no feed)`);
     } else if (iframeBlocked && hasRealFeed) {
-      console.log(`[Honeycomb] ✅ ${bookmark.url} → stays in Hive (has feed, article pages likely OK)`);
+      logger.info(`[Honeycomb] ✅ ${bookmark.url} → stays in Hive (has feed, article pages likely OK)`);
     }
 
     // ── Anti-bot: preserve cached good data instead of overwriting with empty ──
     if (antiBotDetected && result.items.length === 0 && cached?.data?.items && cached.data.items.length > 0) {
-      console.log(`[Honeycomb] 🛡️ ${bookmark.url} anti-bot returned empty — keeping cached data (${cached.data.items.length} items)`);
+      logger.info(`[Honeycomb] 🛡️ ${bookmark.url} anti-bot returned empty — keeping cached data (${cached.data.items.length} items)`);
       // Extend the existing good cache, but update openExternal flag
       cached.data.openExternal = true;
       cached.expiry = Date.now() + CACHE_SUCCESS_LONG_TTL_MS;
@@ -865,7 +866,7 @@ async function fetchFeedForBookmark(bookmark: {
       result.feedUrl = 'anti-bot-fallback';
       // Don't set error — we have an item to display
       delete result.error;
-      console.log(`[Honeycomb] 🎨 ${bookmark.url} anti-bot fallback: generated visual item with favicon`);
+      logger.info(`[Honeycomb] 🎨 ${bookmark.url} anti-bot fallback: generated visual item with favicon`);
     }
 
     // Cache result — use longer TTL for scraped sites (harder to get, rate-limited)
@@ -949,7 +950,7 @@ router.get('/feeds', authMiddleware, async (req: Request, res: Response) => {
           items: [],
         } as FeedResult;
       });
-      console.log(`[Honeycomb] ⏱️ /feeds timeout (${FEEDS_ENDPOINT_TIMEOUT_MS}ms), returning ${results.filter(r => r.items.length > 0).length}/${bookmarks.length} cached`);
+      logger.info(`[Honeycomb] ⏱️ /feeds timeout (${FEEDS_ENDPOINT_TIMEOUT_MS}ms), returning ${results.filter(r => r.items.length > 0).length}/${bookmarks.length} cached`);
     } else {
       // All resolved within timeout
       results = (settled as PromiseSettledResult<FeedResult>[]).map((s, i) =>
@@ -968,7 +969,7 @@ router.get('/feeds', authMiddleware, async (req: Request, res: Response) => {
 
     res.json({ feeds: results });
   } catch (error) {
-    console.error('[Honeycomb] ❌ Error fetching feeds:', error);
+    logger.error('[Honeycomb] ❌ Error fetching feeds:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des flux' });
   }
 });
@@ -997,7 +998,7 @@ router.get('/feeds/:bookmarkId', authMiddleware, async (req: Request, res: Respo
     const feed = await fetchFeedForBookmark(bookmark);
     res.json({ feed });
   } catch (error) {
-    console.error('[Honeycomb] ❌ Error fetching single feed:', error);
+    logger.error('[Honeycomb] ❌ Error fetching single feed:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération du flux' });
   }
 });

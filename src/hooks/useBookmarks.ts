@@ -51,7 +51,7 @@ export function useBookmarks() {
         return true;
       }
       return false;
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 409 = already exists
       if (err?.status === 409 || err?.response?.status === 409) return false;
       console.error('[useBookmarks] add error:', err);

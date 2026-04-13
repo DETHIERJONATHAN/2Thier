@@ -6,6 +6,7 @@ import { UserOrganizationStatus } from '@prisma/client';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
+import { logger } from '../lib/logger';
 
 // ✅ PLUS BESOIN D'INTERFACE LOCALE - UTILISATION DE L'INTERFACE CENTRALISÉE
 
@@ -170,7 +171,7 @@ const cleanupOrganizationData = async (tx: Prisma.TransactionClient, organizatio
       
       await action();
     } catch (error) {
-      console.error(`[ORGANIZATIONS] ❌ Échec suppression ${label} pour ${organizationId}`, error);
+      logger.error(`[ORGANIZATIONS] ❌ Échec suppression ${label} pour ${organizationId}`, error);
       throw error;
     }
   };
@@ -444,7 +445,7 @@ router.get('/public', async (_req, res) => {
     });
 
   } catch (error) {
-    console.error('[Organizations] Erreur /public:', error);
+    logger.error('[Organizations] Erreur /public:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
@@ -523,7 +524,7 @@ router.get('/public/:id', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[Organizations] Erreur /public/:id:', error);
+    logger.error('[Organizations] Erreur /public/:id:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
@@ -650,7 +651,7 @@ router.get('/active', async (req: AuthenticatedRequest, res) => {
     });
     
   } catch (error) {
-    console.error('[ORGANIZATIONS] Erreur GET /active:', error);
+    logger.error('[ORGANIZATIONS] Erreur GET /active:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la récupération des organisations actives'
@@ -767,7 +768,7 @@ router.get('/', requireRole(['admin', 'super_admin']), async (req: Authenticated
     });
     
   } catch (error) {
-    console.error('[ORGANIZATIONS] Erreur GET:', error);
+    logger.error('[ORGANIZATIONS] Erreur GET:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la récupération des organisations'
@@ -858,7 +859,7 @@ router.post('/', organizationsCreateRateLimit, requireRole(['super_admin']), asy
     });
     
   } catch (error) {
-    console.error('[ORGANIZATIONS] Erreur POST:', error);
+    logger.error('[ORGANIZATIONS] Erreur POST:', error);
     
     if (error instanceof z.ZodError) {
       return res.status(400).json(handleZodError(error));
@@ -975,7 +976,7 @@ router.get('/:id', requireRole(['admin', 'super_admin']), async (req: Authentica
     });
     
   } catch (error) {
-    console.error('[ORGANIZATIONS] Erreur GET /:id:', error);
+    logger.error('[ORGANIZATIONS] Erreur GET /:id:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la récupération de l\'organisation'
@@ -995,7 +996,7 @@ router.put('/:id', requireRole(['super_admin']), async (req: AuthenticatedReques
     // 🔍 VALIDATION ZOD
     const validation = organizationUpdateSchema.safeParse(req.body);
     if (!validation.success) {
-      console.error('❌ [ORGANIZATIONS] Erreur validation Zod:', validation.error.errors);
+      logger.error('❌ [ORGANIZATIONS] Erreur validation Zod:', validation.error.errors);
       return res.status(400).json(handleZodError(validation.error));
     }
     
@@ -1164,7 +1165,7 @@ router.put('/:id', requireRole(['super_admin']), async (req: AuthenticatedReques
     });
     
   } catch (error) {
-    console.error('[ORGANIZATIONS] Erreur PUT:', error);
+    logger.error('[ORGANIZATIONS] Erreur PUT:', error);
     
     if (error instanceof z.ZodError) {
       return res.status(400).json(handleZodError(error));
@@ -1230,7 +1231,7 @@ router.delete('/:id', organizationsDeleteRateLimit, requireRole(['super_admin'])
     });
     
   } catch (error) {
-    console.error('[ORGANIZATIONS] Erreur DELETE:', error);
+    logger.error('[ORGANIZATIONS] Erreur DELETE:', error);
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2003') {
@@ -1309,7 +1310,7 @@ router.get('/:id/google-modules', requireRole(['admin', 'super_admin']), async (
     });
     
   } catch (error) {
-    console.error('[ORGANIZATIONS] Erreur GET google-modules:', error);
+    logger.error('[ORGANIZATIONS] Erreur GET google-modules:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la récupération des modules Google'
@@ -1392,7 +1393,7 @@ router.post('/:id/google-modules/:module/toggle', requireRole(['super_admin']), 
     });
     
   } catch (error) {
-    console.error('[ORGANIZATIONS] Erreur POST google-modules toggle:', error);
+    logger.error('[ORGANIZATIONS] Erreur POST google-modules toggle:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la mise à jour du module Google'
@@ -1473,7 +1474,7 @@ router.get('/:id/google-workspace/domain-status', requireRole(['admin', 'super_a
     });
     
   } catch (error) {
-    console.error('[ORGANIZATIONS] Erreur GET domain-status:', error);
+    logger.error('[ORGANIZATIONS] Erreur GET domain-status:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la vérification du domaine'
@@ -1626,7 +1627,7 @@ router.post('/create-my-org', createMyOrgRateLimit, async (req: AuthenticatedReq
     });
 
   } catch (error) {
-    console.error('[ORGANIZATIONS] Erreur create-my-org:', error);
+    logger.error('[ORGANIZATIONS] Erreur create-my-org:', error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return res.status(409).json({
         success: false,
@@ -1691,7 +1692,7 @@ router.post('/:id/logo', async (req: AuthenticatedRequest, res) => {
 
     res.json({ success: true, data: updatedOrg });
   } catch (error) {
-    console.error('❌ [POST /api/organizations/:id/logo] Erreur:', error);
+    logger.error('❌ [POST /api/organizations/:id/logo] Erreur:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur lors de l\'upload du logo' });
   }
 });
@@ -1744,7 +1745,7 @@ router.post('/:id/cover', async (req: AuthenticatedRequest, res) => {
 
     res.json({ success: true, data: updatedOrg });
   } catch (error) {
-    console.error('❌ [POST /api/organizations/:id/cover] Erreur:', error);
+    logger.error('❌ [POST /api/organizations/:id/cover] Erreur:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur lors de l\'upload de la couverture' });
   }
 });
@@ -1777,7 +1778,7 @@ router.put('/:id/cover-position', async (req: AuthenticatedRequest, res) => {
 
     res.json({ success: true, positionY: posY });
   } catch (error) {
-    console.error('❌ [PUT /api/organizations/:id/cover-position] Erreur:', error);
+    logger.error('❌ [PUT /api/organizations/:id/cover-position] Erreur:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });

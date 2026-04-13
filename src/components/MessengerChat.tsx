@@ -235,7 +235,7 @@ const MessengerChat: React.FC = () => {
 
   const fetchUnread = useCallback(async () => {
     try {
-      const data = await api.get('/api/messenger/unread') as any;
+      const data = await api.get('/api/messenger/unread') as unknown;
       if (data && typeof data.unread === 'number') setTotalUnread(data.unread);
       // Global Wizz detection — works even when conversation is closed
       if (data?.latestWizz && data.latestWizz.id !== lastGlobalWizzIdRef.current) {
@@ -249,7 +249,7 @@ const MessengerChat: React.FC = () => {
 
   const fetchFriends = useCallback(async () => {
     try {
-      const data = await api.get('/api/friends') as any;
+      const data = await api.get('/api/friends') as unknown;
       if (data?.friends) {
         // Sort: online friends first, then alphabetical
         const sorted = [...data.friends].sort((a: Friend, b: Friend) => {
@@ -307,7 +307,7 @@ const MessengerChat: React.FC = () => {
   // Real-time new messages
   useEffect(() => {
     if (!socket.connected) return;
-    const cleanup = socket.on('new-message', (data: any) => {
+    const cleanup = socket.on('new-message', (data: unknown) => {
       if (data.conversationId === activeConversationId) {
         // Append new message to inline messages
         setInlineMessages(prev => {
@@ -376,7 +376,7 @@ const MessengerChat: React.FC = () => {
         console.log('[SW] Service Worker enregistré');
 
         // 2. Get VAPID public key
-        const vapidResp = await api.get('/api/push/vapid-key') as any;
+        const vapidResp = await api.get('/api/push/vapid-key') as unknown;
         if (!vapidResp?.publicKey) return;
 
         // 3. Subscribe to push (or get existing subscription)
@@ -441,7 +441,7 @@ const MessengerChat: React.FC = () => {
     const id = convId || activeConversationId;
     if (!id) return;
     try {
-      const data = await api.get(`/api/messenger/conversations/${id}/messages`) as any;
+      const data = await api.get(`/api/messenger/conversations/${id}/messages`) as unknown;
       if (data?.messages) setInlineMessages(data.messages);
     } catch { /* silent */ }
   }, [api, activeConversationId]);
@@ -531,7 +531,7 @@ const MessengerChat: React.FC = () => {
     if (activeCall) return; // don't poll while in a call
     const incomingPoll = setInterval(async () => {
       try {
-        const data = await api.get('/api/calls/check/incoming') as any;
+        const data = await api.get('/api/calls/check/incoming') as unknown;
         if (data?.incoming) {
           const call = data.incoming;
           // Skip if this is the call we just ended (prevents re-triggering)
@@ -685,7 +685,7 @@ const MessengerChat: React.FC = () => {
       // Step 1: Upload the voice file
       const uploadForm = new FormData();
       uploadForm.append('file', blob, 'voice.webm');
-      const uploadResult = await api.post('/api/messenger/upload', uploadForm) as any;
+      const uploadResult = await api.post('/api/messenger/upload', uploadForm) as unknown;
       const urls = uploadResult?.urls;
       if (!urls || !urls.length) throw new Error('Voice upload failed');
 
@@ -737,7 +737,7 @@ const MessengerChat: React.FC = () => {
     try {
       const formData = new FormData();
       pendingFiles.forEach(f => formData.append('file', f));
-      const uploadResult = await api.post('/api/messenger/upload', formData) as any;
+      const uploadResult = await api.post('/api/messenger/upload', formData) as unknown;
       const urls = uploadResult?.urls;
       const mediaType = uploadResult?.mediaType || 'file';
       if (!urls || !urls.length) throw new Error('Upload returned no URLs');
@@ -808,7 +808,7 @@ const MessengerChat: React.FC = () => {
 
   // Build message action menu items
   const getMessageMenuItems = (msg: Message) => {
-    const items: any[] = [];
+    const items: unknown[] = [];
     items.push({
       key: 'pin',
       icon: msg.isPinned ? <PushpinFilled /> : <PushpinOutlined />,
@@ -836,7 +836,7 @@ const MessengerChat: React.FC = () => {
 
   const startNewChat = async (friendId: string) => {
     try {
-      const conv = await api.post('/api/messenger/conversations', { participantIds: [friendId] }) as any;
+      const conv = await api.post('/api/messenger/conversations', { participantIds: [friendId] }) as unknown;
       if (conv?.id) {
         await fetchConversations();
         openChat(conv.id);
@@ -848,7 +848,7 @@ const MessengerChat: React.FC = () => {
   // Start a call from a chat window
   const startCall = async (conversationId: string, callType: 'video' | 'audio', conversationName: string) => {
     try {
-      const result = await api.post('/api/calls/start', { conversationId, callType }) as any;
+      const result = await api.post('/api/calls/start', { conversationId, callType }) as unknown;
       if (result?.call) {
         // Don't re-open a call we just ended
         if (result.call.id === lastEndedCallIdRef.current) return;
@@ -1269,7 +1269,7 @@ const MessengerChat: React.FC = () => {
                   maxWidth: 160, overflow: 'hidden',
                 }}>
                   {f.type.startsWith('image/') ? (
-                    <img src={URL.createObjectURL(f)} alt="" style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />
+                    <img src={URL.createObjectURL(f)} alt="" loading="lazy" style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />
                   ) : (
                     <FileOutlined style={{ fontSize: 14 }} />
                   )}
@@ -1827,7 +1827,7 @@ interface ChatWindowProps {
   conversation?: Conversation;
   index: number;
   onClose: () => void;
-  api: any;
+  api: unknown;
   userId: string;
   onRefresh: () => void;
   onStartCall: (conversationId: string, callType: 'video' | 'audio', conversationName: string) => void;
@@ -1846,7 +1846,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
 
   const fetchMessages = useCallback(async () => {
     try {
-      const data = await api.get(`/api/messenger/conversations/${conversationId}/messages`) as any;
+      const data = await api.get(`/api/messenger/conversations/${conversationId}/messages`) as unknown;
       if (data?.messages) setMessages(data.messages);
     } catch { /* silent */ }
   }, [api, conversationId]);
@@ -2160,7 +2160,7 @@ export const FriendsWidget: React.FC<FriendsWidgetProps> = ({ onStartChat }) => 
   useEffect(() => {
     const fetch = async () => {
       try {
-        const data = await api.get('/api/friends') as any;
+        const data = await api.get('/api/friends') as unknown;
         if (data?.friends) {
           // Sort: online friends first, then alphabetical
           const sorted = [...data.friends].sort((a: Friend, b: Friend) => {

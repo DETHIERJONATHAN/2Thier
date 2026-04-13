@@ -1,7 +1,16 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
+
+// 🔐 Toutes les routes debug nécessitent une authentification SuperAdmin
+router.use(authenticateToken);
+router.use((req: any, res, next) => {
+  if (!req.user?.isSuperAdmin) return res.status(403).json({ error: 'SuperAdmin required' });
+  next();
+});
 
 router.get('/modules', async (_req, res) => {
   try {
@@ -48,7 +57,7 @@ router.get('/modules', async (_req, res) => {
     
     res.json({ modules: processedModules });
   } catch (e) {
-    console.error("Erreur modules:", e);
+    logger.error("Erreur modules:", e);
     res.status(500).json({ error: 'Erreur lors de la récupération des modules.' });
   }
 });

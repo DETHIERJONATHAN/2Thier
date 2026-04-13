@@ -25,7 +25,7 @@ interface PendingRequest {
 // Module-level state
 let pendingRequests: PendingRequest[] = [];
 let batchTimer: ReturnType<typeof setTimeout> | null = null;
-let currentApi: any = null;
+let currentApi: unknown = null;
 
 const BATCH_DELAY_MS = 50; // Collect requests for 50ms before firing
 
@@ -89,7 +89,7 @@ async function flushBatch(): Promise<void> {
  * batched with other requests made within a 50ms window.
  */
 export function batchFetchCalculatedValue(
-  api: any,
+  api: unknown,
   nodeId: string,
   submissionId?: string
 ): Promise<BatchResult | null> {

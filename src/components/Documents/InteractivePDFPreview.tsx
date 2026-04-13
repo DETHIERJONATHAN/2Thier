@@ -4,10 +4,10 @@ import PDFPreview from './PDFPreview';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 
 interface InteractivePDFPreviewProps {
-  sections: any[];
-  theme?: any;
-  globalTheme?: any;
-  onSectionUpdate?: (sectionId: string, updates: any) => void;
+  sections: unknown[];
+  theme?: unknown;
+  globalTheme?: unknown;
+  onSectionUpdate?: (sectionId: string, updates: unknown) => void;
   editMode?: boolean;
   templateId?: string;
 }
@@ -209,7 +209,7 @@ const InteractivePDFPreview = ({
     // Déterminer si c'est une image ou du texte
     const isImage = resizingElement.toLowerCase().includes('image') || resizingElement.toLowerCase().includes('logo');
     
-    let updates: any = {};
+    let updates: unknown = {};
     
     if (isImage) {
       // Pour les images : ajuster maxWidth et maxHeight depuis les valeurs INITIALES

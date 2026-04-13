@@ -52,7 +52,7 @@ interface TableLookupResult {
   };
   config?: TreeBranchLeafSelectConfig;
   // 🔥 FIX 24/02/2026: filterConditions depuis table.meta.lookup (alertes, caps, overrides)
-  filterConditions?: any;
+  filterConditions?: unknown;
   // 🔥 FIX 23/02/2026: Forcer un re-fetch immédiat (appelé à l'ouverture du dropdown)
   refresh: () => void;
 }
@@ -107,7 +107,7 @@ export function useTBLTableLookup(
   fieldId: string | undefined,
   nodeId: string | undefined,
   enabled: boolean = true, // ✅ NOUVEAU: Paramètre pour activer/désactiver le lookup
-  formData?: Record<string, any> // 🆕 ÉTAPE 2.5: Valeurs du formulaire pour filtrage dynamique
+  formData?: Record<string, unknown> // 🆕 ÉTAPE 2.5: Valeurs du formulaire pour filtrage dynamique
 ): TableLookupResult {
   const apiHook = useAuthenticatedApi();
   // 🔥 FIX: Stabiliser l'instance API pour éviter les boucles de rendu infinies
@@ -134,10 +134,10 @@ export function useTBLTableLookup(
   // se déclenche pour d'autres raisons (formData change via saisie utilisateur).
   // Les valeurs calculées sont aussi disponibles via window.TBL_FORM_DATA (déjà enrichi par broadcastCalculatedRefresh).
   // Calculer la valeur initiale une seule fois (useRef n'accepte pas de fonction lazy comme useState)
-  const [initialBroadcastSnapshot] = useState<Record<string, any>>(() => {
+  const [initialBroadcastSnapshot] = useState<Record<string, unknown>>(() => {
     if (typeof window !== 'undefined' && (window as any).TBL_FORM_DATA) {
-      const snapshot: Record<string, any> = {};
-      for (const [key, value] of Object.entries((window as any).TBL_FORM_DATA as Record<string, any>)) {
+      const snapshot: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries((window as any).TBL_FORM_DATA as Record<string, unknown>)) {
         if (key.startsWith('__mirror_')) continue;
         if (value === null || value === undefined || value === '') continue;
         if (typeof value === 'string' && (value.startsWith('data:') || value.length > 2000)) continue;
@@ -152,10 +152,10 @@ export function useTBLTableLookup(
     }
     return {};
   });
-  const broadcastedCalcValuesRef = useRef<Record<string, any>>(initialBroadcastSnapshot);
+  const broadcastedCalcValuesRef = useRef<Record<string, unknown>>(initialBroadcastSnapshot);
   
   // 🚀 PERF: Debounce pour accumuler les broadcasts rapides en un seul state update
-  const pendingCalcValuesRef = useRef<Record<string, any>>({});
+  const pendingCalcValuesRef = useRef<Record<string, unknown>>({});
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replaceAllRef = useRef(false);
   // 🚀 PERF: Clé du dernier lookup exécuté avec succès et génération de cache associée
@@ -179,10 +179,10 @@ export function useTBLTableLookup(
         // 🚀 PERF: Invalider le cache lookup au changement de devis pour éviter données stales
         lookupResultCache.clear();
         lookupCacheGeneration++; // Invalide tous les lastSentLookupKeyRef en jeu
-        const protectedIds = (event.detail as any)?.protectedNodeIds;
+        const protectedIds = (event.detail as unknown)?.protectedNodeIds;
         if (Array.isArray(protectedIds) && protectedIds.length > 0) {
           const prev = broadcastedCalcValuesRef.current;
-          const kept: Record<string, any> = {};
+          const kept: Record<string, unknown> = {};
           for (const id of protectedIds) {
             if (id in prev) kept[id] = prev[id];
           }
@@ -296,7 +296,7 @@ export function useTBLTableLookup(
     const isTargetField = fieldId === '131a7b51-97d5-4f40-8a5a-9359f38939e8';
 
     // 🔥 FIX: Reconstruire formData depuis la version JSON sérialisée
-    let formDataParsed: Record<string, any> | undefined = formDataJson ? JSON.parse(formDataJson) : undefined;
+    let formDataParsed: Record<string, unknown> | undefined = formDataJson ? JSON.parse(formDataJson) : undefined;
     
     // ️ FIX: Reconstruire le set de clés explicitement vidées par l'utilisateur
     // Ces clés ne doivent JAMAIS être réinjectées par le batch ou les valeurs calculées
@@ -457,7 +457,7 @@ export function useTBLTableLookup(
             }
             } // fin du else (pas dans cache)
 
-          } catch (err: any) {
+          } catch (err: unknown) {
             // 🔥 GESTION CRITIQUE DU BUG INCLINAISON-1
             // Si l'API renvoie une erreur avec `isCalculated: true`, cela signifie que
             // la politique du backend a déterminé que ce champ ne DOIT PAS être un select.
@@ -529,7 +529,7 @@ export function useTBLTableLookup(
         // 🆕 ÉTAPE 2.5: Construire les formValues pour le filtrage dynamique
         let queryParams = '';
         let usePostMethod = false;
-        let postFormValues: Record<string, any> = {};
+        let postFormValues: Record<string, unknown> = {};
         if (formDataParsed && Object.keys(formDataParsed).length > 0) {
           // 🔥 Filtrer les champs mirror TBL internes + images/fichiers base64 (évite URL trop longue)
           const filteredFormData = Object.entries(formDataParsed)
@@ -577,7 +577,7 @@ export function useTBLTableLookup(
             .reduce((acc, [key, value]) => {
               acc[key] = value;
               return acc;
-            }, {} as Record<string, any>);
+            }, {} as Record<string, unknown>);
           
           // � FIX STALE DATA: Vérifier si un nouveau devis vient d'être créé
           // Si oui, ne PAS injecter les vieilles valeurs calculées du batch cache
@@ -651,7 +651,7 @@ export function useTBLTableLookup(
           // Ces valeurs sont nécessaires pour les lookups dont le filtre dépend d'un champ LINK.
           // Sans cela, le premier lookup après un changement échoue car le LINK n'est pas dans formData.
           if (!isNewDevisRecent && typeof window !== 'undefined' && (window as any).TBL_FORM_DATA) {
-            const tblFormData = (window as any).TBL_FORM_DATA as Record<string, any>;
+            const tblFormData = (window as any).TBL_FORM_DATA as Record<string, unknown>;
             let linkEnrichedCount = 0;
             for (const [key, value] of Object.entries(tblFormData)) {
               if (key.startsWith('__mirror_')) continue;
@@ -766,7 +766,7 @@ export function useTBLTableLookup(
             });
         }
 
-        const newTableData = (table as any)?.columns !== undefined ? {
+        const newTableData = (table as unknown)?.columns !== undefined ? {
           columns: (table as any).columns,
           rows: (table as any).rows,
           data: (table as any).data,
@@ -774,7 +774,7 @@ export function useTBLTableLookup(
         } : undefined;
 
         // 🔥 FIX 24/02/2026: Extraire filterConditions depuis la réponse du serveur
-        const newFilterConditions = (table as any)?.filterConditions || undefined;
+        const newFilterConditions = (table as unknown)?.filterConditions || undefined;
 
         // 🚀 PERF: Stocker résultat dans le cache lookup 
         lookupResultCache.set(lookupCacheKey, {

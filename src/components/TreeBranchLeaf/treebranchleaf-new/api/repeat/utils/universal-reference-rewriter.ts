@@ -321,7 +321,7 @@ export function rewriteJsonReferences<T>(
   
   // Object : traiter rÃƒÂ©cursivement chaque propriÃƒÂ©tÃƒÂ©
   if (typeof obj === 'object') {
-    const result: any = {};
+    const result: unknown = {};
     for (const [key, value] of Object.entries(obj)) {
       result[key] = rewriteJsonReferences(value, maps, suffix);
     }
@@ -344,7 +344,7 @@ export function rewriteJsonReferences<T>(
  * @param suffix - Suffixe ÃƒÂ  appliquer
  * @returns Tokens rÃƒÂ©ÃƒÂ©crits avec shared-refs forcÃƒÂ©ment suffixÃƒÂ©s
  */
-export function forceSharedRefSuffixes(tokens: any, suffix: number): any {
+export function forceSharedRefSuffixes(tokens: unknown, suffix: number): any {
   if (!Array.isArray(tokens)) {
     return tokens;
   }
@@ -352,7 +352,7 @@ export function forceSharedRefSuffixes(tokens: any, suffix: number): any {
   let modified = 0;
   let matchCount = 0;
   
-  const result = tokens.map((token: any, idx: number) => {
+  const result = tokens.map((token: unknown, idx: number) => {
     if (typeof token === 'string') {
       // Pattern: @value.shared-ref-XXXXXXXX-XXXX (avec ou sans suffix)
       const sharedRefPattern = /^(@value\.shared-ref-[A-Za-z0-9_-]+)(?:-\d+)?$/;
@@ -398,7 +398,7 @@ export function forceSharedRefSuffixesInJson<T extends any>(obj: T, suffix: numb
   if (obj === null || obj === undefined) return obj;
   
   if (Array.isArray(obj)) {
-    return obj.map((item: any) => forceSharedRefSuffixesInJson(item, suffix)) as T;
+    return obj.map((item: Record<string, unknown>) => forceSharedRefSuffixesInJson(item, suffix)) as T;
   }
   
   if (typeof obj === 'string') {
@@ -420,7 +420,7 @@ export function forceSharedRefSuffixesInJson<T extends any>(obj: T, suffix: numb
   
   if (typeof obj === 'object') {
     let modified = 0;
-    const result: any = {};
+    const result: unknown = {};
     for (const key in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, key)) {
         const newVal = forceSharedRefSuffixesInJson((obj as any)[key], suffix);

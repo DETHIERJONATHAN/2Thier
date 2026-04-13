@@ -213,7 +213,7 @@ export function generateLeadRecommendations(
     source: string;
     status: string;
     lastContactDate?: string | Date | null;
-    data?: any;
+    data?: unknown;
   }
 ): {
   priority: 'low' | 'medium' | 'high' | 'critical';

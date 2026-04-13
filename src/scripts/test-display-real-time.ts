@@ -154,7 +154,7 @@ async function testCopyField(originalNodeId: string, copyNodeId: string, _treeId
     console.log(`   📊 Original: ${original.label} → calculatedValue: ${original.calculatedValue || '(vide)'}`);
     console.log(`   📋 Copie: ${copy.label} → calculatedValue: ${copy.calculatedValue || '(vide)'}`);
 
-    const meta = copy.metadata as any;
+    const meta = copy.metadata as unknown;
     console.log(`   🔗 Métadonnées copie: sourceTemplateId=${meta?.sourceTemplateId}, copiedFromNodeId=${meta?.copiedFromNodeId}`);
 
     // Vérifier si les valeurs sont synchronisées
@@ -220,14 +220,14 @@ async function main() {
     });
 
     const copies = allNodes.filter(node => {
-      const meta = node.metadata as any;
+      const meta = node.metadata as unknown;
       return meta?.sourceTemplateId || meta?.copiedFromNodeId;
     });
 
     console.log(`📋 ${copies.length} copies trouvées`);
 
     for (const copy of copies.slice(0, 2)) { // Tester les 2 premières
-      const meta = copy.metadata as any;
+      const meta = copy.metadata as unknown;
       const originalId = meta.sourceTemplateId || meta.copiedFromNodeId;
       
       if (originalId) {

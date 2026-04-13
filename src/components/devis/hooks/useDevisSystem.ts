@@ -108,27 +108,27 @@ export function useDevisSystem(config: DevisSystemConfig = {}) {
         return;
       }
 
-      const transformedBlocks = response.map((block: any) => {
+      const transformedBlocks = response.map((block: Record<string, unknown>) => {
         if (!block.Section || !Array.isArray(block.Section)) {
           console.warn('[DEVIS] Bloc sans sections:', block.id);
           return { id: block.id, name: block.name || 'Bloc', sections: [] };
         }
 
         const sections = block.Section
-          .filter((s: any) => s.active !== false)
-          .sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
-          .map((section: any) => {
+          .filter((s: Record<string, unknown>) => s.active !== false)
+          .sort((a: unknown, b: unknown) => (a.order || 0) - (b.order || 0))
+          .map((section: Record<string, unknown>) => {
             const fields = (section.Field || [])
-              .sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
-              .map((field: any) => ({
+              .sort((a: unknown, b: unknown) => (a.order || 0) - (b.order || 0))
+              .map((field: Record<string, unknown>) => ({
                 id: field.id,
                 label: field.label || 'Champ',
                 type: field.type || 'text',
                 required: field.required || false,
                 width: field.width || '1/2',
                 options: field.FieldOption ? field.FieldOption
-                  .sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
-                  .map((opt: any) => ({
+                  .sort((a: unknown, b: unknown) => (a.order || 0) - (b.order || 0))
+                  .map((opt: Record<string, unknown>) => ({
                     id: opt.id,
                     label: opt.label || opt.value || 'Option',
                     value: opt.value || opt.label

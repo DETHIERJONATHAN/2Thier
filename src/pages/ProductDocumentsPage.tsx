@@ -229,7 +229,7 @@ const ProductDocumentsPage: React.FC = () => {
       } else {
         message.error('Erreur lors de l\'upload');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err.message || 'Erreur lors de l\'upload');
     } finally {
       setUploading(false);
@@ -261,7 +261,7 @@ const ProductDocumentsPage: React.FC = () => {
         resetUrlForm();
         loadDocuments();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       message.error(err.message || 'Erreur');
     } finally {
       setUploading(false);
@@ -341,7 +341,7 @@ const ProductDocumentsPage: React.FC = () => {
       title: 'Produit associé',
       key: 'node',
       width: 200,
-      render: (_: any, record: ProductDocument) => (
+      render: (_: unknown, record: ProductDocument) => (
         record.node ? (
           <Tag icon={<FolderOutlined />} color="blue">
             {record.node.label}
@@ -384,7 +384,7 @@ const ProductDocumentsPage: React.FC = () => {
       title: 'Ajouté par',
       key: 'uploadedBy',
       width: 140,
-      render: (_: any, record: ProductDocument) => (
+      render: (_: unknown, record: ProductDocument) => (
         record.uploadedBy ? (
           <Text type="secondary" className="text-xs">
             {record.uploadedBy.firstName} {record.uploadedBy.lastName}
@@ -407,7 +407,7 @@ const ProductDocumentsPage: React.FC = () => {
       title: 'Actions',
       key: 'actions',
       width: 130,
-      render: (_: any, record: ProductDocument) => (
+      render: (_: unknown, record: ProductDocument) => (
         <Space>
           <Tooltip title="Voir / Télécharger">
             <Button

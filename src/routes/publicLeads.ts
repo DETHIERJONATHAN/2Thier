@@ -8,6 +8,7 @@ import { rateLimit } from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import { db } from '../lib/database';
 import { getGeminiService } from '../services/GoogleGeminiService.js';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -150,7 +151,7 @@ async function calculateLeadScore(leadData: LeadData): Promise<number> {
     
     return isNaN(score) ? 50 : Math.max(1, Math.min(100, score));
   } catch (error) {
-    console.error('[GEMINI-SCORE] Erreur calcul score:', error);
+    logger.error('[GEMINI-SCORE] Erreur calcul score:', error);
     return 50; // Score par défaut en cas d'erreur
   }
 }
@@ -202,7 +203,7 @@ router.get('/stats', publicRateLimit, async (req, res) => {
 
     res.json(stats);
   } catch (error) {
-    console.error('[PUBLIC-STATS] Erreur:', error);
+    logger.error('[PUBLIC-STATS] Erreur:', error);
     res.json({
       totalLeads: 1247,
       successRate: 92,
@@ -369,7 +370,7 @@ router.post('/leads', leadCreationLimit, validateLead, async (req, res) => {
     res.status(201).json(response);
 
   } catch (error) {
-    console.error('[PUBLIC-LEAD] Erreur création:', error);
+    logger.error('[PUBLIC-LEAD] Erreur création:', error);
     
     res.status(500).json({
       success: false,
@@ -434,7 +435,7 @@ router.get('/lead-status/:id', publicRateLimit, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[LEAD-STATUS] Erreur:', error);
+    logger.error('[LEAD-STATUS] Erreur:', error);
     res.status(500).json({
       error: 'Erreur lors de la vérification du statut'
     });

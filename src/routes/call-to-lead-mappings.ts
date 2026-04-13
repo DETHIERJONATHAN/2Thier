@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, type AuthenticatedRequest, requireRole } from '../middlewares/auth.js';
 import { db } from '../lib/database.js';
+import { logger } from '../lib/logger';
 
 const router = Router();
 router.use(authMiddleware);
@@ -16,7 +17,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     });
     res.json({ success: true, data: mappings });
   } catch (error) {
-    console.error('❌ [CallToLeadMappings] Erreur GET:', error);
+    logger.error('❌ [CallToLeadMappings] Erreur GET:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -43,7 +44,7 @@ router.post('/', requireRole(['admin', 'super_admin']), async (req: Authenticate
     });
     res.status(201).json({ success: true, data: mapping });
   } catch (error) {
-    console.error('❌ [CallToLeadMappings] Erreur POST:', error);
+    logger.error('❌ [CallToLeadMappings] Erreur POST:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -70,7 +71,7 @@ router.put('/:id', requireRole(['admin', 'super_admin']), async (req: Authentica
     });
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('❌ [CallToLeadMappings] Erreur PUT:', error);
+    logger.error('❌ [CallToLeadMappings] Erreur PUT:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -85,7 +86,7 @@ router.delete('/:id', requireRole(['admin', 'super_admin']), async (req: Authent
     await db.callToLeadMapping.delete({ where: { id } });
     res.json({ success: true, message: 'Mapping supprimé' });
   } catch (error) {
-    console.error('❌ [CallToLeadMappings] Erreur DELETE:', error);
+    logger.error('❌ [CallToLeadMappings] Erreur DELETE:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });

@@ -4,7 +4,7 @@ import type { FieldDependency } from "../../../../../../../store/slices/types";
 interface DependencyValidationResult {
   isValid: boolean;
   message: string;
-  details?: any;
+  details?: unknown;
 }
 
 /**

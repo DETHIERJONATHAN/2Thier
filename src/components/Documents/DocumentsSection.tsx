@@ -114,7 +114,7 @@ const DocumentsSection = ({ submissionId, leadId, treeId, onLoadDevis, onDeleteD
       const allLeadsWithSubmissions = await api.get(`/api/treebranchleaf/submissions/by-leads?treeId=${effectiveTreeId}`);
       
       // Filtrer pour ce lead
-      const thisLeadData = allLeadsWithSubmissions?.find((lead: any) => lead.id === leadId);
+      const thisLeadData = allLeadsWithSubmissions?.find((lead: Record<string, unknown>) => lead.id === leadId);
       const submissions = thisLeadData?.submissions || [];
       
       console.log('📄 [DocumentsSection] Devis TBL trouvés:', submissions.length);

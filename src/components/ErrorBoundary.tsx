@@ -6,7 +6,7 @@ interface ErrorBoundaryProps {
 
 interface ErrorBoundaryState {
   hasError: boolean;
-  error: any;
+  error: unknown;
 }
 
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
@@ -15,11 +15,11 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError(error: any) {
+  static getDerivedStateFromError(error: unknown) {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: any, errorInfo: any) {
+  componentDidCatch(error: unknown, errorInfo: unknown) {
     // Log l'erreur si besoin
     console.error('Erreur capturée par ErrorBoundary:', error, errorInfo);
   }

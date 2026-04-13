@@ -115,7 +115,7 @@ export const SectionHeaderEditor: React.FC<SectionHeaderEditorProps> = ({
     setConfig(value || DEFAULT_HEADER);
   }, [value]);
 
-  const updateConfig = (key: string, val: any) => {
+  const updateConfig = (key: string, val: unknown) => {
     const newConfig = { ...config, [key]: val };
     setConfig(newConfig);
     onChange(newConfig);

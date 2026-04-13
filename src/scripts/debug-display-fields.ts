@@ -30,7 +30,7 @@ interface DisplayFieldDiagnostic {
     id: string;
     submissionId: string;
     value?: string | null;
-    operationResult?: any;
+    operationResult?: unknown;
     operationSource?: string | null;
     lastResolved?: Date | null;
     isVariable: boolean;
@@ -212,13 +212,13 @@ async function main() {
     });
 
     const copyNodes = allNodes.filter(node => {
-      const meta = node.metadata as any;
+      const meta = node.metadata as unknown;
       return meta?.sourceTemplateId || meta?.copiedFromNodeId;
     });
 
     console.log(`   ✅ ${copyNodes.length} nœuds copiés trouvés`);
     copyNodes.forEach(node => {
-      const meta = node.metadata as any;
+      const meta = node.metadata as unknown;
       console.log(`      - ${node.label} (${node.id})`);
       console.log(`        Copié depuis: ${meta.sourceTemplateId || meta.copiedFromNodeId}`);
       console.log(`        Valeur: ${node.calculatedValue || '(vide)'}`);

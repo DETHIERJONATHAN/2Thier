@@ -25,9 +25,9 @@ export interface Project {
 }
 
 export class CalendarIntegrationService {
-  private api: any;
+  private api: unknown;
 
-  constructor(api: any) {
+  constructor(api: unknown) {
     this.api = api;
   }
 
@@ -122,7 +122,7 @@ export class CalendarIntegrationService {
   }
 
   // Créer l'événement dans Google Calendar (simulation)
-  private async createGoogleCalendarEvent(eventData: any): Promise<any> {
+  private async createGoogleCalendarEvent(eventData: unknown): Promise<unknown> {
     // En pratique, ici vous utiliseriez l'API Google Calendar
     // Pour l'instant, on simule la création
     return {

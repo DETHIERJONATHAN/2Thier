@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import webPush from 'web-push';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -13,7 +14,7 @@ const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:info@2thier.be';
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 } else {
-  console.warn('[PUSH] ⚠️ VAPID keys manquantes — notifications push désactivées');
+  logger.warn('[PUSH] ⚠️ VAPID keys manquantes — notifications push désactivées');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -26,7 +27,7 @@ router.get('/vapid-key', (_req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════════
 // POST /push/subscribe — Save push subscription for current user
 // ═══════════════════════════════════════════════════════════════
-router.post('/subscribe', authenticateToken as any, async (req: Request, res: Response): Promise<void> => {
+router.post('/subscribe', authenticateToken as unknown, async (req: Request, res: Response): Promise<void> => {
   const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
@@ -56,7 +57,7 @@ router.post('/subscribe', authenticateToken as any, async (req: Request, res: Re
 
     res.json({ success: true });
   } catch (err) {
-    console.error('[PUSH] Error saving subscription:', err);
+    logger.error('[PUSH] Error saving subscription:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -64,7 +65,7 @@ router.post('/subscribe', authenticateToken as any, async (req: Request, res: Re
 // ═══════════════════════════════════════════════════════════════
 // DELETE /push/unsubscribe — Remove push subscription
 // ═══════════════════════════════════════════════════════════════
-router.delete('/unsubscribe', authenticateToken as any, async (req: Request, res: Response): Promise<void> => {
+router.delete('/unsubscribe', authenticateToken as unknown, async (req: Request, res: Response): Promise<void> => {
   const user = req.user;
   if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
 
@@ -77,7 +78,7 @@ router.delete('/unsubscribe', authenticateToken as any, async (req: Request, res
     });
     res.json({ success: true });
   } catch (err) {
-    console.error('[PUSH] Error removing subscription:', err);
+    logger.error('[PUSH] Error removing subscription:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -114,7 +115,7 @@ export async function sendPushToUser(userId: string, payload: {
         JSON.stringify(payload)
       );
       sent++;
-    } catch (err: any) {
+    } catch (err: unknown) {
       // If subscription expired/invalid, deactivate it
       if (err.statusCode === 404 || err.statusCode === 410) {
         await db.pushSubscription.update({
@@ -122,7 +123,7 @@ export async function sendPushToUser(userId: string, payload: {
           data: { isActive: false },
         }).catch(() => {});
       }
-      console.warn(`[PUSH] Failed to send to ${sub.endpoint.slice(0, 50)}...`, err.statusCode || err.message);
+      logger.warn(`[PUSH] Failed to send to ${sub.endpoint.slice(0, 50)}...`, err.statusCode || err.message);
     }
   }
 

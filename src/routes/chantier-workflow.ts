@@ -8,9 +8,10 @@ import nodemailer from 'nodemailer';
 import { decrypt } from '../utils/crypto.js';
 import { sendPushToUser } from './push';
 import { createBusinessAutoPost } from '../services/business-auto-post';
+import { logger } from '../lib/logger';
 
 /** Crée une notification en DB ET envoie un push */
-async function createChantierNotifWithPush(args: any) {
+async function createChantierNotifWithPush(args: unknown) {
   const notif = await db.notification.create(args);
   const d = args.data;
   if (d?.userId) {
@@ -70,7 +71,7 @@ router.get('/transitions', authenticateToken, async (req, res) => {
 
     res.json({ success: true, data: transitions });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur GET /transitions:', error);
+    logger.error('[ChantierWorkflow] Erreur GET /transitions:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -118,7 +119,7 @@ router.post('/transitions', authenticateToken, isAdmin, async (req, res) => {
 
     res.status(201).json({ success: true, data: transition });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur POST /transitions:', error);
+    logger.error('[ChantierWorkflow] Erreur POST /transitions:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -162,7 +163,7 @@ router.put('/transitions/:id', authenticateToken, isAdmin, async (req, res) => {
 
     res.json({ success: true, data: transition });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur PUT /transitions/:id:', error);
+    logger.error('[ChantierWorkflow] Erreur PUT /transitions/:id:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -189,7 +190,7 @@ router.delete('/transitions/:id', authenticateToken, isAdmin, async (req, res) =
     await db.chantierStatusTransition.delete({ where: { id } });
     res.json({ success: true, message: 'Transition supprimée' });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur DELETE /transitions/:id:', error);
+    logger.error('[ChantierWorkflow] Erreur DELETE /transitions/:id:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -265,7 +266,7 @@ router.get('/transitions/allowed-targets', authenticateToken, async (req, res) =
 
     res.json({ success: true, data: allowedMap });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur GET /transitions/allowed-targets:', error);
+    logger.error('[ChantierWorkflow] Erreur GET /transitions/allowed-targets:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -327,7 +328,7 @@ router.post('/transitions/check', authenticateToken, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur POST /transitions/check:', error);
+    logger.error('[ChantierWorkflow] Erreur POST /transitions/check:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -368,7 +369,7 @@ router.get('/invoice-templates', authenticateToken, async (req, res) => {
 
     res.json({ success: true, data: templates });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur GET /invoice-templates:', error);
+    logger.error('[ChantierWorkflow] Erreur GET /invoice-templates:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -411,7 +412,7 @@ router.post('/invoice-templates', authenticateToken, isAdmin, async (req, res) =
 
     res.status(201).json({ success: true, data: template });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur POST /invoice-templates:', error);
+    logger.error('[ChantierWorkflow] Erreur POST /invoice-templates:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -453,7 +454,7 @@ router.put('/invoice-templates/:id', authenticateToken, isAdmin, async (req, res
 
     res.json({ success: true, data: template });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur PUT /invoice-templates/:id:', error);
+    logger.error('[ChantierWorkflow] Erreur PUT /invoice-templates/:id:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -480,7 +481,7 @@ router.delete('/invoice-templates/:id', authenticateToken, isAdmin, async (req, 
     await db.chantierInvoiceTemplate.delete({ where: { id } });
     res.json({ success: true, message: 'Template supprimé' });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur DELETE /invoice-templates/:id:', error);
+    logger.error('[ChantierWorkflow] Erreur DELETE /invoice-templates/:id:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -519,7 +520,7 @@ router.get('/chantiers/:chantierId/billing-plan', authenticateToken, async (req,
 
     res.json({ success: true, data: templates, source: 'templates' });
   } catch (error) {
-    console.error('[BILLING-PLAN] Erreur GET:', error);
+    logger.error('[BILLING-PLAN] Erreur GET:', error);
     res.status(500).json({ success: false, message: 'Erreur interne' });
   }
 });
@@ -596,7 +597,7 @@ router.put('/chantiers/:chantierId/billing-plan', authenticateToken, isAdmin, as
 
     res.json({ success: true, data: created });
   } catch (error) {
-    console.error('[BILLING-PLAN] Erreur PUT:', error);
+    logger.error('[BILLING-PLAN] Erreur PUT:', error);
     res.status(500).json({ success: false, message: 'Erreur interne' });
   }
 });
@@ -645,7 +646,7 @@ router.post('/chantiers/:chantierId/billing-plan/init', authenticateToken, isAdm
 
     res.json({ success: true, data: created, message: `${created.length} lignes initialisées depuis les templates` });
   } catch (error) {
-    console.error('[BILLING-PLAN] Erreur INIT:', error);
+    logger.error('[BILLING-PLAN] Erreur INIT:', error);
     res.status(500).json({ success: false, message: 'Erreur interne' });
   }
 });
@@ -745,7 +746,7 @@ router.post('/chantiers/:chantierId/validate', authenticateToken, isAdmin, async
           where: { id: acompteInvoice.id },
           data: { status: 'SENT', sentAt: new Date(), updatedAt: new Date() },
         });
-        console.log(`[VALIDATION] Facture acompte ${acompteInvoice.id} auto-envoyée pour chantier ${chantierId}`);
+        logger.info(`[VALIDATION] Facture acompte ${acompteInvoice.id} auto-envoyée pour chantier ${chantierId}`);
       }
     }
 
@@ -763,7 +764,7 @@ router.post('/chantiers/:chantierId/validate', authenticateToken, isAdmin, async
     const invoiceMsg = invoicesCreated > 0 ? ` ${invoicesCreated} facture(s) créée(s) automatiquement.` : '';
     res.json({ success: true, data: updated, message: `Chantier validé avec succès.${invoiceMsg}` });
   } catch (error) {
-    console.error('[VALIDATION] Erreur:', error);
+    logger.error('[VALIDATION] Erreur:', error);
     res.status(500).json({ success: false, message: 'Erreur interne' });
   }
 });
@@ -803,7 +804,7 @@ router.post('/chantiers/:chantierId/unvalidate', authenticateToken, isAdmin, asy
 
     res.json({ success: true, message: 'Validation retirée' });
   } catch (error) {
-    console.error('[VALIDATION] Erreur unvalidate:', error);
+    logger.error('[VALIDATION] Erreur unvalidate:', error);
     res.status(500).json({ success: false, message: 'Erreur interne' });
   }
 });
@@ -852,7 +853,7 @@ router.get('/chantiers/:chantierId/invoices', authenticateToken, async (req, res
 
     res.json({ success: true, data: invoices });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur GET /chantiers/:id/invoices:', error);
+    logger.error('[ChantierWorkflow] Erreur GET /chantiers/:id/invoices:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -917,7 +918,7 @@ router.post('/chantiers/:chantierId/invoices', authenticateToken, isAdmin, async
 
     res.status(201).json({ success: true, data: invoice });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur POST /chantiers/:id/invoices:', error);
+    logger.error('[ChantierWorkflow] Erreur POST /chantiers/:id/invoices:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -949,7 +950,7 @@ router.put('/invoices/:id', authenticateToken, isAdmin, async (req, res) => {
     }
 
     const data = validation.data;
-    const updateData: any = { ...data, updatedAt: new Date() };
+    const updateData: unknown = { ...data, updatedAt: new Date() };
 
     // Si le statut passe à PAID, enregistrer paidAt
     if (data.status === 'PAID' && existing.status !== 'PAID') {
@@ -979,7 +980,7 @@ router.put('/invoices/:id', authenticateToken, isAdmin, async (req, res) => {
         entityId: id,
         entityLabel: existing.label || `Facture ${existing.type}`,
         amount: existing.amount ? Number(existing.amount) : undefined,
-      }).catch(err => console.error('[ChantierWorkflow] Auto-post error:', err));
+      }).catch(err => logger.error('[ChantierWorkflow] Auto-post error:', err));
     }
 
     // Si le statut passe à SENT, enregistrer sentAt
@@ -998,7 +999,7 @@ router.put('/invoices/:id', authenticateToken, isAdmin, async (req, res) => {
 
     res.json({ success: true, data: invoice });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur PUT /invoices/:id:', error);
+    logger.error('[ChantierWorkflow] Erreur PUT /invoices/:id:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1025,7 +1026,7 @@ router.delete('/invoices/:id', authenticateToken, isAdmin, async (req, res) => {
     await db.chantierInvoice.delete({ where: { id } });
     res.json({ success: true, message: 'Facture supprimée' });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur DELETE /invoices/:id:', error);
+    logger.error('[ChantierWorkflow] Erreur DELETE /invoices/:id:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1084,7 +1085,7 @@ router.get('/chantiers/:chantierId/events', authenticateToken, async (req, res) 
 
     res.json({ success: true, data: events });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur GET /chantiers/:id/events:', error);
+    logger.error('[ChantierWorkflow] Erreur GET /chantiers/:id/events:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1149,7 +1150,7 @@ router.post('/chantiers/:chantierId/events', authenticateToken, requireChantierA
 
     res.status(201).json({ success: true, data: event });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur POST /chantiers/:id/events:', error);
+    logger.error('[ChantierWorkflow] Erreur POST /chantiers/:id/events:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1187,7 +1188,7 @@ router.put('/events/:id', authenticateToken, requireChantierAction('edit'), asyn
     }
 
     const data = validation.data;
-    const updateData: any = { ...data, updatedAt: new Date() };
+    const updateData: unknown = { ...data, updatedAt: new Date() };
 
     // Si problème signalé → historique + notification
     if (data.status === 'PROBLEM' && existing.status !== 'PROBLEM') {
@@ -1245,7 +1246,7 @@ router.put('/events/:id', authenticateToken, requireChantierAction('edit'), asyn
 
     res.json({ success: true, data: event });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur PUT /events/:id:', error);
+    logger.error('[ChantierWorkflow] Erreur PUT /events/:id:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1291,7 +1292,7 @@ router.put('/events/:id/lock-subcontract', authenticateToken, isAdmin, async (re
 
     res.json({ success: true, data: event });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur PUT /events/:id/lock-subcontract:', error);
+    logger.error('[ChantierWorkflow] Erreur PUT /events/:id/lock-subcontract:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1320,7 +1321,7 @@ router.delete('/events/:id', authenticateToken, isAdmin, async (req, res) => {
     await db.chantierEvent.delete({ where: { id } });
     res.json({ success: true, message: 'Événement supprimé' });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur DELETE /events/:id:', error);
+    logger.error('[ChantierWorkflow] Erreur DELETE /events/:id:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1360,7 +1361,7 @@ router.get('/chantiers/:chantierId/history', authenticateToken, async (req, res)
 
     res.json({ success: true, data: history });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur GET /chantiers/:id/history:', error);
+    logger.error('[ChantierWorkflow] Erreur GET /chantiers/:id/history:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1417,7 +1418,7 @@ router.post('/chantiers/:chantierId/history', authenticateToken, async (req, res
 
     res.status(201).json({ success: true, data: entry });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur POST /chantiers/:id/history:', error);
+    logger.error('[ChantierWorkflow] Erreur POST /chantiers/:id/history:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1434,7 +1435,7 @@ async function checkAutoTransitions(
   chantierId: string,
   organizationId: string,
   triggerType: string,
-  user: any
+  user: unknown
 ): Promise<void> {
   try {
     const chantier = await db.chantier.findFirst({
@@ -1463,7 +1464,7 @@ async function checkAutoTransitions(
 
     // Vérifier les conditions requises si définies
     if (transition.requiredConditions) {
-      const conditions = transition.requiredConditions as any;
+      const conditions = transition.requiredConditions as unknown;
 
       // Condition: toutes les factures d'un type doivent être payées
       if (conditions.invoiceType && conditions.allPaid) {
@@ -1522,9 +1523,9 @@ async function checkAutoTransitions(
       await sendTransitionNotifications(chantierId, organizationId, oldStatusId, transition.toStatusId, roles, transition.sendEmail);
     }
 
-    console.log(`[ChantierWorkflow] Auto-transition: chantier ${chantierId} → ${transition.ToStatus.name} (trigger: ${triggerType})`);
+    logger.info(`[ChantierWorkflow] Auto-transition: chantier ${chantierId} → ${transition.ToStatus.name} (trigger: ${triggerType})`);
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur checkAutoTransitions:', error);
+    logger.error('[ChantierWorkflow] Erreur checkAutoTransitions:', error);
   }
 }
 
@@ -1658,20 +1659,20 @@ async function sendTransitionNotifications(
               subject,
               html,
             });
-            console.log(`[ChantierWorkflow] ✉️ Email envoyé à ${emailTargets.length} destinataires`);
+            logger.info(`[ChantierWorkflow] ✉️ Email envoyé à ${emailTargets.length} destinataires`);
           }
         } else {
-          console.warn('[ChantierWorkflow] ⚠️ sendEmail=true mais aucun EmailAccount configuré dans l\'org');
+          logger.warn('[ChantierWorkflow] ⚠️ sendEmail=true mais aucun EmailAccount configuré dans l\'org');
         }
       } catch (emailErr) {
         // L'envoi d'email est non-bloquant
-        console.error('[ChantierWorkflow] ❌ Erreur envoi email (non bloquant):', emailErr);
+        logger.error('[ChantierWorkflow] ❌ Erreur envoi email (non bloquant):', emailErr);
       }
     }
 
-    console.log(`[ChantierWorkflow] ${targetUsers.length} notifications envoyées pour transition ${fromStatus?.name} → ${toStatus?.name}`);
+    logger.info(`[ChantierWorkflow] ${targetUsers.length} notifications envoyées pour transition ${fromStatus?.name} → ${toStatus?.name}`);
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur sendTransitionNotifications:', error);
+    logger.error('[ChantierWorkflow] Erreur sendTransitionNotifications:', error);
   }
 }
 
@@ -1682,7 +1683,7 @@ async function notifyProblem(
   chantierId: string,
   organizationId: string,
   problemNote: string,
-  user: any
+  user: unknown
 ): Promise<void> {
   try {
     const chantier = await db.chantier.findFirst({
@@ -1752,7 +1753,7 @@ async function notifyProblem(
       });
     }
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur notifyProblem:', error);
+    logger.error('[ChantierWorkflow] Erreur notifyProblem:', error);
   }
 }
 
@@ -1869,7 +1870,7 @@ router.get('/events/:id/review-fields', authenticateToken, async (req, res) => {
     });
 
     // Extraire le montant devis
-    const snapshot = (event.Chantier.GeneratedDocument?.dataSnapshot as any) || {};
+    const snapshot = (event.Chantier.GeneratedDocument?.dataSnapshot as unknown) || {};
     const quoteData = snapshot?.quote || {};
     const chantierAmount = event.Chantier.amount
       || (quoteData.totalTTC ? Number(quoteData.totalTTC) : null)
@@ -1889,7 +1890,7 @@ router.get('/events/:id/review-fields', authenticateToken, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur GET /events/:id/review-fields:', error);
+    logger.error('[ChantierWorkflow] Erreur GET /events/:id/review-fields:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -1935,7 +1936,7 @@ router.get('/events/:id/has-subcontractors', authenticateToken, async (req, res)
       })),
     });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur GET /events/:id/has-subcontractors:', error);
+    logger.error('[ChantierWorkflow] Erreur GET /events/:id/has-subcontractors:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -2069,7 +2070,7 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
       }
 
       // Mettre à jour l'événement
-      const eventUpdate: any = {
+      const eventUpdate: unknown = {
         status: 'COMPLETED',
         reviewStatus,
         reviewData: {
@@ -2170,7 +2171,7 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
           });
         }
       } catch (notifError) {
-        console.error('[ChantierWorkflow] Erreur envoi notifications review:', notifError);
+        logger.error('[ChantierWorkflow] Erreur envoi notifications review:', notifError);
       }
     }
 
@@ -2198,7 +2199,7 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
               updatedAt: new Date(),
             }
           });
-          console.log(`[ChantierWorkflow] Créé LeadStatus "À rectifier" (${rectifyStatus.id}) pour org ${organizationId}`);
+          logger.info(`[ChantierWorkflow] Créé LeadStatus "À rectifier" (${rectifyStatus.id}) pour org ${organizationId}`);
         }
 
         // Déplacer le lead vers "À rectifier"
@@ -2210,7 +2211,7 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
             updatedAt: new Date(),
           }
         });
-        console.log(`[ChantierWorkflow] Lead ${event.Chantier.leadId} déplacé vers "À rectifier"`);
+        logger.info(`[ChantierWorkflow] Lead ${event.Chantier.leadId} déplacé vers "À rectifier"`);
 
         // Notifier le commercial assigné du lead
         const lead = await db.lead.findUnique({
@@ -2235,7 +2236,7 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
           });
         }
       } catch (leadErr) {
-        console.error('[ChantierWorkflow] Erreur auto-return lead:', leadErr);
+        logger.error('[ChantierWorkflow] Erreur auto-return lead:', leadErr);
       }
     }
 
@@ -2256,7 +2257,7 @@ router.post('/events/:id/submit-review', authenticateToken, async (req, res) => 
         : 'Analyse terminée — Toutes les données confirmées ✅'
     });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur POST /events/:id/submit-review:', error);
+    logger.error('[ChantierWorkflow] Erreur POST /events/:id/submit-review:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -2342,7 +2343,7 @@ router.get('/chantiers/:chantierId/review-summary', authenticateToken, async (re
       }
     });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur GET review-summary:', error);
+    logger.error('[ChantierWorkflow] Erreur GET review-summary:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -2472,7 +2473,7 @@ router.post('/chantiers/:chantierId/reject-to-lead', authenticateToken, isAdmin,
           }
         });
       } catch (notifError) {
-        console.error('[ChantierWorkflow] Erreur notification reject-to-lead:', notifError);
+        logger.error('[ChantierWorkflow] Erreur notification reject-to-lead:', notifError);
       }
     }
 
@@ -2482,7 +2483,7 @@ router.post('/chantiers/:chantierId/reject-to-lead', authenticateToken, isAdmin,
       data: { leadId: chantier.leadId },
     });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur POST reject-to-lead:', error);
+    logger.error('[ChantierWorkflow] Erreur POST reject-to-lead:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -2551,7 +2552,7 @@ router.post('/chantiers/:chantierId/reception/prepare', authenticateToken, async
     const subcontractTotal = chantier.ChantierEvent.reduce((sum, e) => sum + (e.subcontractAmount || 0), 0);
 
     // Construire la checklist depuis les champs TBL technicianVisible
-    let checklist: any[] = [];
+    let checklist: unknown[] = [];
     if (chantier.submissionId) {
       const submission = await db.treeBranchLeafSubmission.findUnique({
         where: { id: chantier.submissionId },
@@ -2641,7 +2642,7 @@ router.post('/chantiers/:chantierId/reception/prepare', authenticateToken, async
       message: 'PV de réception préparé — Lien client généré'
     });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur POST reception/prepare:', error);
+    logger.error('[ChantierWorkflow] Erreur POST reception/prepare:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -2702,7 +2703,7 @@ router.get('/reception/:token', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur GET /reception/:token:', error);
+    logger.error('[ChantierWorkflow] Erreur GET /reception/:token:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -2781,13 +2782,13 @@ router.post('/reception/:token/sign', async (req, res) => {
           clientSignedAt: new Date(),
           clientIpAddress: ip,
           clientUserAgent: userAgent,
-          checklist: data.checklist as any,
+          checklist: data.checklist as unknown,
           satisfactionRating: avgRating ? Math.round(avgRating) : null,
-          satisfactionAnswers: data.satisfactionAnswers as any,
+          satisfactionAnswers: data.satisfactionAnswers as unknown,
           legalAccepted: true,
           legalAcceptedAt: new Date(),
           hasReserves,
-          reserves: hasReserves ? data.reserves as any : null,
+          reserves: hasReserves ? data.reserves as unknown : null,
           updatedAt: new Date(),
         }
       });
@@ -2851,7 +2852,7 @@ router.post('/reception/:token/sign', async (req, res) => {
         }
       }
     } catch (notifError) {
-      console.error('[ChantierWorkflow] Erreur notification reception sign:', notifError);
+      logger.error('[ChantierWorkflow] Erreur notification reception sign:', notifError);
     }
 
     res.json({
@@ -2862,7 +2863,7 @@ router.post('/reception/:token/sign', async (req, res) => {
       data: { status: hasReserves ? 'ACCEPTED_WITH_RESERVES' : 'ACCEPTED' }
     });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur POST /reception/:token/sign:', error);
+    logger.error('[ChantierWorkflow] Erreur POST /reception/:token/sign:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -2892,7 +2893,7 @@ router.get('/chantiers/:chantierId/reception', authenticateToken, async (req, re
 
     res.json({ success: true, data: reception });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur GET reception:', error);
+    logger.error('[ChantierWorkflow] Erreur GET reception:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -2985,7 +2986,7 @@ router.post('/chantiers/:chantierId/reception/send-to-client', authenticateToken
         });
       }
     } catch (emailError) {
-      console.error('[ChantierWorkflow] Erreur envoi email reception:', emailError);
+      logger.error('[ChantierWorkflow] Erreur envoi email reception:', emailError);
       // Ne pas bloquer — l'email est optionnel
     }
 
@@ -3005,7 +3006,7 @@ router.post('/chantiers/:chantierId/reception/send-to-client', authenticateToken
       message: `Lien de réception envoyé à ${reception.clientEmail}`,
     });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur POST send-to-client:', error);
+    logger.error('[ChantierWorkflow] Erreur POST send-to-client:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -3170,7 +3171,7 @@ router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
       results.templates++;
     }
 
-    console.log(`[ChantierWorkflow] Seed terminé pour org ${organizationId}: ${results.transitions} transitions, ${results.templates} templates${results.skipped.length ? `, ${results.skipped.length} ignorés` : ''}`);
+    logger.info(`[ChantierWorkflow] Seed terminé pour org ${organizationId}: ${results.transitions} transitions, ${results.templates} templates${results.skipped.length ? `, ${results.skipped.length} ignorés` : ''}`);
 
     res.status(201).json({
       success: true,
@@ -3178,7 +3179,7 @@ router.post('/seed', authenticateToken, isAdmin, async (req, res) => {
       message: `Workflow initialisé : ${results.transitions} transitions, ${results.templates} templates de factures${results.skipped.length ? `. ${results.skipped.length} ignoré(s).` : ''}`
     });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur POST /seed:', error);
+    logger.error('[ChantierWorkflow] Erreur POST /seed:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });
@@ -3307,7 +3308,7 @@ router.post('/events/:id/submit-commercial-correction', authenticateToken, async
       });
     });
 
-    console.log(
+    logger.info(
       `[ChantierWorkflow] ${corrections.length} corrections commerciales enregistrées pour event ${eventId}`
     );
 
@@ -3317,7 +3318,7 @@ router.post('/events/:id/submit-commercial-correction', authenticateToken, async
       data: { totalCorrections: corrections.length },
     });
   } catch (error) {
-    console.error('[ChantierWorkflow] Erreur POST /events/:id/submit-commercial-correction:', error);
+    logger.error('[ChantierWorkflow] Erreur POST /events/:id/submit-commercial-correction:', error);
     res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
   }
 });

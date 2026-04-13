@@ -52,9 +52,9 @@ const readGlobalTreeIdFallback = (): string | undefined => {
     return undefined;
   }
   const candidates = [
-    (window as any)?.__TBL_LAST_TREE_ID,
-    (window as any)?.__TBL_TREE_ID,
-    (window as any)?.TBL_LAST_TREE_ID
+    (window as unknown)?.__TBL_LAST_TREE_ID,
+    (window as unknown)?.__TBL_TREE_ID,
+    (window as unknown)?.TBL_LAST_TREE_ID
   ];
   for (const value of candidates) {
     if (value === undefined || value === null) continue;
@@ -245,7 +245,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
         await new Promise(r => setTimeout(r, 120));
         const nid = detail.nodeId as string | undefined;
         if (nid) {
-          const found = rawNodesRef.current.find(n => n.id === nid) as any | undefined;
+          const found = rawNodesRef.current.find(n => n.id === nid) as unknown | undefined;
           if (process.env.NODE_ENV === 'development') console.log('[useTBLDataHierarchicalFixed] After refetch - node found for detail.nodeId:', { nid, found });
         } else {
           if (process.env.NODE_ENV === 'development') console.log('[useTBLDataHierarchicalFixed] After refetch - no nodeId in detail; rawNodes length:', rawNodesRef.current.length);
@@ -263,7 +263,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
     if (!treeId || disabled) return;
     const handleNodeUpdated = (event: Event) => {
       try {
-        const customEvent = event as CustomEvent<{ node?: any; treeId?: string | number }>;
+        const customEvent = event as CustomEvent<{ node?: unknown; treeId?: string | number }>;
         const { node, treeId: eventTreeId } = customEvent.detail || {};
         if (!node) return;
         if (!matchesCurrentTreeId(eventTreeId)) return;
@@ -305,22 +305,22 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
         ddiag('Repeater update received', detail);
         try {
           const debugEventId = Math.random().toString(36).slice(2, 9);
-          const inlineNodesRaw = (detail as any)?.newNodes || (detail as any)?.nodes;
+          const inlineNodesRaw = (detail as unknown)?.newNodes || (detail as unknown)?.nodes;
           const inlineNodes: Array<Partial<TreeBranchLeafNode> & { id?: string }> = Array.isArray(inlineNodesRaw) ? inlineNodesRaw : [];
-          const duplicateIds = Array.isArray((detail as any)?.duplicated) ? (detail as any).duplicated.map((d: any) => d.id) : [];
-          const rawDuplicated = Array.isArray((detail as any)?.duplicated) ? (detail as any).duplicated : [];
-          const source = (detail as any)?.source || null;
-          const suppressReload = Boolean((detail as any)?.suppressReload);
+          const duplicateIds = Array.isArray((detail as unknown)?.duplicated) ? (detail as any).duplicated.map((d: Record<string, unknown>) => d.id) : [];
+          const rawDuplicated = Array.isArray((detail as unknown)?.duplicated) ? (detail as any).duplicated : [];
+          const source = (detail as unknown)?.source || null;
+          const suppressReload = Boolean((detail as unknown)?.suppressReload);
           console.log(`[Hierarchical][evt:${debugEventId}] tbl-repeater-updated detail:`, { source, suppressReload, duplicateIds, rawDuplicatedCount: rawDuplicated.length, inlineNodesCount: inlineNodes.length, inlineNodeIds: inlineNodes.map(n => n && n.id), detail });
         } catch { /* ignore */ }
 
         if (detail?.suppressReload) {
           ddiag('Repeater update (suppressReload=true) → Doing local retransform only', detail);
-          const duplicated: Array<{ id: string }> = (detail as any)?.duplicated || [];
-          const deletedIds: string[] = (detail as any)?.deletedIds || [];
-          const deletingIds: string[] = (detail as any)?.deletingIds || [];
+          const duplicated: Array<{ id: string }> = (detail as unknown)?.duplicated || [];
+          const deletedIds: string[] = (detail as unknown)?.deletedIds || [];
+          const deletingIds: string[] = (detail as unknown)?.deletingIds || [];
           // Accept both `newNodes` and legacy `nodes` from repeater duplication event
-          const inlineNodesRaw = (detail as any)?.newNodes || (detail as any)?.nodes;
+          const inlineNodesRaw = (detail as unknown)?.newNodes || (detail as unknown)?.nodes;
           const inlineNodes: Array<Partial<TreeBranchLeafNode> & { id?: string }> = Array.isArray(inlineNodesRaw)
             ? inlineNodesRaw
             : [];
@@ -333,7 +333,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
           
           // 🔄 BACKGROUND SYNC: Si c'est une synchronisation silencieuse en arrière-plan,
           // faire un fetch silencieux immédiatement pour garantir la cohérence des données
-          if ((detail as any)?.source === 'background-sync' || (detail as any)?.silentRefresh) {
+          if ((detail as unknown)?.source === 'background-sync' || (detail as unknown)?.silentRefresh) {
             ddiag('[useTBLDataHierarchicalFixed] Background sync event → silent fetch');
             window.setTimeout(() => {
               try { fetchData({ silent: true }); } catch { /* ignore */ }
@@ -343,7 +343,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
           
           // If the event indicates a duplicate-templates action but contains no duplicated ids
           // nor inline nodes, schedule a silent fetch to re-sync with the server if it materializes nodes later.
-          if ((detail as any)?.source === 'duplicate-templates' && (!duplicated || duplicated.length === 0) && inlineNodeCount === 0) {
+          if ((detail as unknown)?.source === 'duplicate-templates' && (!duplicated || duplicated.length === 0) && inlineNodeCount === 0) {
             ddiag('[useTBLDataHierarchicalFixed] duplicate-templates event without duplicated ids detected; scheduling silent fetch');
             window.setTimeout(() => {
               try { fetchData({ silent: true }); } catch { /* ignore */ }
@@ -378,7 +378,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                     if (!res) return;
                     if (Array.isArray(res)) fetched.push(...res as TreeBranchLeafNode[]);
                     else if (res && typeof res === 'object') {
-                      const asAny = res as any;
+                      const asAny = res as unknown;
                       if (Array.isArray(asAny.data)) fetched.push(...asAny.data);
                       else if (Array.isArray(asAny.nodes)) fetched.push(...asAny.nodes);
                       else if (asAny.node && typeof asAny.node === 'object') fetched.push(asAny.node);
@@ -442,7 +442,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                   // 🔧 FIX DISPLAY: Scanner les display/derived nodes avec le même suffixe + même repeater
                   // Les display nodes ne sont pas enfants des copies supprimées, mais ils partagent le même
                   // suffixe et repeater. Sans ce scan, ils persistent jusqu'au smart merge (500ms).
-                  const eventRepeaterId = String((detail as any)?.nodeId || '');
+                  const eventRepeaterId = String((detail as unknown)?.nodeId || '');
                   if (eventRepeaterId && deletedSuffixes.size > 0) {
                     for (const n of prev) {
                       if (removed.has(n.id)) continue;
@@ -518,7 +518,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                   }
 
                   // 🔧 FIX DISPLAY: Scanner les display/derived nodes avec le même suffixe + même repeater
-                  const eventRepeaterId2 = String((detail as any)?.nodeId || '');
+                  const eventRepeaterId2 = String((detail as unknown)?.nodeId || '');
                   if (eventRepeaterId2 && deletedSuffixes.size > 0) {
                     for (const n of prev) {
                       if (removed.has(n.id)) continue;
@@ -551,7 +551,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                     // Prefer local cache first
                     let allNodes: TreeBranchLeafNode[] = Array.isArray(rawNodesRef.current) ? rawNodesRef.current as TreeBranchLeafNode[] : [];
                     // If local cache is empty and the caller asked for a full refresh, fetch it
-                    if (!allNodes.length && (detail as any)?.forceRefresh) {
+                    if (!allNodes.length && (detail as unknown)?.forceRefresh) {
                       const resp = await apiRef.current.get(`/api/treebranchleaf/trees/${treeId}/nodes`);
                       if (Array.isArray(resp)) allNodes = resp as TreeBranchLeafNode[];
                       else if (resp && typeof resp === 'object') allNodes = (resp.data || resp.nodes || []) as TreeBranchLeafNode[];
@@ -559,7 +559,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                     if (!allNodes.length) {
                       // No nodes available from full tree query. Respect suppressReload and
                       // only refresh if the caller explicitly requested it via forceRefresh.
-                      if ((detail as any)?.forceRefresh) setTimeout(() => fetchData(), 800);
+                      if ((detail as unknown)?.forceRefresh) setTimeout(() => fetchData(), 800);
                       return;
                     }
                     const baseRemoved = new Set(deletedIds);
@@ -569,7 +569,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                     for (const rid of deletedIds) {
                       const deletedNode = nodeById.get(rid as string);
                       if (!deletedNode) continue;
-                      const dm: any = deletedNode.metadata || {};
+                      const dm: unknown = deletedNode.metadata || {};
                       const suffix = String(rid).match(/-(\d+)$/)?.[1] ?? null;
                       if (dm?.sourceTemplateId) {
                         relatedTemplateIds.add(String(dm.sourceTemplateId));
@@ -586,7 +586,7 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                     }
                     const extraToRemove = new Set<string>();
                     for (const node of allNodes) {
-                      const meta: any = node.metadata || {};
+                      const meta: unknown = node.metadata || {};
                       if (meta.copiedFromNodeId && baseRemoved.has(String(meta.copiedFromNodeId))) {
                         extraToRemove.add(node.id);
                         ddiag('[useTBLDataHierarchicalFixed] extraToRemove candidate (copiedFrom matches removed id):', node.id, meta.copiedFromNodeId);
@@ -660,11 +660,11 @@ export function useTBLDataHierarchicalFixed(params: UseTBLDataHierarchicalParams
                       ddiag('[useTBLDataHierarchicalFixed] merged additional deletion candidates from full tree:', extraToRemove.size);
                       setFormDataVersion(v => v + 1);
                     } else {
-                      if ((detail as any)?.forceRefresh) setTimeout(() => fetchData(), 800);
+                      if ((detail as unknown)?.forceRefresh) setTimeout(() => fetchData(), 800);
                     }
                     } catch (e) {
                       ddiag('[useTBLDataHierarchicalFixed] failed to enrich deletions via full tree query', e);
-                      if ((detail as any)?.forceRefresh) setTimeout(() => fetchData(), 800);
+                      if ((detail as unknown)?.forceRefresh) setTimeout(() => fetchData(), 800);
                     }
                 })();
               }

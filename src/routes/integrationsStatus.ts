@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { db, Prisma } from '../lib/database';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { requireRole } from '../middlewares/requireRole.js';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -46,7 +47,7 @@ router.get('/status', requireRole(['admin', 'super_admin']), async (req: Authent
 
     res.json({ success: true, data: status });
   } catch (error) {
-    console.error('❌ [INTEGRATIONS] Erreur status:', error);
+    logger.error('❌ [INTEGRATIONS] Erreur status:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération du statut des intégrations' });
   }
 });
@@ -96,7 +97,7 @@ router.post('/ad-platform/connect', requireRole(['admin', 'super_admin']), async
     }
     res.json({ success: true, data: { id: rec.id } });
   } catch (error) {
-    console.error('❌ [INTEGRATIONS] Erreur connect:', error);
+    logger.error('❌ [INTEGRATIONS] Erreur connect:', error);
     res.status(500).json({ success: false, message: 'Erreur connexion plateforme' });
   }
 });
@@ -118,7 +119,7 @@ router.post('/ad-platform/disconnect', requireRole(['admin', 'super_admin']), as
     });
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ [INTEGRATIONS] Erreur disconnect:', error);
+    logger.error('❌ [INTEGRATIONS] Erreur disconnect:', error);
     res.status(500).json({ success: false, message: 'Erreur déconnexion plateforme' });
   }
 });
@@ -137,7 +138,7 @@ router.post('/ad-platform/sync', requireRole(['admin', 'super_admin']), async (r
     const rec = await prisma.adPlatformIntegration.update({ where: { id: existing.id }, data: { lastSync: new Date(), updatedAt: new Date() } });
     res.json({ success: true, data: { id: rec.id, lastSync: rec.lastSync } });
   } catch (error) {
-    console.error('❌ [INTEGRATIONS] Erreur sync:', error);
+    logger.error('❌ [INTEGRATIONS] Erreur sync:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la synchronisation' });
   }
 });

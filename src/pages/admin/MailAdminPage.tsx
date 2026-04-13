@@ -41,7 +41,7 @@ const MailAdminPage = () => {
     try {
       const data = await api.get(`/mail/settings`);
       setMailSettings(data || []);
-    } catch (e: any) {
+    } catch (e: unknown) {
       const errorMessage = e.message || 'Erreur lors du chargement des paramètres de messagerie.';
       setError(errorMessage);
       NotificationManager.error(errorMessage);
@@ -74,7 +74,7 @@ const MailAdminPage = () => {
       await api.patch(`/mail/settings/${settingsId}/toggle`, { isActivated: !currentStatus });
       NotificationManager.success(`Statut de la messagerie mis à jour.`);
       fetchMailSettings();
-    } catch (e: any) {
+    } catch (e: unknown) {
       const errorMessage = e.message || 'Erreur lors de la modification du statut.';
       NotificationManager.error(errorMessage);
     }
@@ -88,7 +88,7 @@ const MailAdminPage = () => {
       await api.delete(`/mail/settings/${settingsId}`);
       NotificationManager.success('Configuration de messagerie supprimée.');
       fetchMailSettings();
-    } catch (e: any) {
+    } catch (e: unknown) {
       NotificationManager.error(e.message || 'Erreur lors de la suppression.');
     }
   };
@@ -117,7 +117,7 @@ const MailAdminPage = () => {
       NotificationManager.success(`Configuration ${isEditing ? 'mise à jour' : 'créée'}.`);
       fetchMailSettings();
       handleCloseModal();
-    } catch (e: any) {
+    } catch (e: unknown) {
       NotificationManager.error(e.message || `Erreur lors de la ${isEditing ? 'mise à jour' : 'création'}.`);
     }
   };
@@ -223,7 +223,7 @@ const MailAdminPage = () => {
 
 interface MailSettingsModalProps {
   onClose: () => void;
-  onSave: (data: any) => void;
+  onSave: (data: unknown) => void;
   setting: MailSettings | null;
   users: User[];
 }
@@ -238,7 +238,7 @@ const MailSettingsModal: React.FC<MailSettingsModalProps> = ({ onClose, onSave, 
   const [formErrors, setFormErrors] = useState<any>({});
 
   const validate = () => {
-      const errors: any = {};
+      const errors: unknown = {};
       if (!formData.userId) errors.userId = "L'utilisateur est requis.";
       if (!formData.login) errors.login = "Le login est requis.";
       if (!formData.host) errors.host = "L'hôte est requis.";

@@ -1,7 +1,10 @@
 import express from 'express';
 import prisma from '../prisma';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = express.Router();
+router.use(authenticateToken);
 
 /**
  * 🏢 ROUTES ORGANIZATIONS - VERSION SIMPLE POUR DEBUG
@@ -26,7 +29,7 @@ router.get('/', async (req, res) => {
 
     res.json({ success: true, data: organizations });
   } catch (error) {
-    console.error('❌ [GET /api/organizations] Erreur:', error);
+    logger.error('❌ [GET /api/organizations] Erreur:', error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
@@ -56,7 +59,7 @@ router.get('/:id', async (req, res) => {
 
     res.json({ success: true, data: organization });
   } catch (error) {
-    console.error(`❌ [GET /api/organizations/${req.params.id}] Erreur:`, error);
+    logger.error(`❌ [GET /api/organizations/${req.params.id}] Erreur:`, error);
     res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });
@@ -84,7 +87,7 @@ router.post('/', async (req, res) => {
 
     res.json({ success: true, data: newOrganization });
   } catch (error) {
-    console.error('❌ [POST /api/organizations] Erreur:', error);
+    logger.error('❌ [POST /api/organizations] Erreur:', error);
     res.status(500).json({ success: false, error: 'Erreur lors de la création de l\'organisation' });
   }
 });
@@ -117,12 +120,12 @@ router.put('/:id', async (req, res) => {
 
     res.json({ success: true, data: updatedOrganization });
   } catch (error) {
-    console.error(`❌ [PUT /api/organizations/${req.params.id}] Erreur:`, error);
+    logger.error(`❌ [PUT /api/organizations/${req.params.id}] Erreur:`, error);
 
     // 🔍 Plus de détails sur l'erreur
     if (error instanceof Error) {
-      console.error("❌ Message d'erreur:", error.message);
-      console.error('❌ Stack trace:', error.stack);
+      logger.error("❌ Message d'erreur:", error.message);
+      logger.error('❌ Stack trace:', error.stack);
     }
 
     res.status(400).json({
@@ -142,7 +145,7 @@ router.delete('/:id', async (req, res) => {
     
     res.json({ success: true, message: 'Organisation supprimée avec succès' });
   } catch (error) {
-    console.error(`❌ [DELETE /api/organizations/${req.params.id}] Erreur:`, error);
+    logger.error(`❌ [DELETE /api/organizations/${req.params.id}] Erreur:`, error);
     res.status(500).json({ success: false, error: 'Erreur lors de la suppression de l\'organisation' });
   }
 });

@@ -76,7 +76,7 @@ interface Website {
   domain: string;
   isActive: boolean;
   isPublished: boolean;
-  config?: any;
+  config?: unknown;
 }
 
 export const WebsitesAdminPage: React.FC = () => {
@@ -182,7 +182,7 @@ export const WebsitesAdminPage: React.FC = () => {
     {
       title: 'Statut',
       key: 'status',
-      render: (_: any, record: Website) => (
+      render: (_: unknown, record: Website) => (
         <Space>
           {record.isActive && <Tag color="success">Actif</Tag>}
           {record.isPublished && <Tag color="processing">Publié</Tag>}
@@ -193,7 +193,7 @@ export const WebsitesAdminPage: React.FC = () => {
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, record: Website) => (
+      render: (_: unknown, record: Website) => (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <button onClick={() => handleView(record)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: '#e7f3ff', color: FB.blue, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span>👁️</span><span>Voir</span></button>
           <button onClick={() => handleEdit(record)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: '#f9f0ff', color: FB.purple, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span>✏️</span><span>Éditer</span></button>

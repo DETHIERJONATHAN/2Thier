@@ -542,7 +542,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [msgApi]);
 
-    const login = async (email: string, password: string): Promise<any> => {
+    const login = async (email: string, password: string): Promise<unknown> => {
       if (window.__authLoginInFlight) {
         console.log('[AuthProvider] Login déjà en cours – appel ignoré');
         return;
@@ -590,11 +590,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           window.__authMeCooldownUntil = Date.now() + retryAfterMs;
           msgApi.error(`Trop de tentatives de connexion. Patientez ${seconds > 60 ? `${Math.ceil(seconds / 60)} minutes` : `${seconds} secondes`} avant de réessayer.`);
           throw error;
-        } else if (apiError?.status === 403 && ((apiError?.body as any)?.emailNotVerified || apiError?.message?.includes('vérifié'))) {
+        } else if (apiError?.status === 403 && ((apiError?.body as unknown)?.emailNotVerified || apiError?.message?.includes('vérifié'))) {
           // Email non vérifié — propager l'erreur avec les détails pour le composant Connexion
           const enrichedError = Object.assign(new Error('Votre compte n\'est pas encore activé. Vérifiez votre boîte mail pour le lien d\'activation.'), {
             emailNotVerified: true,
-            email: (apiError.body as any)?.email || '',
+            email: (apiError.body as unknown)?.email || '',
             status: 403,
           });
           throw enrichedError;

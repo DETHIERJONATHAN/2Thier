@@ -136,7 +136,7 @@ export class GoogleCalendarNotificationService extends EventEmitter {
   /**
    * 🧠 TRAITER ÉVÉNEMENT AVEC IA
    */
-  private async processEventWithAI(event: any, userId: string): Promise<void> {
+  private async processEventWithAI(event: unknown, userId: string): Promise<void> {
     try {
 
       // Analyser l'événement avec IA
@@ -150,13 +150,13 @@ export class GoogleCalendarNotificationService extends EventEmitter {
         startTime: new Date(event.start.dateTime || event.start.date),
         endTime: new Date(event.end.dateTime || event.end.date),
         location: event.location,
-        attendees: (event.attendees || []).map((a: any) => a.email),
+        attendees: (event.attendees || []).map((a: Record<string, unknown>) => a.email),
         organizer: event.organizer?.email || '',
         aiAnalysis,
         userId,
         organizationId: (await this.getUserOrganization(userId))!,
         meetingUrl: event.hangoutLink || event.location?.includes('http') ? event.location : undefined,
-        attachments: (event.attachments || []).map((a: any) => ({
+        attachments: (event.attachments || []).map((a: Record<string, unknown>) => ({
           title: a.title,
           link: a.fileUrl
         }))
@@ -174,7 +174,7 @@ export class GoogleCalendarNotificationService extends EventEmitter {
   /**
    * 🧠 ANALYSER ÉVÉNEMENT AVEC IA
    */
-  private async analyzeEventWithAI(event: any): Promise<MeetingAIAnalysis> {
+  private async analyzeEventWithAI(event: unknown): Promise<MeetingAIAnalysis> {
     try {
       const title = (event.summary || '').toLowerCase();
       const description = (event.description || '').toLowerCase();
@@ -411,7 +411,7 @@ export class GoogleCalendarNotificationService extends EventEmitter {
     return [];
   }
 
-  private analyzeParticipants(attendees: any[]) {
+  private analyzeParticipants(attendees: unknown[]) {
     if (!Array.isArray(attendees) || attendees.length === 0) {
       return {
         vipAttendees: [],
@@ -493,14 +493,14 @@ export class GoogleCalendarNotificationService extends EventEmitter {
     return ['Envoyer compte-rendu', 'Définir actions suivantes'];
   }
 
-  private calculateDuration(event: any): number {
+  private calculateDuration(event: unknown): number {
     if (!event.end || !event.start) return 60;
     const start = new Date(event.start.dateTime || event.start.date);
     const end = new Date(event.end.dateTime || event.end.date);
     return Math.round((end.getTime() - start.getTime()) / (1000 * 60));
   }
 
-  private async assessConflictRisk(event: any): Promise<'none' | 'low' | 'medium' | 'high'> {
+  private async assessConflictRisk(event: unknown): Promise<'none' | 'low' | 'medium' | 'high'> {
     if (!event || !event.start || !event.end) {
       return 'none';
     }

@@ -82,7 +82,7 @@ const ColonyProfilePage: React.FC = () => {
     if (!orgId) return;
     setLoading(true);
     api.get(`/api/organizations/public/${orgId}`)
-      .then((r: any) => {
+      .then((r: unknown) => {
         setColony(r?.data || r);
         setLoading(false);
       })
@@ -97,10 +97,10 @@ const ColonyProfilePage: React.FC = () => {
     if (!orgId) return;
     setPostsLoading(true);
     try {
-      const result: any = await api.get(`/api/wall/feed?mode=org&visibility=ALL`);
+      const result: unknown = await api.get(`/api/wall/feed?mode=org&visibility=ALL`);
       const allPosts: WallPostData[] = result?.posts || [];
       // Filter posts published by this org
-      const orgPosts = allPosts.filter((p: any) => p.publishAsOrg && p.organization?.id === orgId);
+      const orgPosts = allPosts.filter((p: Record<string, unknown>) => p.publishAsOrg && p.organization?.id === orgId);
       setPosts(orgPosts);
     } catch {
       setPosts([]);

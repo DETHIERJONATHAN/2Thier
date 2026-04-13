@@ -10,8 +10,8 @@ export interface Category {
   active: boolean;
   organizationId?: string;
   superAdminOnly: boolean;
-  allowedRoles?: any;
-  requiredPermissions?: any;
+  allowedRoles?: unknown;
+  requiredPermissions?: unknown;
   createdAt: string;
   updatedAt: string;
 }
@@ -52,9 +52,9 @@ export interface ModuleWithStatus {
   Category?: Category;
   
   // Autres relations
-  Organization?: any;
-  OrganizationModuleStatus?: any[];
-  Permission?: any[];
+  Organization?: unknown;
+  OrganizationModuleStatus?: unknown[];
+  Permission?: unknown[];
 }
 
 export interface SectionWithModules {

@@ -261,7 +261,7 @@ export const anomalyDetection = (req: Request, res: Response, next: NextFunction
 // 🛡️ SANITISATION DES ENTRÉES - VERSION CORRIGÉE
 export const inputSanitization = (req: Request, res: Response, next: NextFunction) => {
   // Sanitiser récursivement les objets
-  const sanitizeObject = (obj: any): any => {
+  const sanitizeObject = (obj: unknown): unknown => {
     if (typeof obj !== 'object' || obj === null) {
       if (typeof obj === 'string') {
         // Nettoyer les caractères dangereux
@@ -278,7 +278,7 @@ export const inputSanitization = (req: Request, res: Response, next: NextFunctio
       return obj.map(sanitizeObject);
     }
     
-    const sanitized: any = {};
+    const sanitized: unknown = {};
     for (const [key, value] of Object.entries(obj)) {
       sanitized[key] = sanitizeObject(value);
     }
@@ -307,7 +307,7 @@ export const sqlInjectionDetection = (req: Request, res: Response, next: NextFun
     /exec(\s|\+)+(s|x)p\w+/i
   ];
   
-  const checkForSQLInjection = (data: any): boolean => {
+  const checkForSQLInjection = (data: unknown): boolean => {
     if (typeof data === 'string') {
       return sqlPatterns.some(pattern => pattern.test(data));
     }
@@ -340,3 +340,26 @@ export const sqlInjectionDetection = (req: Request, res: Response, next: NextFun
   
   next();
 };
+
+// 🛡️ RATE LIMITERS SPÉCIFIQUES
+export const aiRateLimit: RequestHandler = isRateLimitEnabled
+  ? rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    trustProxy: 1,
+    message: { error: 'Trop de requêtes AI, réessayez plus tard.' },
+  })
+  : noopMiddleware;
+
+export const uploadRateLimit: RequestHandler = isRateLimitEnabled
+  ? rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    trustProxy: 1,
+    message: { error: 'Trop de fichiers téléchargés, réessayez plus tard.' },
+  })
+  : noopMiddleware;

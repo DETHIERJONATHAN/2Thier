@@ -111,7 +111,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
   /**
    * ➕ AJOUT D'UNE NOUVELLE SECTION (depuis ComponentLibrary)
    */
-  const handleAddSection = async (sectionType: string, defaultContent: any) => {
+  const handleAddSection = async (sectionType: string, defaultContent: unknown) => {
     try {
       console.log('➕ [NoCodeBuilder v2] Ajout section type:', sectionType);
 
@@ -153,7 +153,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
   /**
    * 💾 SAUVEGARDE DES MODIFICATIONS (appelé par UniversalSectionEditor)
    */
-  const handleSaveSection = async (updatedContent: any) => {
+  const handleSaveSection = async (updatedContent: unknown) => {
     if (!selectedSection) return;
 
     try {
@@ -331,7 +331,7 @@ const NoCodeBuilder: React.FC<NoCodeBuilderProps> = ({ websiteId, siteName }) =>
   /**
    * 💾 SAUVEGARDE DES PARAMÈTRES DU SITE
    */
-  const handleSaveSettings = async (cloudRunData: any) => {
+  const handleSaveSettings = async (cloudRunData: unknown) => {
     setSavingSettings(true);
     try {
       console.log('💾 [NoCodeBuilder v2] Sauvegarde paramètres site:', cloudRunData);

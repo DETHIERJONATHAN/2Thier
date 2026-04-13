@@ -393,7 +393,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
           onNodesUpdate(updatedNodes);
           console.log('🔄 Données rechargées après déplacement');
         }
-      } catch (patchError: any) {
+      } catch (patchError: unknown) {
         // Tentative de fallback avec PUT
         console.warn('⚠️ PATCH échoué, tentative PUT fallback');
         
@@ -410,7 +410,7 @@ const TreeBranchLeafEditor: React.FC<TreeBranchLeafEditorProps> = ({
             onNodesUpdate(updatedNodes);
             console.log('🔄 Données rechargées après déplacement (PUT)');
           }
-        } catch (putError: any) {
+        } catch (putError: unknown) {
           // 🔄 ROLLBACK : Les deux appels ont échoué, restaurer l'état précédent
           console.error('❌ Échec serveur, rollback de la mise à jour optimiste');
           onNodesUpdate(previousNodes);

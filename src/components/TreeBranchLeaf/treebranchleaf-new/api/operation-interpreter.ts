@@ -70,7 +70,7 @@ export interface InterpretResult {
     /** Type d'opÃƒÂ©ration (condition, formula, table, field) */
     type: string;
     /** Autres propriÃƒÂ©tÃƒÂ©s spÃƒÂ©cifiques au type */
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -859,7 +859,7 @@ async function interpretReference(
         
         // PRIORITÉ 2: capabilities sourceRef UNIQUEMENT si c'est une formule (pas condition)
         if (String(result.result) === '0') {
-          const meta = calcNode.metadata as any;
+          const meta = calcNode.metadata as unknown;
           const datas = meta?.capabilities?.datas;
           if (datas && datas.length > 0) {
             const sourceRef = datas[0]?.config?.sourceRef;
@@ -1074,7 +1074,7 @@ async function interpretCondition(
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   // Ã°Å¸â€Â Ãƒâ€°TAPE 2 : Extraire la structure WHEN et les branches
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-  const condSet = condition.conditionSet as any;
+  const condSet = condition.conditionSet as unknown;
 
   // ════════════════════════════════════════════════════════════════════
   // 🔀 MODE FIRST-MATCH : Support multi-branches
@@ -1452,7 +1452,7 @@ async function interpretCondition(
  * @param right - Valeur de droite
  * @returns true si condition vraie, false sinon
  */
-function evaluateOperator(op: string, left: any, right: any): boolean {
+function evaluateOperator(op: string, left: unknown, right: unknown): boolean {
   const normalizeUuidWithNumericSuffix = (value: unknown): unknown => {
     if (typeof value !== 'string') return value;
     const m = value.match(/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(-\d+)?$/i);
@@ -1467,12 +1467,12 @@ function evaluateOperator(op: string, left: any, right: any): boolean {
     return /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(normalized);
   };
 
-  const normalizeComparable = (value: any): any => {
+  const normalizeComparable = (value: unknown): any => {
     if (Array.isArray(value)) return value.map(normalizeComparable);
     return normalizeUuidWithNumericSuffix(value);
   };
 
-  const equalsWithCopySuffixSupport = (a: any, b: any): boolean => {
+  const equalsWithCopySuffixSupport = (a: unknown, b: unknown): boolean => {
     const na = normalizeComparable(a);
     const nb = normalizeComparable(b);
 
@@ -1563,7 +1563,7 @@ function evaluateOperator(op: string, left: any, right: any): boolean {
   }
 }
 
-function compareValuesByOperator(op: string | undefined | null, cellValue: any, targetValue: any): boolean {
+function compareValuesByOperator(op: string | undefined | null, cellValue: unknown, targetValue: unknown): boolean {
   if (!op) return false;
 
   const normalizeUuidWithNumericSuffix = (value: unknown): unknown => {
@@ -1829,7 +1829,7 @@ function tryParseTokenReference(token?: string | null): FormulaReferenceMeta | n
   return null;
 }
 
-function buildFormulaExpression(tokens: any[]): FormulaExpressionBuildResult {
+function buildFormulaExpression(tokens: unknown[]): FormulaExpressionBuildResult {
   const parts: FormulaExpressionPart[] = [];
   const roleToEncoded: Record<string, string> = {};
   const encodedMeta: Record<string, FormulaReferenceMeta> = {};
@@ -2226,8 +2226,8 @@ async function interpretFormula(
  * @returns Valeur source | null
  */
 async function getSourceValue(
-  sourceOption: any,
-  lookupConfig: any,
+  sourceOption: unknown,
+  lookupConfig: unknown,
   fieldId: string | null | undefined,
   submissionId: string,
   prisma: PrismaClient,
@@ -2283,8 +2283,8 @@ async function getSourceValue(
  * @returns Label de la source
  */
 async function getSourceLabel(
-  sourceOption: any,
-  lookupConfig: any,
+  sourceOption: unknown,
+  lookupConfig: unknown,
   fieldId: string | null | undefined,
   prisma: PrismaClient,
   labelMap?: Map<string, string>
@@ -2514,12 +2514,12 @@ async function interpretTable(
   // Reconstituer columns, rows, data depuis les relations
   let columns = table.tableColumns.map(col => col.name);
   let rows: string[] = [];
-  let data: any[][] = [];
+  let data: unknown[][] = [];
   
   // Ã°Å¸â€â€ž Parser cells avec support hybride (JSON array OU plain string)
   table.tableRows.forEach(row => {
     try {
-      let cellsData: any;
+      let cellsData: unknown;
       
       // Ã°Å¸â€Â Tentative 1: Parse JSON si c'est une string
       if (typeof row.cells === 'string') {
@@ -2578,7 +2578,7 @@ async function interpretTable(
         select: { overrideData: true }
       });
       if (tableOverride?.overrideData) {
-        const od = tableOverride.overrideData as any;
+        const od = tableOverride.overrideData as unknown;
         if (od.columns && Array.isArray(od.columns) && od.data && Array.isArray(od.data)) {
           columns = od.columns;
           const overrideRows = Array.isArray(od.rows) ? od.rows : [];
@@ -2601,7 +2601,7 @@ async function interpretTable(
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   // Ã¯Â¿Â½Ã°Å¸â€Â Ãƒâ€°TAPE 2 : Extraire la configuration de lookup
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-  const meta = table.meta as any;
+  const meta = table.meta as unknown;
   const lookup = meta?.lookup;
   
   // Ã°Å¸â€Â¥ FIX: lookup.enabled peut ÃƒÂªtre undefined si seulement columnLookupEnabled/rowLookupEnabled sont dÃƒÂ©finis
@@ -2619,8 +2619,8 @@ async function interpretTable(
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   // Ã°Å¸â€œÅ  Ãƒâ€°TAPE 3 : RÃƒÂ©cupÃƒÂ©rer les selectors (champs de sÃƒÂ©lection) et les toggles
   // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-  let rowFieldId: string | null = (lookup.selectors?.rowFieldId ?? (lookup as any)?.rowFieldId ?? (lookup as any)?.rowField ?? null) as any;
-  let colFieldId: string | null = (lookup.selectors?.columnFieldId ?? (lookup as any)?.columnFieldId ?? (lookup as any)?.colFieldId ?? (lookup as any)?.columnField ?? null) as any;
+  let rowFieldId: string | null = (lookup.selectors?.rowFieldId ?? (lookup as unknown)?.rowFieldId ?? (lookup as unknown)?.rowField ?? null) as unknown;
+  let colFieldId: string | null = (lookup.selectors?.columnFieldId ?? (lookup as unknown)?.columnFieldId ?? (lookup as unknown)?.colFieldId ?? (lookup as unknown)?.columnField ?? null) as unknown;
   if (typeof rowFieldId === 'string' && rowFieldId.trim() === '') rowFieldId = null;
   if (typeof colFieldId === 'string' && colFieldId.trim() === '') colFieldId = null;
   const rowEnabled = lookup.rowLookupEnabled === true;
@@ -3596,7 +3596,7 @@ async function interpretField(
 export interface VariableEvalOptions {
   labelMap?: Map<string, string>;
   treeId?: string;
-  preloadedVariable?: any;
+  preloadedVariable?: unknown;
   organizationId?: string;
 }
 
@@ -3608,7 +3608,7 @@ export async function evaluateVariableOperation(
   options: VariableEvalOptions = {}
 ): Promise<{
   value: string;
-  operationDetail: any;
+  operationDetail: unknown;
   operationResult: string;
   operationSource: 'condition' | 'formula' | 'table' | 'field' | 'fixed';
   sourceRef: string;

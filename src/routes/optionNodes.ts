@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authMiddleware } from '../middlewares/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -54,7 +55,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     if (!node) return res.status(404).json({ success: false, message: 'Not found' });
     return res.json({ success: true, data: node });
   } catch (e) {
-    console.error('[API] GET option-node detail error:', e);
+    logger.error('[API] GET option-node detail error:', e);
     return res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -98,7 +99,7 @@ router.get('/field/:fieldId/tree', async (req: Request, res: Response) => {
     const enriched = tree.map(r=>enrich(r,[],[]));
     return res.json({ success: true, data: enriched, _v: 1 });
   } catch (e) {
-    console.error('[API] GET option-nodes tree error:', e);
+    logger.error('[API] GET option-nodes tree error:', e);
     return res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -140,7 +141,7 @@ router.get('/search', async (req: Request, res: Response) => {
 
     return res.json({ success: true, nodes: result });
   } catch (e) {
-    console.error('[API] GET option-nodes search error:', e);
+    logger.error('[API] GET option-nodes search error:', e);
     return res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -154,7 +155,7 @@ router.get('/field/:fieldId/children', async (req: Request, res: Response) => {
     const children = base.map((b) => ({ id: b.id, label: b.label, value: b.value ?? undefined }));
     return res.json({ success: true, data: children });
   } catch (e) {
-    console.error('[API] GET option-nodes children error:', e);
+    logger.error('[API] GET option-nodes children error:', e);
     return res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -179,7 +180,7 @@ router.post('/', async (req: Request, res: Response) => {
     
     return res.json({ success: true, data: created });
   } catch (e) {
-    console.error('[API] POST option-nodes create error:', e);
+    logger.error('[API] POST option-nodes create error:', e);
     return res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -192,7 +193,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     const updated = await prisma.fieldOptionNode.update({ where: { id }, data: { label: label ?? undefined, value: value === undefined ? undefined : value, order: order ?? undefined, data: data === undefined ? undefined : data, parentId: parentId === undefined ? undefined : parentId } });
     return res.json({ success: true, data: updated });
   } catch (e) {
-    console.error('[API] PUT option-nodes update error:', e);
+    logger.error('[API] PUT option-nodes update error:', e);
     return res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -222,7 +223,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     await prisma.fieldOptionNode.deleteMany({ where: { id: { in: allIds } } });
     return res.json({ success: true });
   } catch (e) {
-    console.error('[API] DELETE option-nodes error:', e);
+    logger.error('[API] DELETE option-nodes error:', e);
     return res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -235,7 +236,7 @@ router.post('/reorder', async (req: Request, res: Response) => {
     await prisma.$transaction(orderedIds.map((id, idx) => prisma.fieldOptionNode.update({ where: { id }, data: { order: idx } })));
     return res.json({ success: true });
   } catch (e) {
-    console.error('[API] POST option-nodes reorder error:', e);
+    logger.error('[API] POST option-nodes reorder error:', e);
     return res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -263,7 +264,7 @@ router.post('/import', async (req: Request, res: Response) => {
     await Promise.all(inserts);
     return res.json({ success: true });
   } catch (e) {
-    console.error('[API] POST option-nodes import error:', e);
+    logger.error('[API] POST option-nodes import error:', e);
     return res.status(500).json({ success: false, message: (e as Error)?.message || 'Erreur serveur' });
   }
 });
@@ -275,7 +276,7 @@ router.get('/export/:fieldId', async (req: Request, res: Response) => {
     const nodes = await prisma.fieldOptionNode.findMany({ where: { fieldId }, orderBy: [{ parentId: 'asc' }, { order: 'asc' }], select: { id: true, label: true, value: true, parentId: true, order: true, data: true } });
     return res.json({ success: true, data: buildTree(nodes as FlatNode[]) });
   } catch (e) {
-    console.error('[API] GET option-nodes export error:', e);
+    logger.error('[API] GET option-nodes export error:', e);
     return res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db, Prisma } from '../lib/database';
 import { authMiddleware, type AuthenticatedRequest } from '../middlewares/auth.js';
 import { notify } from '../services/NotificationHelper';
+import { logger } from '../lib/logger';
 
 // Enum temporaire pour les devis
 enum QuoteStatus {
@@ -131,7 +132,7 @@ router.get('/', async (req, res) => {
 
     res.json({ success: true, total, page: pageNum, pageSize: sizeNum, data });
   } catch (e) {
-    console.error('[QUOTES] GET list error', e);
+    logger.error('[QUOTES] GET list error', e);
     res.status(500).json({ success: false, error: 'Erreur lors du chargement des devis' });
   }
 });
@@ -154,7 +155,7 @@ router.get('/:id', async (req, res) => {
     if (!quote) return res.status(404).json({ error: 'Devis introuvable' });
     res.json(quote);
   } catch (e) {
-    console.error('[QUOTES] GET detail error', e);
+    logger.error('[QUOTES] GET detail error', e);
     res.status(500).json({ error: 'Erreur lors du chargement du devis' });
   }
 });
@@ -196,7 +197,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(created);
   } catch (e) {
-    console.error('[QUOTES] POST create error', e);
+    logger.error('[QUOTES] POST create error', e);
     res.status(500).json({ error: 'Erreur lors de la création du devis' });
   }
 });
@@ -242,7 +243,7 @@ router.patch('/:id', async (req, res) => {
 
     res.json(updated);
   } catch (e) {
-    console.error('[QUOTES] PATCH update error', e);
+    logger.error('[QUOTES] PATCH update error', e);
     res.status(500).json({ error: 'Erreur lors de la mise à jour du devis' });
   }
 });
@@ -261,7 +262,7 @@ router.delete('/:id', async (req, res) => {
     await prisma.quote.update({ where: { id }, data: { status: QuoteStatus.CANCELLED } });
     res.status(204).send();
   } catch (e) {
-    console.error('[QUOTES] DELETE error', e);
+    logger.error('[QUOTES] DELETE error', e);
     res.status(500).json({ error: 'Erreur lors de l\'annulation du devis' });
   }
 });
@@ -332,7 +333,7 @@ router.post('/:id/items', async (req, res) => {
     });
     res.json({ success: true, quote: updated });
   } catch (e) {
-    console.error('[QUOTES] POST items error', e);
+    logger.error('[QUOTES] POST items error', e);
     res.status(500).json({ error: 'Erreur lors de la mise à jour des lignes' });
   }
 });
@@ -393,7 +394,7 @@ router.post('/:id/duplicate', async (req, res) => {
 
     res.status(201).json(newQuote);
   } catch (e) {
-    console.error('[QUOTES] duplicate error', e);
+    logger.error('[QUOTES] duplicate error', e);
     res.status(500).json({ error: 'Erreur lors de la duplication du devis' });
   }
 });

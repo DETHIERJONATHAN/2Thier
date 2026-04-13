@@ -24,8 +24,8 @@ interface WebsiteFormModalProps {
   visible: boolean;
   loading?: boolean;
   formConfig?: WebsiteFormConfig | null;
-  initialValues?: Record<string, any>;
-  onSubmit: (values: Record<string, any>) => Promise<void>;
+  initialValues?: Record<string, unknown>;
+  onSubmit: (values: Record<string, unknown>) => Promise<void>;
   onCancel?: () => void;
 }
 
@@ -48,7 +48,7 @@ export const WebsiteFormModal: React.FC<WebsiteFormModalProps> = ({
 
   const normalizedFields = useMemo(() => formConfig?.fields ?? [], [formConfig]);
 
-  const handleFinish = async (values: Record<string, any>) => {
+  const handleFinish = async (values: Record<string, unknown>) => {
     if (!formConfig) {
       message.error("Formulaire indisponible");
       return;
@@ -92,7 +92,7 @@ export const WebsiteFormModal: React.FC<WebsiteFormModalProps> = ({
 
           {normalizedFields.map((field) => {
             const Component = typeToInput[field.type] || Input;
-            const inputProps: Record<string, any> = {};
+            const inputProps: Record<string, unknown> = {};
             if (field.type === 'email') {
               inputProps.type = 'email';
             }

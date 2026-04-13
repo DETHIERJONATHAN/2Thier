@@ -44,7 +44,7 @@ interface ExposedTable {
   rowCount: number | null;
   hasOverride: boolean;
   overrideId: string | null;
-  overrideData: any;
+  overrideData: unknown;
   lastUpdatedBy: string | null;
   lastUpdatedAt: string | null;
 }
@@ -119,7 +119,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
   //   columns: string[] — noms de colonnes (col[0] = label, col[1+] = données)
   //   rows: [...] — rows[0] = header (skippé), rows[1+] = labels de lignes
   //   data: [...] — data[0] = header (vide), data[i] parallèle à rows[i]
-  const apiToTableConfig = useCallback((columns: string[], apiRows: any[], tableName: string): TableConfig => {
+  const apiToTableConfig = useCallback((columns: string[], apiRows: unknown[], tableName: string): TableConfig => {
     // rows[0] = header placeholder (skipped by editor), rows[1+] = row labels
     const cfgRows: (string | (string | number | null)[])[] = [
       columns[0] || 'Ligne' // Header placeholder
@@ -130,7 +130,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
     for (const cells of apiRows) {
       if (Array.isArray(cells)) {
         cfgRows.push(String(cells[0] ?? ''));
-        cfgData.push(cells.slice(1).map((v: any) => v ?? null));
+        cfgData.push(cells.slice(1).map((v: Record<string, unknown>) => v ?? null));
       } else {
         cfgRows.push(String(cells ?? ''));
         cfgData.push([]);
@@ -170,8 +170,8 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
       const res = await api.get(`/api/treebranchleaf/tables/${table.id}?limit=10000`);
       
       // Extraire les noms de colonnes depuis l'API (objets {name, type, ...})
-      const columns: string[] = (res.columns || []).map((c: any) => c.name || c);
-      const apiRows: any[][] = res.rows || [];
+      const columns: string[] = (res.columns || []).map((c: Record<string, unknown>) => c.name || c);
+      const apiRows: unknown[][] = res.rows || [];
       
       const tableName = table.gestionnaireLabel || table.name || res.name || 'Tableau';
       setTableCfg(apiToTableConfig(columns, apiRows, tableName));
@@ -309,8 +309,8 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
         };
       } else {
         const res = await api.get(`/api/treebranchleaf/tables/${table.id}?limit=10000`);
-        const columns: string[] = (res.columns || []).map((c: any) => c.name || c);
-        const apiRows: any[][] = res.rows || [];
+        const columns: string[] = (res.columns || []).map((c: Record<string, unknown>) => c.name || c);
+        const apiRows: unknown[][] = res.rows || [];
         const tableName = table.gestionnaireLabel || table.name || res.name || 'Tableau';
         currentCfg = apiToTableConfig(columns, apiRows, tableName);
       }

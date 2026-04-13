@@ -57,7 +57,7 @@ export class GoogleMailNotificationService extends EventEmitter {
   private static instance: GoogleMailNotificationService;
   private universalService: UniversalNotificationService;
   private isWatching = new Map<string, boolean>();
-  private webhookHandlers = new Map<string, any>();
+  private webhookHandlers = new Map<string, unknown>();
 
   private constructor() {
     super();
@@ -138,7 +138,7 @@ export class GoogleMailNotificationService extends EventEmitter {
   /**
    * 🔔 TRAITER UN NOUVEAU EMAIL AVEC IA
    */
-  async processNewGmailWithAI(emailData: any, userId: string): Promise<void> {
+  async processNewGmailWithAI(emailData: unknown, userId: string): Promise<void> {
     try {
 
       // 1. Récupérer le contenu complet de l'email
@@ -177,7 +177,7 @@ export class GoogleMailNotificationService extends EventEmitter {
   /**
    * 🧠 ANALYSER EMAIL AVEC IA
    */
-  private async analyzeEmailWithAI(email: any): Promise<EmailAIAnalysis> {
+  private async analyzeEmailWithAI(email: unknown): Promise<EmailAIAnalysis> {
     try {
       // Préparer le contenu pour l'IA
       const content = `
@@ -218,7 +218,7 @@ Body: ${email.textContent || email.snippet}
   /**
    * 🎯 ANALYSE BASIQUE AVEC RÈGLES MÉTIER
    */
-  private analyzeEmailBasic(email: any): EmailAIAnalysis {
+  private analyzeEmailBasic(email: unknown): EmailAIAnalysis {
     const subject = (email.subject || '').toLowerCase();
     const content = (email.textContent || email.snippet || '').toLowerCase();
     const from = (email.from || '').toLowerCase();
@@ -367,7 +367,7 @@ Body: ${email.textContent || email.snippet}
     return match ? match[1] : emailString;
   }
 
-  private generateSummary(email: any): string {
+  private generateSummary(email: unknown): string {
     const content = email.textContent || email.snippet || '';
     if (content.length <= 100) return content;
     return content.substring(0, 100) + '...';
@@ -379,7 +379,7 @@ Body: ${email.textContent || email.snippet}
     return sentences.slice(0, 3).map(s => s.trim());
   }
 
-  private async getFullEmailContent(emailId: string, _userId: string): Promise<any> {
+  private async getFullEmailContent(emailId: string, _userId: string): Promise<unknown> {
     // TODO: Implémenter la récupération complète via Gmail API
     return {
       id: emailId,

@@ -14,8 +14,8 @@ import { SectionHeaderEditor } from '../SectionHeaderEditor';
 const { TextArea } = Input;
 
 interface HeroEditorProps {
-  section: any;
-  onSave: (content: any) => void;
+  section: unknown;
+  onSave: (content: unknown) => void;
   onCancel: () => void;
 }
 
@@ -74,7 +74,7 @@ export const HeroEditor: React.FC<HeroEditorProps> = ({ section, onSave, onCance
     setButtons(newButtons);
   };
 
-  const handleSubmit = (values: any) => {
+  const handleSubmit = (values: unknown) => {
     onSave({
       name: values.name,
       content: {
@@ -106,7 +106,7 @@ export const HeroEditor: React.FC<HeroEditorProps> = ({ section, onSave, onCance
       }
       return isImage && isLt5M;
     },
-    onChange: (info: any) => {
+    onChange: (info: unknown) => {
       setBackgroundFile(info.fileList);
     },
     maxCount: 1

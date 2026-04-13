@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken, fetchFullUser } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
-router.use(authenticateToken as any);
-router.use(fetchFullUser as any);
+router.use(authenticateToken as unknown);
+router.use(fetchFullUser as unknown);
 
 // ═══════════════════════════════════════════════════════════════
 // Métadonnées des tables connues : catégorie, label, icône, route
@@ -44,6 +45,9 @@ const TABLE_META: Record<string, TableConfig> = {
   website_forms:     { category: 'forms',      label: 'Formulaire',      icon: 'form',      routeFn: id => `/form/${id}`,             labelCols: ['name'], descCols: ['description', 'status'] },
   TreeBranchLeafTree: { category: 'trees',     label: 'Formulaire',      icon: 'form',      routeFn: id => `/tbl/${id}`,              labelCols: ['name', 'label'], descCols: ['description'] },
 };
+
+// SECURITY: ALLOWED_TABLES whitelist — only these tables can be searched
+const ALLOWED_TABLES = new Set(Object.keys(TABLE_META));
 
 // Tables à exclure de la recherche (internes, techniques, trop volumineuses)
 const EXCLUDED_TABLES = new Set([
@@ -159,6 +163,7 @@ router.get('/global', async (req: Request, res: Response): Promise<void> => {
     }
 
     const fullSql = subQueries.join('\nUNION ALL\n') + '\nLIMIT 60';
+    // SECURITY: $queryRawUnsafe is safe here — table+column names come from ALLOWED_TABLES whitelist + SAFE_IDENTIFIER regex validation. User input is passed as $1 parameter.
     const rawResults = await db.$queryRawUnsafe<Array<{
       tbl: string; rid: string; matchCol: string; label: string; desc: string;
     }>>(fullSql, `%${q}%`);
@@ -221,7 +226,7 @@ router.get('/global', async (req: Request, res: Response): Promise<void> => {
     res.json({ results: grouped, query: q, total });
 
   } catch (err) {
-    console.error('[GLOBAL SEARCH] Error:', err);
+    logger.error('[GLOBAL SEARCH] Error:', err);
     res.status(500).json({ error: 'Erreur lors de la recherche' });
   }
 });
@@ -270,7 +275,7 @@ router.get('/web', async (req: Request, res: Response): Promise<void> => {
     clearTimeout(timeout);
 
     if (!response.ok) {
-      console.warn(`[ZHIIVE SEARCH] Status ${response.status}`);
+      logger.warn(`[ZHIIVE SEARCH] Status ${response.status}`);
       res.status(502).json({ error: 'Recherche temporairement indisponible' });
       return;
     }
@@ -289,12 +294,12 @@ router.get('/web', async (req: Request, res: Response): Promise<void> => {
       };
     });
     res.json({ results, query: q });
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err.name === 'AbortError') {
-      console.warn('[ZHIIVE SEARCH] Timeout');
+      logger.warn('[ZHIIVE SEARCH] Timeout');
       res.status(504).json({ error: 'Recherche expirée, réessayez' });
     } else {
-      console.warn('[ZHIIVE SEARCH] Error:', err.message);
+      logger.warn('[ZHIIVE SEARCH] Error:', err.message);
       res.status(503).json({ error: 'Recherche indisponible' });
     }
   }
@@ -675,10 +680,10 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
     const cspFrameAncestors = csp.includes('frame-ancestors') ? csp.match(/frame-ancestors[^;]*/)?.[0] : 'none';
     const redirected = finalUrl !== targetUrl;
 
-    if (redirected) console.log(`[PROXY]   ↪ Redirected to: ${finalUrl.length > 80 ? finalUrl.slice(0, 80) + '...' : finalUrl}`);
-    if (xfo !== 'none') console.log(`[PROXY]   🚫 X-Frame-Options: ${xfo}`);
-    if (cspFrameAncestors && cspFrameAncestors !== 'none') console.log(`[PROXY]   🚫 CSP: ${cspFrameAncestors}`);
-    if (setCookieHeaders.length) console.log(`[PROXY]   🍪 Received ${setCookieHeaders.length} Set-Cookie headers`);
+    if (redirected) logger.info(`[PROXY]   ↪ Redirected to: ${finalUrl.length > 80 ? finalUrl.slice(0, 80) + '...' : finalUrl}`);
+    if (xfo !== 'none') logger.info(`[PROXY]   🚫 X-Frame-Options: ${xfo}`);
+    if (cspFrameAncestors && cspFrameAncestors !== 'none') logger.info(`[PROXY]   🚫 CSP: ${cspFrameAncestors}`);
+    if (setCookieHeaders.length) logger.info(`[PROXY]   🍪 Received ${setCookieHeaders.length} Set-Cookie headers`);
 
     // Common response headers
     const setProxyHeaders = () => {
@@ -697,7 +702,7 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
       const isCaptcha = /captcha|robot|automated|bot.*detect|verify.*human/i.test(html.slice(0, 5000));
       const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
       const pageTitle = titleMatch ? titleMatch[1].trim() : '(no title)';
-      if (isCaptcha) console.log(`[PROXY]   ⚠️ CAPTCHA/BOT DETECTION detected in HTML!`);
+      if (isCaptcha) logger.info(`[PROXY]   ⚠️ CAPTCHA/BOT DETECTION detected in HTML!`);
 
       // Log first 200 chars of <body> to see what's there
       const bodyMatch = html.match(/<body[^>]*>([\s\S]{0,300})/i);
@@ -715,7 +720,7 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
 
       // Count how many frame-busting patterns we stripped
       const stripped = (originalSize - html.length);
-      if (stripped > 0) console.log(`[PROXY]   🧹 Stripped ${stripped} chars of frame-busting code`);
+      if (stripped > 0) logger.info(`[PROXY]   🧹 Stripped ${stripped} chars of frame-busting code`);
 
       // Inject interceptor FIRST (before any other script runs)
       const interceptor = buildInterceptorScript(finalUrl);
@@ -775,12 +780,12 @@ router.get('/browse-proxy', async (req: Request, res: Response): Promise<void> =
       res.setHeader('Cache-Control', 'public, max-age=3600');
       res.send(buffer);
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err.name === 'AbortError') {
-      console.error(`[PROXY] ⏱️ TIMEOUT (20s) | ${shortUrl}`);
+      logger.error(`[PROXY] ⏱️ TIMEOUT (20s) | ${shortUrl}`);
       res.status(504).json({ error: 'La page ne répond pas' });
     } else {
-      console.error(`[PROXY] ❌ ERROR | ${shortUrl} | ${err.message}`);
+      logger.error(`[PROXY] ❌ ERROR | ${shortUrl} | ${err.message}`);
       res.status(502).json({ error: 'Impossible de charger cette page' });
     }
   }

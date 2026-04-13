@@ -112,7 +112,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
         return res.redirect(redirectUrl);
       }
     } catch (e) {
-      console.error('Erreur parsing state Facebook:', e);
+      logger.error('Erreur parsing state Facebook:', e);
     }
   }
   
@@ -141,7 +141,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
         return res.redirect(redirectUrl);
       }
     } catch (e) {
-      console.error('Erreur parsing state:', e);
+      logger.error('Erreur parsing state:', e);
     }
   }
   
@@ -157,7 +157,7 @@ router.get('/advertising/oauth/:platform/callback', async (req: Request, res: Re
     const platform = req.params.platform as 'google_ads' | 'meta_ads';
     const { code, state, error } = req.query as { code?: string; state?: string; error?: string };
     if (error) {
-      console.warn('OAuth error from provider:', error);
+      logger.warn('OAuth error from provider:', error);
     }
     if (!code || !state) {
       res.status(400).send('Missing code/state');
@@ -216,12 +216,12 @@ router.get('/advertising/oauth/:platform/callback', async (req: Request, res: Re
         try {
           const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
           const { tokens } = await oauth2.getToken(code);
-          console.log('✅ Google Ads OAuth tokens received successfully');
+          logger.info('✅ Google Ads OAuth tokens received successfully');
           await upsertIntegration({ name: 'Google Ads OAuth', credentials: { tokens, userId } });
         } catch (e: unknown) {
           const idSanMasked = clientId ? (clientId.length > 8 ? clientId.slice(0,4) + '...' + clientId.slice(-4) : 'defined') : 'MISSING';
           const secretFp = fingerprintSecret(clientSecret);
-          console.error(`Google Ads token exchange failed (clientId=${idSanMasked}, secretFp=${secretFp ?? 'null'}):`, e);
+          logger.error(`Google Ads token exchange failed (clientId=${idSanMasked}, secretFp=${secretFp ?? 'null'}):`, e);
           const errorMsg = (e as Error).message || (e as { code?: string }).code || 'unknown_error';
           let userFriendlyError = 'Erreur d\'authentification';
           
@@ -260,7 +260,7 @@ router.get('/advertising/oauth/:platform/callback', async (req: Request, res: Re
           }
           await upsertIntegration({ name: 'Meta Ads OAuth', credentials: { accessToken: longLived, userId } });
         } catch (e) {
-          console.error('Meta token exchange failed:', e);
+          logger.error('Meta token exchange failed:', e);
           await upsertIntegration({ name: 'Meta Ads (OAuth error)', credentials: { authCode: code, error: 'token_exchange_failed', userId } });
         }
       }
@@ -276,7 +276,7 @@ router.get('/advertising/oauth/:platform/callback', async (req: Request, res: Re
       <script src="/api/integrations/advertising/oauth/callback-close.js?platform=${encodeURIComponent(platform)}"></script>\
     </body></html>`);
   } catch (error) {
-    console.error('Erreur oauth callback:', error);
+    logger.error('Erreur oauth callback:', error);
     res.status(500).send('OAuth callback error');
   }
 });
@@ -330,7 +330,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 
     res.json({ success: true, data: integrationsSettings });
   } catch (error) {
-    console.error('Failed to get integrations:', error);
+    logger.error('Failed to get integrations:', error);
     res.status(500).json({ success: false, message: 'Failed to get integrations' });
   }
 });
@@ -380,7 +380,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
     res.status(201).json({ success: true, data: upsertedIntegration });
   } catch (error) {
-    console.error('Failed to upsert integration:', error);
+    logger.error('Failed to upsert integration:', error);
     res.status(500).json({ success: false, message: 'Failed to upsert integration' });
   }
 });
@@ -417,7 +417,7 @@ router.delete('/:type', async (req: Request, res: Response): Promise<void> => {
       res.status(404).json({ success: false, message: 'Integration not found' });
       return;
     }
-    console.error('Failed to delete integration:', error);
+    logger.error('Failed to delete integration:', error);
     res.status(500).json({ success: false, message: 'Failed to delete integration' });
   }
 });
@@ -426,6 +426,7 @@ router.delete('/:type', async (req: Request, res: Response): Promise<void> => {
 // Import des nouveaux services (ajouté ici pour éviter les conflits)
 import { AdPlatformService, AD_PLATFORMS } from '../services/adPlatformService';
 import { EcommerceService, ECOMMERCE_PLATFORMS } from '../services/ecommerceService';
+import { logger } from '../lib/logger';
 
 /**
  * GET /api/integrations/advertising/platforms
@@ -594,7 +595,7 @@ router.get('/advertising', async (req, res) => {
       integrations
     });
   } catch (error) {
-    console.error('Erreur récupération intégrations publicitaires:', error);
+    logger.error('Erreur récupération intégrations publicitaires:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -648,10 +649,10 @@ router.get('/advertising/oauth/:platform/url', async (req: Request, res: Respons
         if (warning) warns.push(warning);
         if (idSan.sanitized || idSan.looksQuoted) warns.push('GOOGLE_ADS_CLIENT_ID semblait contenir des guillemets/espaces — valeur nettoyée');
         if (secretSan.sanitized || secretSan.looksQuoted) warns.push('GOOGLE_ADS_CLIENT_SECRET semblait contenir des guillemets/espaces — valeur nettoyée');
-        console.log(`[ADS OAUTH] Génération URL Google Ads OAuth | clientId=${masked} | redirectUri=${redirectUri}`);
+        logger.info(`[ADS OAUTH] Génération URL Google Ads OAuth | clientId=${masked} | redirectUri=${redirectUri}`);
         return res.json({ success: true, platform, authUrl, warnings: warns });
       } catch (err) {
-        console.error('Erreur génération URL OAuth Google Ads:', err);
+        logger.error('Erreur génération URL OAuth Google Ads:', err);
         return res.status(500).json({ success: false, message: 'Erreur génération URL OAuth (Google Ads)' });
       }
     }
@@ -688,7 +689,7 @@ router.get('/advertising/oauth/:platform/url', async (req: Request, res: Respons
 
     return res.status(400).json({ success: false, message: 'Plateforme non supportée' });
   } catch (error) {
-    console.error('Erreur oauth url:', error);
+    logger.error('Erreur oauth url:', error);
     res.status(500).json({ success: false, message: 'Erreur génération URL OAuth' });
   }
 });
@@ -754,7 +755,7 @@ router.get('/advertising/oauth/google_ads/debug', async (req: Request, res: Resp
       warnings
     });
   } catch (error) {
-    console.error('Erreur debug OAuth Google Ads:', error);
+    logger.error('Erreur debug OAuth Google Ads:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur (debug OAuth)' });
   }
 });
@@ -1164,8 +1165,8 @@ router.get('/advertising/:platform/accounts', async (req: Request, res: Response
             return { type: 'success', payload, loginCustomerId: sanitizedLoginHeader ?? loginCustomerId, headerFormatUsed: loginHeaderSent ? headerFormat : 'none', fromCache: false, cacheKeyBase, cacheKeyUsed: cacheKeyOk, apiVersion };
         } catch (error: unknown) {
           const { data, apiErrorSummary, apiStatus, errorCodeKeys } = extractGoogleAdsError(error);
-          console.error('Erreur Google Ads listAccessibleCustomers:', data || error);
-          console.error('Google Ads diagnostics (listAccessibleCustomers):', {
+          logger.error('Erreur Google Ads listAccessibleCustomers:', data || error);
+          logger.error('Google Ads diagnostics (listAccessibleCustomers):', {
             organizationId,
             apiStatus,
             loginHeader: {
@@ -1409,7 +1410,7 @@ router.get('/advertising/:platform/accounts', async (req: Request, res: Response
         ];
       }
 
-      console.log('[Google Ads] Résultat listAccessibleCustomers', {
+      logger.info('[Google Ads] Résultat listAccessibleCustomers', {
         organizationId,
         type: finalResult.type,
         apiVersion: finalResult.apiVersion,
@@ -1636,7 +1637,7 @@ router.get('/advertising/:platform/accounts', async (req: Request, res: Response
     // Par défaut pour autres plateformes (placeholder)
     return res.json({ success: true, platform, integration, accounts: [], note: 'Intégration configurée', connectionState: 'unknown' as const });
   } catch (error) {
-    console.error('Erreur listing comptes:', error);
+    logger.error('Erreur listing comptes:', error);
     res.status(500).json({ success: false, message: 'Erreur listing comptes' });
   }
 });
@@ -1790,7 +1791,7 @@ router.get('/advertising/google_ads/test/customers-get', async (req: Request, re
       });
     }
   } catch (error) {
-    console.error('Erreur test customers.get:', error);
+    logger.error('Erreur test customers.get:', error);
     res.status(500).json({ success: false, message: 'Erreur test customers.get' });
   }
 });
@@ -1829,7 +1830,7 @@ router.delete('/advertising/:platform', async (req: Request, res: Response): Pro
 
     res.status(200).json({ success: true, message: `Intégration ${platform} supprimée avec succès` });
   } catch (error) {
-    console.error('Failed to delete platform integration:', error);
+    logger.error('Failed to delete platform integration:', error);
     res.status(500).json({ success: false, message: 'Failed to delete integration' });
   }
 });
@@ -1869,7 +1870,7 @@ router.post('/advertising/:platform/select-account', async (req: Request, res: R
 
     return res.json({ success: true, platform, selectedAccount: { id: account.id, name: account.name, currency: account.currency } });
   } catch (error) {
-    console.error('Erreur select account:', error);
+    logger.error('Erreur select account:', error);
     res.status(500).json({ success: false, message: 'Erreur sélection compte' });
   }
 });
@@ -1912,7 +1913,7 @@ router.post('/advertising', async (req, res) => {
       integration
     });
   } catch (error) {
-    console.error('Erreur création intégration publicitaire:', error);
+    logger.error('Erreur création intégration publicitaire:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1945,7 +1946,7 @@ router.get('/ecommerce', async (req, res) => {
       integrations
     });
   } catch (error) {
-    console.error('Erreur récupération intégrations e-commerce:', error);
+    logger.error('Erreur récupération intégrations e-commerce:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1989,7 +1990,7 @@ router.post('/ecommerce', async (req, res) => {
       integration
     });
   } catch (error) {
-    console.error('Erreur création intégration e-commerce:', error);
+    logger.error('Erreur création intégration e-commerce:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

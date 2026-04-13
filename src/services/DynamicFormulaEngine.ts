@@ -12,7 +12,7 @@
  * - Calculs en  async applyFormulas(fieldValues: Record<string, unknown>, options?: { 
     changedFieldId?: string; 
     debug?: boolean;
-    preloadedRules?: Record<string, { formulas?: any[] }>;
+    preloadedRules?: Record<string, { formulas?: unknown[] }>;
   }): Promise<{
     success: boolean;
     calculatedValues: Record<string, unknown>;

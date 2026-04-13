@@ -244,7 +244,7 @@ const PublicFormsManagementPage: React.FC = () => {
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, record: PublicForm) => (
+      render: (_: unknown, record: PublicForm) => (
         <Space>
           <Button
             icon={<EyeOutlined />}

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -44,7 +45,7 @@ router.post('/login', async (req, res) => {
     };
     res.json(response);
   } catch (error) {
-    console.error('Erreur auth/login:', error);
+    logger.error('Erreur auth/login:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -80,7 +81,7 @@ router.get('/me', async (_req, res) => {
       }
     });
   } catch (error) {
-    console.error('Erreur auth/me:', error);
+    logger.error('Erreur auth/me:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -90,7 +91,7 @@ router.post('/logout', async (req, res) => {
   try {
     res.json({ success: true, message: 'Déconnexion réussie' });
   } catch (error) {
-    console.error('Erreur auth/logout:', error);
+    logger.error('Erreur auth/logout:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

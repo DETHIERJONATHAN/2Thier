@@ -66,7 +66,7 @@ interface GeocodeSuggestion {
   distance?: number | null;
 }
 
-interface WaxPanelProps { api: any; currentUser?: any; }
+interface WaxPanelProps { api: unknown; currentUser?: unknown; }
 
 const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
   const { t } = useTranslation();
@@ -237,7 +237,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
             },
           },
         ],
-      } as any);
+      } as unknown);
     } else {
       map.setStyle('https://tiles.openfreemap.org/styles/liberty');
     }
@@ -270,14 +270,14 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
           'fog-color': style === 'satellite' ? '#2d3436' : '#c8d6e5',
           'fog-ground-blend': 0.5,
           'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 12, 0],
-        } as any);
+        } as unknown);
       } catch { /* */ }
 
       // Re-add 3D buildings on vector style
       if (style === 'vector') {
         try {
           const layers = map.getStyle().layers || [];
-          const buildingLayer = layers.find((l: any) =>
+          const buildingLayer = layers.find((l: Record<string, unknown>) =>
             l.id.includes('building') && (l.type === 'fill' || l['source-layer']?.includes('building'))
           );
           if (buildingLayer) {
@@ -465,12 +465,12 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
     // Enable 2-finger rotation (mobile) and right-click drag rotation (desktop)
     map.dragRotate.enable();
     map.touchZoomRotate.enable();
-    try { (map.touchZoomRotate as any).enableRotation(); } catch { /* */ }
+    try { (map.touchZoomRotate as unknown).enableRotation(); } catch { /* */ }
     map.touchPitch.enable();
 
     // When GeolocateControl gets a position, update userPosition
     // Also auto-start location sharing (triggered by user clicking GPS button = user gesture)
-    map.on('geolocate' as any, ((e: any) => {
+    map.on('geolocate' as unknown, ((e: unknown) => {
       const coords = e.coords || e;
       if (coords?.latitude == null) return;
       const userLat = coords.latitude;
@@ -522,7 +522,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
         }, 50);
       }
       // Otherwise: let GeolocateControl center on user normally
-    }) as any);
+    }) as unknown);
 
     map.on('load', () => {
       // ── 3D Terrain (free DEM tiles from AWS/Mapzen Terrarium) ──
@@ -553,13 +553,13 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
           'fog-color': '#c8d6e5',
           'fog-ground-blend': 0.5,
           'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 12, 0],
-        } as any);
+        } as unknown);
       } catch { /* sky not supported — harmless */ }
 
       // ── 3D Buildings extrusion ──
       try {
         const layers = map.getStyle().layers || [];
-        const buildingLayer = layers.find((l: any) =>
+        const buildingLayer = layers.find((l: Record<string, unknown>) =>
           l.id.includes('building') && (l.type === 'fill' || l['source-layer']?.includes('building'))
         );
         if (buildingLayer) {
@@ -1355,7 +1355,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
             speakInstruction('Recalcul du trajet');
             const dest = routeDestRef.current;
             api.get(`/api/wax/route?from_lng=${userLng}&from_lat=${userLat}&to_lng=${dest.lng}&to_lat=${dest.lat}`)
-              .then((res: any) => {
+              .then((res: unknown) => {
                 if (res?.success && res.data) {
                   setRouteData(res.data);
                   setCurrentStepIndex(0);
@@ -2059,7 +2059,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
                 background: SF.primary, display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 {selectedEntity.logoUrl
-                  ? <img src={selectedEntity.logoUrl} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+                  ? <img src={selectedEntity.logoUrl} alt={selectedEntity.name || ''} loading="lazy" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
                   : <span style={{ color: 'white', fontWeight: 800, fontSize: 18 }}>{selectedEntity.name?.[0]}</span>}
               </div>
               <div>
@@ -2119,7 +2119,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
                 </div>
               </div>
               {selectedEntity.previewUrl && (
-                <img src={selectedEntity.previewUrl} alt="" style={{
+                <img src={selectedEntity.previewUrl} alt="" loading="lazy" style={{
                   width: '100%', height: 120, objectFit: 'cover', borderRadius: 8, marginBottom: 6,
                 }} />
               )}

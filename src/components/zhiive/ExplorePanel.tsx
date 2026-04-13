@@ -118,7 +118,7 @@ interface SuggestedUser {
 // ══════════════════════════════════════════════════════════════════
 // ExplorePanel — Friends (Instagram-style)
 // ══════════════════════════════════════════════════════════════════
-const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void; compact?: boolean }> = ({ api, compact }) => {
+const ExplorePanel: React.FC<{ api: unknown; openModule?: (route: string) => void; compact?: boolean }> = ({ api, compact }) => {
   const { feedMode } = useZhiiveNav();
   const { currentOrganization, user } = useAuth();
   const navigate = useNavigate();
@@ -212,7 +212,7 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void; c
       if (category) galleryParams.set('category', categoryMap[category] || category);
       if (search && search.trim().length >= 2) galleryParams.set('search', search.trim());
 
-      const requests: Promise<any>[] = [
+      const requests: Promise<unknown>[] = [
         api.get(`/api/zhiive/explore/gallery?${galleryParams}`).catch(() => ({ items: [] })),
       ];
       if (!append) {
@@ -230,12 +230,12 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void; c
         const newItems: GalleryItem[] = galleryRes.items;
         if (append) {
           setItems(prev => [...prev, ...newItems]);
-          setLikedSet(prev => { const n = new Set(prev); newItems.forEach((p: any) => { if (p.isLiked) n.add(p.id); }); return n; });
-          setSavedSet(prev => { const n = new Set(prev); newItems.forEach((p: any) => { if (p.isSaved) n.add(p.id); }); return n; });
+          setLikedSet(prev => { const n = new Set(prev); newItems.forEach((p: Record<string, unknown>) => { if (p.isLiked) n.add(p.id); }); return n; });
+          setSavedSet(prev => { const n = new Set(prev); newItems.forEach((p: Record<string, unknown>) => { if (p.isSaved) n.add(p.id); }); return n; });
         } else {
           setItems(newItems);
           const liked = new Set<string>(); const saved = new Set<string>();
-          newItems.forEach((p: any) => { if (p.isLiked) liked.add(p.id); if (p.isSaved) saved.add(p.id); });
+          newItems.forEach((p: Record<string, unknown>) => { if (p.isLiked) liked.add(p.id); if (p.isSaved) saved.add(p.id); });
           setLikedSet(liked); setSavedSet(saved);
         }
         setHasMore(galleryRes.hasMore ?? newItems.length >= PAGE_SIZE);
@@ -245,7 +245,7 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void; c
       if (usersRes?.users) {
         setSuggestedUsers(usersRes.users);
         const fSet = new Set<string>();
-        usersRes.users.forEach((u: any) => { if (u.isFollowing) fSet.add(u.id); });
+        usersRes.users.forEach((u: Record<string, unknown>) => { if (u.isFollowing) fSet.add(u.id); });
         setFollowingSet(fSet);
       }
     } catch { /* non-blocking */ }
@@ -413,7 +413,7 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void; c
       const res = await api.get(`/api/wall/posts/${postId}/comments?limit=20`);
       if (res?.comments) {
         setPostComments(res.comments);
-        const ids: string[] = res.comments.map((c: any) => c.id);
+        const ids: string[] = res.comments.map((c: Record<string, unknown>) => c.id);
         if (ids.length > 0) {
           try { const lr = await api.post('/api/zhiive/comments/liked', { commentIds: ids }); if (lr?.likedIds) setLikedCommentsSet(new Set(lr.likedIds)); } catch { /* non-blocking */ }
         }
@@ -781,7 +781,7 @@ const ExplorePanel: React.FC<{ api: any; openModule?: (route: string) => void; c
                           <LoadingOutlined /> {t('common.loading')}
                         </div>
                       ) : postComments.length > 0 ? (
-                        postComments.map((c: any) => {
+                        postComments.map((c: Record<string, unknown>) => {
                           const cIsOrg = c.publishAsOrg && c.organization;
                           const cAvatar = cIsOrg ? c.organization?.logoUrl : (c.authorAvatar || c.author?.avatarUrl);
                           const cName = cIsOrg ? c.organization.name : (c.authorName || [c.author?.firstName, c.author?.lastName].filter(Boolean).join(' ') || 'Utilisateur');

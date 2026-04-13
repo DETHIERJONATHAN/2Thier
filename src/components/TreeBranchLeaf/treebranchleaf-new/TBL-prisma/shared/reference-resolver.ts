@@ -6,8 +6,8 @@ import { TBLReference, TBLContext, TBLNode } from './types';
  * Gère @value.nodeId, node-formula:id, node-condition:id, node-table:id
  */
 export class ReferenceResolver {
-  private formulaCalculator?: any;
-  private conditionCalculator?: any;
+  private formulaCalculator?: unknown;
+  private conditionCalculator?: unknown;
 
   constructor(
     private prisma: PrismaClient,
@@ -17,7 +17,7 @@ export class ReferenceResolver {
   /**
    * Injection des calculateurs pour éviter les références circulaires
    */
-  setCalculators(formulaCalculator: any, conditionCalculator: any) {
+  setCalculators(formulaCalculator: unknown, conditionCalculator: unknown) {
     this.formulaCalculator = formulaCalculator;
     this.conditionCalculator = conditionCalculator;
   }

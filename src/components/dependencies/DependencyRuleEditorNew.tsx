@@ -97,7 +97,7 @@ function DependencyRuleEditorNew({ dependency, allFields, onUpdate, onDelete, on
     });
     
     if (active.data.current) {
-      const data = active.data.current as any;
+      const data = active.data.current as unknown;
       
       // Normalisation des données d'élément externe
       if (data.fieldId || data.sectionId || data.formulaId) {
@@ -143,7 +143,7 @@ function DependencyRuleEditorNew({ dependency, allFields, onUpdate, onDelete, on
     });
     
     // TRAITER TOUT DROP, PEU IMPORTE LA CIBLE
-    const activeData = active.data.current as any;
+    const activeData = active.data.current as unknown;
     
     if (activeData) {
       // Détection de type simplifiée

@@ -11,6 +11,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authMiddleware } from '../middlewares/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 
     res.json(result);
   } catch (error) {
-    console.error('[UserPreferences] ❌ GET /:', error);
+    logger.error('[UserPreferences] ❌ GET /:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -54,7 +55,7 @@ router.get('/:key', authMiddleware, async (req: Request, res: Response) => {
 
     res.json({ value: pref.value });
   } catch (error) {
-    console.error('[UserPreferences] ❌ GET /:key:', error);
+    logger.error('[UserPreferences] ❌ GET /:key:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -80,7 +81,7 @@ router.put('/:key', authMiddleware, async (req: Request, res: Response) => {
 
     res.json({ key: pref.key, value: pref.value });
   } catch (error) {
-    console.error('[UserPreferences] ❌ PUT /:key:', error);
+    logger.error('[UserPreferences] ❌ PUT /:key:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -97,7 +98,7 @@ router.delete('/:key', authMiddleware, async (req: Request, res: Response) => {
 
     res.json({ deleted: true });
   } catch (error) {
-    console.error('[UserPreferences] ❌ DELETE /:key:', error);
+    logger.error('[UserPreferences] ❌ DELETE /:key:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -123,15 +124,15 @@ router.post('/batch', authMiddleware, async (req: Request, res: Response) => {
       entries.map(([key, value]) =>
         db.userPreference.upsert({
           where: { userId_key: { userId, key } },
-          update: { value: value as any },
-          create: { userId, key, value: value as any },
+          update: { value: value as unknown },
+          create: { userId, key, value: value as unknown },
         })
       )
     );
 
     res.json({ saved: entries.length });
   } catch (error) {
-    console.error('[UserPreferences] ❌ POST /batch:', error);
+    logger.error('[UserPreferences] ❌ POST /batch:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

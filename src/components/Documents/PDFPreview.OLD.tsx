@@ -1,8 +1,8 @@
 import { Card, Empty } from 'antd';
 
 interface PDFPreviewProps {
-  sections: any[];
-  theme?: any;
+  sections: unknown[];
+  theme?: unknown;
 }
 
 const PDFPreview = ({ sections, theme }: PDFPreviewProps) => {
@@ -33,7 +33,7 @@ const PDFPreview = ({ sections, theme }: PDFPreviewProps) => {
     fontSize: 11
   };
 
-  const renderSection = (section: any, index: number) => {
+  const renderSection = (section: unknown, index: number) => {
     const config = section.config || {};
     console.log(`[PDFPreview] Rendering section ${index} (${section.type}):`, config);
 
@@ -183,7 +183,7 @@ const PDFPreview = ({ sections, theme }: PDFPreviewProps) => {
                     {(() => {
                       try {
                         const stats = JSON.parse(config.statsData);
-                        return stats.map((stat: any, i: number) => (
+                        return stats.map((stat: unknown, i: number) => (
                           <div key={i} style={{ textAlign: 'center' }}>
                             <div style={{ 
                               fontSize: '24px', 

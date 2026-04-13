@@ -16,7 +16,7 @@ export interface ModuleAccess {
   // Placement du module : 'swipe' (header), 'sidebar' (pills), 'both'
   placement?: string;
   // Clés supplémentaires possibles depuis le backend, on les tolère via index signature si besoin plus tard
-  // [extra: string]: any; // (décommenter si nécessaire)
+  // [extra: string]: unknown; // (décommenter si nécessaire)
 }
 
 // Helper pour vérifier l'accès à un module

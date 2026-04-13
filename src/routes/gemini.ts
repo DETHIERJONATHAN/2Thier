@@ -7,6 +7,7 @@ import express from 'express';
 import { getGeminiService } from '../services/GoogleGeminiService';
 import { authenticateToken } from '../middleware/auth';
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const router = express.Router();
 const geminiService = getGeminiService();
@@ -50,7 +51,7 @@ router.post('/generate-email', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('❌ Erreur route generate-email:', error);
+    logger.error('❌ Erreur route generate-email:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la génération d\'email'
@@ -93,7 +94,7 @@ router.post('/analyze-lead', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('❌ Erreur route analyze-lead:', error);
+    logger.error('❌ Erreur route analyze-lead:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de l\'analyse du lead'
@@ -137,7 +138,7 @@ router.post('/generate-proposal', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('❌ Erreur route generate-proposal:', error);
+    logger.error('❌ Erreur route generate-proposal:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la génération de proposition'
@@ -180,7 +181,7 @@ router.post('/analyze-sentiment', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('❌ Erreur route analyze-sentiment:', error);
+    logger.error('❌ Erreur route analyze-sentiment:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de l\'analyse de sentiment'
@@ -223,7 +224,7 @@ router.post('/suggest-response', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('❌ Erreur route suggest-response:', error);
+    logger.error('❌ Erreur route suggest-response:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur lors de la suggestion de réponse'
@@ -254,7 +255,7 @@ router.get('/test', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Erreur test Gemini:', error);
+    logger.error('❌ Erreur test Gemini:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors du test Gemini',
@@ -283,7 +284,7 @@ router.get('/stats', async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('❌ Erreur stats Gemini:', error);
+    logger.error('❌ Erreur stats Gemini:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des statistiques'

@@ -2,8 +2,8 @@ import { Empty } from 'antd';
 import { DocumentGlobalTheme } from '../Documents/DocumentGlobalThemeEditor';
 
 interface PDFPreviewProps {
-  sections: any[];
-  theme?: any;
+  sections: unknown[];
+  theme?: unknown;
   globalTheme?: DocumentGlobalTheme;
 }
 
@@ -23,7 +23,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
     }
     
     // Sinon utiliser les positions préréglées
-    const positions: Record<string, any> = {
+    const positions: Record<string, unknown> = {
       'top-left': { position: 'absolute' as const, top: 30, left: 30 },
       'top-center': { position: 'absolute' as const, top: 30, left: '50%', transform: 'translateX(-50%)' },
       'top-right': { position: 'absolute' as const, top: 30, right: 30 },
@@ -85,16 +85,16 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
   };
 
   // Vérifier si un élément est masqué
-  const isElementHidden = (section: any, fieldName: string): boolean => {
+  const isElementHidden = (section: unknown, fieldName: string): boolean => {
     return section.config?._fieldStyles?.[fieldName]?.hidden === true;
   };
 
   // Style de base pour les champs avec style personnalisé
-  const getFieldStyle = (section: any, fieldName: string) => {
+  const getFieldStyle = (section: unknown, fieldName: string) => {
     const customStyle = section.config?._fieldStyles?.[fieldName];
     if (!customStyle) return {};
     
-    const style: any = {};
+    const style: unknown = {};
     
     // Appliquer UNIQUEMENT les propriétés définies dans customStyle
     if (customStyle.fontFamily) style.fontFamily = customStyle.fontFamily;
@@ -270,7 +270,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
     return {};
   };
 
-  const renderSection = (section: any, index: number) => {
+  const renderSection = (section: unknown, index: number) => {
     const config = section.config || {};
     console.log(`[PDFPreview] Rendering section ${index} (${section.type}):`, config);
     console.log(`[PDFPreview] Section ${index} - companyImage:`, config.companyImage);
@@ -874,7 +874,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
               <tbody>
                 {/* Afficher les items du config OU des exemples si pas de données */}
                 {(config.items && config.items.length > 0) ? (
-                  config.items.map((item: any, idx: number) => (
+                  config.items.map((item: unknown, idx: number) => (
                     <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#fafafa', borderBottom: '1px solid #e8e8e8' }}>
                       <td style={{ padding: '18px' }}>
                         <div style={{ fontWeight: '600', fontSize: '13px', marginBottom: '4px', ...getFieldStyle(section, `items.${idx}.description`) }}>
@@ -922,7 +922,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
               <div style={{ width: '400px' }}>
                 {(() => {
                   // Calcul des totaux depuis les items
-                  const subtotal = config.items?.reduce((sum: number, item: any) => 
+                  const subtotal = config.items?.reduce((sum: number, item: unknown) => 
                     sum + ((item.total || (item.quantity || 1) * (item.unitPrice || 0))), 0
                   ) || 0;
                   const taxRate = config.taxRate || 0.21;

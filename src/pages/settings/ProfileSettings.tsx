@@ -93,7 +93,7 @@ const ProfileSettings: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      api.get('/api/profile').then((response: any) => {
+      api.get('/api/profile').then((response: unknown) => {
         setFirstName(response.firstName || '');
         setLastName(response.lastName || '');
         setAddress(response.address || '');
@@ -118,7 +118,7 @@ const ProfileSettings: React.FC = () => {
     try {
       const formData = new FormData();
       formData.append('avatar', e.target.files[0]);
-      const response: any = await api.post('/api/profile/avatar', formData);
+      const response: unknown = await api.post('/api/profile/avatar', formData);
       setAvatarUrl(response.avatarUrl);
       message.success('Photo mise à jour !');
       if (refetchUser) refetchUser();
@@ -136,7 +136,7 @@ const ProfileSettings: React.FC = () => {
     }
     setSaving(true);
     try {
-      const result: any = await api.put('/api/profile', { firstName, lastName, address, vatNumber, phoneNumber, language });
+      const result: unknown = await api.put('/api/profile', { firstName, lastName, address, vatNumber, phoneNumber, language });
       setFirstName(result.firstName || firstName);
       setLastName(result.lastName || lastName);
       setAddress(result.address || address);

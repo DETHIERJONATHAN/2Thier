@@ -7,7 +7,7 @@ interface ValidationEvaluatorProps {
 }
 
 const ValidationEvaluator: React.FC<ValidationEvaluatorProps> = ({ validation }) => {
-  const [testValues, setTestValues] = useState<Record<string, any>>({});
+  const [testValues, setTestValues] = useState<Record<string, unknown>>({});
   const [result, setResult] = useState<{ isValid: boolean; error?: string; details?: any } | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [fieldsInfo, setFieldsInfo] = useState<Array<{ id: string; label: string; type: string }>>([]);
@@ -75,7 +75,7 @@ const ValidationEvaluator: React.FC<ValidationEvaluatorProps> = ({ validation })
         setFieldsInfo(fieldsData);
         
         // Initialiser les valeurs de test
-        const initialTestValues: Record<string, any> = {};
+        const initialTestValues: Record<string, unknown> = {};
         fieldsData.forEach(field => {
           // Initialiser avec des valeurs par défaut selon le type
           switch (field.type) {
@@ -103,7 +103,7 @@ const ValidationEvaluator: React.FC<ValidationEvaluatorProps> = ({ validation })
     fetchFields();
   }, [validation.id, validation.sequence]);
 
-  const handleValueChange = (fieldId: string, value: any) => {
+  const handleValueChange = (fieldId: string, value: unknown) => {
     setTestValues(prev => ({
       ...prev,
       [fieldId]: value

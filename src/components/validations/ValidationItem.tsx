@@ -5,9 +5,9 @@ interface ValidationItemProps {
     id: string;
     type: string;
     message?: string;
-    params?: Record<string, any>;
+    params?: Record<string, unknown>;
     active?: boolean;
-    onUpdate?: (id: string, updates: any) => void;
+    onUpdate?: (id: string, updates: unknown) => void;
     onDelete?: (id: string) => void;
 }
 
@@ -26,7 +26,7 @@ const ValidationItem: React.FC<ValidationItemProps> = ({
     const [isEditing, setIsEditing] = useState(false);
     const [editMessage, setEditMessage] = useState(message);
     const [isActive, setIsActive] = useState(active);
-    const [editParams, setEditParams] = useState<Record<string, any>>(params);
+    const [editParams, setEditParams] = useState<Record<string, unknown>>(params);
 
     // Gestion de la mise à jour
     const handleUpdate = () => {

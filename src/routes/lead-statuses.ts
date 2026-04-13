@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../lib/database';
 import { authenticateToken } from '../middleware/auth';
 import { z } from 'zod';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -44,7 +45,7 @@ router.get('/', authenticateToken, async (req, res) => {
       data: leadStatuses
     });
   } catch (error) {
-    console.error('Erreur lors de la récupération des statuts:', error);
+    logger.error('Erreur lors de la récupération des statuts:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur interne du serveur' 
@@ -118,7 +119,7 @@ router.post('/', authenticateToken, async (req, res) => {
       message: 'Statut créé avec succès'
     });
   } catch (error) {
-    console.error('Erreur lors de la création du statut:', error);
+    logger.error('Erreur lors de la création du statut:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur interne du serveur' 
@@ -194,7 +195,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       message: 'Statut mis à jour avec succès'
     });
   } catch (error) {
-    console.error('Erreur lors de la mise à jour du statut:', error);
+    logger.error('Erreur lors de la mise à jour du statut:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur interne du serveur' 
@@ -252,7 +253,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       message: 'Statut supprimé avec succès'
     });
   } catch (error) {
-    console.error('Erreur lors de la suppression du statut:', error);
+    logger.error('Erreur lors de la suppression du statut:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur interne du serveur' 
@@ -298,7 +299,7 @@ router.post('/reorder', authenticateToken, async (req, res) => {
       message: 'Ordre mis à jour avec succès'
     });
   } catch (error) {
-    console.error('Erreur lors de la réorganisation:', error);
+    logger.error('Erreur lors de la réorganisation:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur interne du serveur' 
@@ -344,7 +345,7 @@ router.put('/reorder', authenticateToken, async (req, res) => {
       message: 'Ordre mis à jour avec succès'
     });
   } catch (error) {
-    console.error('Erreur lors de la réorganisation:', error);
+    logger.error('Erreur lors de la réorganisation:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Erreur interne du serveur' 

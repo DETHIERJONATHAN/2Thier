@@ -35,7 +35,7 @@ export function canPermission(
  * @param user objet utilisateur avec le rôle
  * @param permission permission à vérifier
  */
-export function isUserPermitted(user: any, permission: string): boolean {
+export function isUserPermitted(user: unknown, permission: string): boolean {
   // Si pas d'utilisateur, pas de permission
   if (!user) return false;
   

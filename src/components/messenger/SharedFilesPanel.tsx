@@ -9,7 +9,7 @@ import { FilePreview } from './FilePreview';
 
 interface SharedFilesPanelProps {
   conversationId: string;
-  api: any;
+  api: unknown;
 }
 
 export const SharedFilesPanel: React.FC<SharedFilesPanelProps> = ({ conversationId, api }) => {
@@ -61,7 +61,7 @@ export const SharedFilesPanel: React.FC<SharedFilesPanelProps> = ({ conversation
           <Empty description="Aucun fichier partagé" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : (
           <div className="space-y-2">
-            {files.map((file: any) => (
+            {files.map((file: Record<string, unknown>) => (
               <div key={file.id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-gray-800/30">
                 <FilePreview
                   urls={(file.mediaUrls as string[]) || []}

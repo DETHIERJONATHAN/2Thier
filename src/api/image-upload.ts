@@ -17,7 +17,7 @@ const prisma = db;
 const multerStorage = multer.memoryStorage();
 
 // Filtre pour n'accepter que les images
-const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const fileFilter = (req: unknown, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
   
   if (allowedTypes.includes(file.mimetype)) {
@@ -44,7 +44,7 @@ async function getUploadedFileUrl(file: Express.Multer.File): Promise<{ fileUrl:
 }
 
 // POST - Upload simple pour documents (sans websiteId requis)
-router.post('/upload', upload.single('file'), async (req: any, res) => {
+router.post('/upload', upload.single('file'), async (req: unknown, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -77,7 +77,7 @@ router.post('/upload', upload.single('file'), async (req: any, res) => {
 });
 
 // POST - Upload une image
-router.post('/upload-image', upload.single('image'), async (req: any, res) => {
+router.post('/upload-image', upload.single('image'), async (req: unknown, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -139,7 +139,7 @@ router.get('/images/:websiteId', async (req, res) => {
     const websiteId = parseInt(req.params.websiteId);
     const { category } = req.query;
 
-    const where: any = { websiteId };
+    const where: unknown = { websiteId };
     if (category) {
       where.category = category;
     }

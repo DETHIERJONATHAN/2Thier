@@ -46,7 +46,7 @@ interface VideoCallModalProps {
   callType: 'video' | 'audio';
   isIncoming: boolean;
   conversationName: string;
-  api: any;
+  api: unknown;
   userId: string;
   onClose: () => void;
 }
@@ -83,7 +83,7 @@ const FALLBACK_ICE_SERVERS: RTCConfiguration = {
 
 // Fetch TURN credentials from backend (cached for session)
 let cachedIceServers: RTCConfiguration | null = null;
-async function getIceServers(api: any): Promise<RTCConfiguration> {
+async function getIceServers(api: unknown): Promise<RTCConfiguration> {
   if (cachedIceServers) return cachedIceServers;
   try {
     const data = await api.get('/api/calls/ice-servers');
@@ -657,7 +657,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
     if (isRecording && audioChunksRef.current.length > 0) {
       const transcriptionText = `Meeting ${callType === 'video' ? 'video' : 'audio'} with ${conversationName} - Duration: ${formatDuration(callDuration)}. [Audio recording captured — Hive Mind transcription]`;
       api.post(`/api/calls/${callId}/transcribe`, { transcription: transcriptionText })
-        .catch((err: any) => console.error('[CALL] Transcription error:', err));
+        .catch((err: unknown) => console.error('[CALL] Transcription error:', err));
     }
 
     // Close modal immediately — no delay to prevent race condition with incoming call polling

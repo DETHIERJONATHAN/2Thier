@@ -173,7 +173,7 @@ const ModuleConfigPanel = ({
     return <div style={{ padding: '20px', color: '#ff4d4f' }}>Module non trouvé</div>;
   }
 
-  const handleValuesChange = (_: any, allValues: any) => {
+  const handleValuesChange = (_: unknown, allValues: unknown) => {
     // Convertir les couleurs
     const processedValues = { ...allValues };
     Object.keys(processedValues).forEach(key => {

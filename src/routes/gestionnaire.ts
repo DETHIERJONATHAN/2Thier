@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -162,7 +163,7 @@ router.get('/trees/:treeId/exposed', async (req: Request, res: Response) => {
 
     return res.json({ variables, tables, constants });
   } catch (error) {
-    console.error('[GESTIONNAIRE] Error fetching exposed items:', error);
+    logger.error('[GESTIONNAIRE] Error fetching exposed items:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -214,7 +215,7 @@ router.patch('/override/variable', async (req: Request, res: Response) => {
 
     return res.json({ success: true, override });
   } catch (error) {
-    console.error('[GESTIONNAIRE] Error saving variable override:', error);
+    logger.error('[GESTIONNAIRE] Error saving variable override:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -267,7 +268,7 @@ const handleOverrideConstant = async (req: Request, res: Response) => {
 
     return res.json({ success: true, override });
   } catch (error) {
-    console.error('[GESTIONNAIRE] Error saving constant override:', error);
+    logger.error('[GESTIONNAIRE] Error saving constant override:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -321,7 +322,7 @@ router.patch('/override/table', async (req: Request, res: Response) => {
 
     return res.json({ success: true, override });
   } catch (error) {
-    console.error('[GESTIONNAIRE] Error saving table override:', error);
+    logger.error('[GESTIONNAIRE] Error saving table override:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -372,7 +373,7 @@ router.delete('/constant/:constId', async (req: Request, res: Response) => {
 
     return res.json({ success: true, updated });
   } catch (error) {
-    console.error('[GESTIONNAIRE] Error deleting constant:', error);
+    logger.error('[GESTIONNAIRE] Error deleting constant:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -401,7 +402,7 @@ router.delete('/override/:overrideId', async (req: Request, res: Response) => {
 
     return res.json({ success: true });
   } catch (error) {
-    console.error('[GESTIONNAIRE] Error deleting override:', error);
+    logger.error('[GESTIONNAIRE] Error deleting override:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -443,7 +444,7 @@ const handleExpose = async (req: Request, res: Response) => {
 
     return res.status(400).json({ error: 'Invalid capabilityType. Must be "variable" or "table"' });
   } catch (error) {
-    console.error('[GESTIONNAIRE] Error toggling expose:', error);
+    logger.error('[GESTIONNAIRE] Error toggling expose:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -496,7 +497,7 @@ router.get('/exposed-tokens/:treeId', async (req: Request, res: Response) => {
       tables: exposedTables,
     });
   } catch (error) {
-    console.error('[GESTIONNAIRE] Error fetching exposed tokens:', error);
+    logger.error('[GESTIONNAIRE] Error fetching exposed tokens:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

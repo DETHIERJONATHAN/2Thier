@@ -43,7 +43,7 @@ interface CalendarEvent {
     };
     client?: {
       id: string;
-      data: any;
+      data: unknown;
     };
   }>;
 }
@@ -140,7 +140,7 @@ const AgendaPage: React.FC = () => {
   }
 
   // Créer ou modifier un événement
-  const handleEventSubmit = async (values: any) => {
+  const handleEventSubmit = async (values: unknown) => {
     try {
       const eventData = {
         ...values,
@@ -182,7 +182,7 @@ const AgendaPage: React.FC = () => {
   };
 
   // Clic sur un événement
-  const handleEventClick = (clickInfo: any) => {
+  const handleEventClick = (clickInfo: unknown) => {
     const event = events.find(e => e.id === clickInfo.event.id);
     if (event) {
       setEditingEvent(event);
@@ -204,7 +204,7 @@ const AgendaPage: React.FC = () => {
   };
 
   // Sélection de date pour créer un événement
-  const handleDateSelect = (selectInfo: any) => {
+  const handleDateSelect = (selectInfo: unknown) => {
     setEditingEvent(null);
     form.setFieldsValue({
       title: '',

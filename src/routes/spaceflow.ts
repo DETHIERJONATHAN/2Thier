@@ -26,7 +26,7 @@ router.post('/follow/:userId', authenticateToken, async (req: Request, res: Resp
 
     await db.follow.create({ data: { followerId, followingId } });
     res.json({ success: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -37,7 +37,7 @@ router.delete('/follow/:userId', authenticateToken, async (req: Request, res: Re
     const followingId = req.params.userId;
     await db.follow.deleteMany({ where: { followerId, followingId } });
     res.json({ success: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -50,7 +50,7 @@ router.get('/followers/:userId', authenticateToken, async (req: Request, res: Re
       orderBy: { createdAt: 'desc' },
     });
     res.json({ followers: followers.map(f => f.follower), count: followers.length });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -63,7 +63,7 @@ router.get('/following/:userId', authenticateToken, async (req: Request, res: Re
       orderBy: { createdAt: 'desc' },
     });
     res.json({ following: following.map(f => f.following), count: following.length });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -108,7 +108,7 @@ router.get('/stories/feed', authenticateToken, async (req: Request, res: Respons
         };
       }),
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -134,7 +134,7 @@ router.post('/stories', authenticateToken, async (req: Request, res: Response) =
       },
     });
     res.json({ story });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -151,7 +151,7 @@ router.post('/stories/:storyId/view', authenticateToken, async (req: Request, re
       await db.storyView.create({ data: { storyId, viewerId: userId } });
     }
     res.json({ success: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -166,7 +166,7 @@ router.delete('/stories/:storyId', authenticateToken, async (req: Request, res: 
     await db.storyView.deleteMany({ where: { storyId } });
     await db.story.delete({ where: { id: storyId } });
     res.json({ success: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -182,7 +182,7 @@ router.get('/explore/posts', authenticateToken, async (req: Request, res: Respon
     const category = req.query.category as string | undefined;
     const search = req.query.search as string | undefined;
 
-    const where: any = {
+    const where: unknown = {
       organizationId: orgId,
       isPublished: true,
       visibility: { in: ['ALL', 'IN'] },
@@ -232,7 +232,7 @@ router.get('/explore/posts', authenticateToken, async (req: Request, res: Respon
         };
       }),
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -254,7 +254,7 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
     const search = req.query.search as string | undefined;
 
     // ── Build WallPost query ──
-    const postWhere: any = {
+    const postWhere: unknown = {
       isPublished: true,
       NOT: { mediaUrls: { equals: null } },
     };
@@ -334,7 +334,7 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
     });
 
     // Flatten: each media URL becomes a gallery item, filter out empty
-    const galleryItems: any[] = [];
+    const galleryItems: unknown[] = [];
     for (const p of posts) {
       const urls = Array.isArray(p.mediaUrls) ? p.mediaUrls as string[] : [];
       if (urls.length === 0 || !urls[0]) continue;
@@ -357,10 +357,10 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
     }
 
     // ── Fetch Stories (only if not filtering video-only) ──
-    let storyItems: any[] = [];
+    let storyItems: unknown[] = [];
     if (mediaFilter !== 'video') {
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const storyWhere: any = {
+      const storyWhere: unknown = {
         OR: [
           { createdAt: { gt: twentyFourHoursAgo }, expiresAt: { gt: new Date() } },
           { isHighlight: true },
@@ -434,7 +434,7 @@ router.get('/explore/gallery', authenticateToken, async (req: Request, res: Resp
       items: allItems.slice(0, limit),
       total: allItems.length,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -490,7 +490,7 @@ router.get('/reels', authenticateToken, async (req: Request, res: Response) => {
         };
       }),
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -500,7 +500,7 @@ router.get('/explore/hashtags', authenticateToken, async (req: Request, res: Res
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
     const search = req.query.search as string | undefined;
 
-    const where: any = {};
+    const where: unknown = {};
     if (search && search.trim().length >= 1) {
       where.name = { contains: search.trim().toLowerCase().replace('#', ''), mode: 'insensitive' };
     }
@@ -511,7 +511,7 @@ router.get('/explore/hashtags', authenticateToken, async (req: Request, res: Res
       take: limit,
     });
     res.json({ hashtags });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -574,7 +574,7 @@ router.get('/explore/suggested-users', authenticateToken, async (req: Request, r
     }));
 
     res.json({ users: usersWithMutual });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -596,7 +596,7 @@ router.get('/sparks', authenticateToken, async (req: Request, res: Response) => 
     // Use centralized social context for sparks
     const isSuperAdmin = req.user.role === 'super_admin' || req.user.isSuperAdmin;
     const socialCtx = await getSocialContext(userId, orgId, isSuperAdmin);
-    const whereClause: any = buildSparkFeedWhere(socialCtx, mode);
+    const whereClause: unknown = buildSparkFeedWhere(socialCtx, mode);
 
     const sparks = await db.spark.findMany({
       where: whereClause,
@@ -621,7 +621,7 @@ router.get('/sparks', authenticateToken, async (req: Request, res: Response) => 
         hasVoted: s.votes.length > 0,
       })),
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -641,7 +641,7 @@ router.post('/sparks', authenticateToken, async (req: Request, res: Response) =>
       data: { content, authorId: userId, organizationId: orgId, publishAsOrg },
     });
     res.json({ spark });
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors });
     res.status(500).json({ error: e.message });
   }
@@ -678,7 +678,7 @@ router.post('/sparks/:sparkId/vote', authenticateToken, async (req: Request, res
     });
 
     res.json({ sparkCount: spark.sparkCount, isRevealed: spark.isRevealed });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -692,7 +692,7 @@ router.get('/battles', authenticateToken, async (req: Request, res: Response) =>
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
     const mode = (req.query.mode as string) || 'org';
 
-    const whereClause: any = {};
+    const whereClause: unknown = {};
     if (mode === 'personal' || !orgId) {
       whereClause.OR = [
         { challengerId: userId },
@@ -727,7 +727,7 @@ router.get('/battles', authenticateToken, async (req: Request, res: Response) =>
         entriesCount: b._count.entries,
       })),
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -756,7 +756,7 @@ router.post('/battles', authenticateToken, async (req: Request, res: Response) =
       },
     });
     res.json({ battle });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -783,7 +783,7 @@ router.post('/battles/:id/join', authenticateToken, async (req: Request, res: Re
       data: { battleId, userId },
     });
     res.json({ success: true, entry });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -821,7 +821,7 @@ router.get('/quests/available', authenticateToken, async (req: Request, res: Res
         expiresAt: q.endsAt,
       })),
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -862,7 +862,7 @@ router.get('/events', authenticateToken, async (req: Request, res: Response) => 
         coverImage: e.coverUrl,
       })),
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -890,7 +890,7 @@ router.post('/events', authenticateToken, async (req: Request, res: Response) =>
       },
     });
     res.json({ event });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -911,7 +911,7 @@ router.post('/events/:eventId/rsvp', authenticateToken, async (req: Request, res
       await db.eventAttendee.create({ data: { eventId, userId, status } });
     }
     res.json({ success: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -922,7 +922,7 @@ router.delete('/events/:eventId/rsvp', authenticateToken, async (req: Request, r
     const eventId = req.params.eventId;
     await db.eventAttendee.deleteMany({ where: { eventId, userId } });
     res.json({ success: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -960,7 +960,7 @@ router.get('/capsules', authenticateToken, async (req: Request, res: Response) =
         recipientName: c.recipient ? `${c.recipient.firstName} ${c.recipient.lastName}`.trim() : undefined,
       })),
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -986,7 +986,7 @@ router.post('/capsules', authenticateToken, async (req: Request, res: Response) 
       },
     });
     res.json({ capsule });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -1047,7 +1047,7 @@ router.get('/orbit', authenticateToken, async (req: Request, res: Response) => {
     friends.sort((a, b) => b.interactionScore - a.interactionScore);
 
     res.json({ friends });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -1087,7 +1087,7 @@ router.get('/gamification/me', authenticateToken, async (req: Request, res: Resp
         earned: badges.some(ub => ub.badgeId === b.id),
       })),
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).json({ error: e.message });
   }
 });

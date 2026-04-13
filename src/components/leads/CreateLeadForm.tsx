@@ -17,7 +17,7 @@ export const CreateLeadForm: React.FC<CreateLeadFormProps> = ({
   const { currentOrganization } = useAuth();
   const [loading, setLoading] = React.useState(false);
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: unknown) => {
     if (!currentOrganization?.id) {
       message.error("Organisation non sélectionnée");
       return;
@@ -52,7 +52,7 @@ export const CreateLeadForm: React.FC<CreateLeadFormProps> = ({
       } else {
         throw new Error('Erreur lors de la création du lead');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       message.error(error.message || 'Erreur lors de la création du lead');
     } finally {
       setLoading(false);

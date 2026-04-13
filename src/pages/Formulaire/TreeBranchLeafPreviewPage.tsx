@@ -449,8 +449,8 @@ const TreeBranchLeafPreviewPage: React.FC = () => {
         const maxItems = repeaterMeta.maxItems ?? 10;
         const addButtonLabel = repeaterMeta.addButtonLabel || 'Ajouter une entrée';
         // 🎨 Apparence du bouton d'ajout (respecte les réglages du répétiteur)
-        const buttonSize: 'tiny' | 'small' | 'middle' | 'large' = (repeaterMeta.buttonSize as any) || 'middle';
-        const buttonWidth: 'auto' | 'half' | 'full' = (repeaterMeta.buttonWidth as any) || 'auto';
+        const buttonSize: 'tiny' | 'small' | 'middle' | 'large' = (repeaterMeta.buttonSize as unknown) || 'middle';
+        const buttonWidth: 'auto' | 'half' | 'full' = (repeaterMeta.buttonWidth as unknown) || 'auto';
         const iconOnly: boolean = !!repeaterMeta.iconOnly;
 
         // Helpers de style (alignés avec TBLFieldRendererAdvanced)

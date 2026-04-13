@@ -26,10 +26,10 @@ export interface Field {
 export interface ValidationItem {
   type: 'field' | 'operator' | 'value' | 'reference-field' | 'formula' | 'validation';
   id: string;
-  value: any;
+  value: unknown;
   label: string;
   referenceFieldId?: string;
   referenceSectionId?: string;
-  originalValue?: any; // Pour stocker la valeur originale JavaScript
+  originalValue?: unknown; // Pour stocker la valeur originale JavaScript
   formulaExpression?: string;
 }

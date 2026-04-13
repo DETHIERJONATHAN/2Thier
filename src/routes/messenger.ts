@@ -6,10 +6,11 @@ import { sendPushToUser } from './push';
 import { emitToConversation, emitToUser as _emitToUser, isUserOnline as _isUserOnline, getOnlineUsers } from '../lib/socket';
 import { uploadExpressFile } from '../lib/storage';
 import { createBusinessAutoPost } from '../services/business-auto-post';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
-router.use(authenticateToken as any);
+router.use(authenticateToken as unknown);
 
 // ═══════════════════════════════════════════════════════════════
 // GET /messenger/conversations — List user's conversations
@@ -83,7 +84,7 @@ router.get('/conversations', async (req: Request, res: Response): Promise<void> 
 
     res.json(conversations);
   } catch (err) {
-    console.error('[MESSENGER] Error listing conversations:', err);
+    logger.error('[MESSENGER] Error listing conversations:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -144,7 +145,7 @@ router.post('/conversations', async (req: Request, res: Response): Promise<void>
 
     res.json(conv);
   } catch (err) {
-    console.error('[MESSENGER] Error creating conversation:', err);
+    logger.error('[MESSENGER] Error creating conversation:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -209,7 +210,7 @@ router.get('/conversations/:id/messages', async (req: Request, res: Response): P
       nextCursor: messages.length > 0 ? messages[0].id : null,
     });
   } catch (err) {
-    console.error('[MESSENGER] Error fetching messages:', err);
+    logger.error('[MESSENGER] Error fetching messages:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -325,7 +326,7 @@ router.post('/conversations/:id/messages', async (req: Request, res: Response): 
 
     res.json(message);
   } catch (err) {
-    console.error('[MESSENGER] Error sending message:', err);
+    logger.error('[MESSENGER] Error sending message:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -344,7 +345,7 @@ router.post('/conversations/:id/read', async (req: Request, res: Response): Prom
     });
     res.json({ success: true });
   } catch (err) {
-    console.error('[MESSENGER] Error marking read:', err);
+    logger.error('[MESSENGER] Error marking read:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -369,7 +370,7 @@ router.delete('/messages/:id', async (req: Request, res: Response): Promise<void
 
     res.json({ success: true });
   } catch (err) {
-    console.error('[MESSENGER] Error deleting message:', err);
+    logger.error('[MESSENGER] Error deleting message:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -406,7 +407,7 @@ router.post('/upload', async (req: Request, res: Response): Promise<void> => {
       const safeName = file.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_.-]/g, '');
       const filename = `${Date.now()}_${safeName}`;
       const key = `messenger/${user.id}/${filename}`;
-      const url = await uploadExpressFile(file as any, key);
+      const url = await uploadExpressFile(file as unknown, key);
       urls.push(url);
 
       // Detect media type from first file
@@ -424,7 +425,7 @@ router.post('/upload', async (req: Request, res: Response): Promise<void> => {
 
     res.json({ urls, mediaType: detectedMediaType });
   } catch (err) {
-    console.error('[MESSENGER] Error uploading files:', err);
+    logger.error('[MESSENGER] Error uploading files:', err);
     res.status(500).json({ error: 'Erreur upload' });
   }
 });
@@ -453,7 +454,7 @@ router.post('/messages/:id/view-ephemeral', async (req: Request, res: Response):
     });
     res.json({ success: true, viewedAt });
   } catch (err) {
-    console.error('[MESSENGER] Error marking ephemeral viewed:', err);
+    logger.error('[MESSENGER] Error marking ephemeral viewed:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -507,7 +508,7 @@ router.get('/unread', async (req: Request, res: Response): Promise<void> => {
 
     res.json({ unread, latestWizz: latestWizz || null });
   } catch (err) {
-    console.error('[MESSENGER] Error getting unread:', err);
+    logger.error('[MESSENGER] Error getting unread:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -615,7 +616,7 @@ router.get('/telnyx-eligibility', async (req: Request, res: Response): Promise<v
       sipCredentials: eligible ? sipCredentials : null,
     });
   } catch (err) {
-    console.error('[MESSENGER] Error checking Telnyx eligibility:', err);
+    logger.error('[MESSENGER] Error checking Telnyx eligibility:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -676,7 +677,7 @@ router.post('/messages/:id/reactions', async (req: Request, res: Response): Prom
       res.json({ action: 'added', reaction });
     }
   } catch (err) {
-    console.error('[MESSENGER] Error handling reaction:', err);
+    logger.error('[MESSENGER] Error handling reaction:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -694,7 +695,7 @@ router.get('/messages/:id/reactions', async (req: Request, res: Response): Promi
     });
 
     // Group by emoji
-    const grouped: Record<string, { emoji: string; count: number; users: any[] }> = {};
+    const grouped: Record<string, { emoji: string; count: number; users: unknown[] }> = {};
     for (const r of reactions) {
       if (!grouped[r.emoji]) {
         grouped[r.emoji] = { emoji: r.emoji, count: 0, users: [] };
@@ -705,7 +706,7 @@ router.get('/messages/:id/reactions', async (req: Request, res: Response): Promi
 
     res.json(Object.values(grouped));
   } catch (err) {
-    console.error('[MESSENGER] Error listing reactions:', err);
+    logger.error('[MESSENGER] Error listing reactions:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -750,12 +751,12 @@ router.post('/messages/:id/pin', async (req: Request, res: Response): Promise<vo
     emitToConversation(message.conversationId, 'message-pinned', {
       messageId: message.id,
       isPinned: newPinned,
-      pinnedBy: newPinned ? { id: user.id, firstName: (updated.pinnedBy as any)?.firstName, lastName: (updated.pinnedBy as any)?.lastName } : null,
+      pinnedBy: newPinned ? { id: user.id, firstName: (updated.pinnedBy as unknown)?.firstName, lastName: (updated.pinnedBy as unknown)?.lastName } : null,
     });
 
     res.json({ isPinned: newPinned, message: updated });
   } catch (err) {
-    console.error('[MESSENGER] Error pinning message:', err);
+    logger.error('[MESSENGER] Error pinning message:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -782,7 +783,7 @@ router.get('/conversations/:id/pinned', async (req: Request, res: Response): Pro
 
     res.json(pinned);
   } catch (err) {
-    console.error('[MESSENGER] Error listing pinned:', err);
+    logger.error('[MESSENGER] Error listing pinned:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -827,7 +828,7 @@ router.get('/conversations/:id/files', async (req: Request, res: Response): Prom
 
     res.json(files);
   } catch (err) {
-    console.error('[MESSENGER] Error listing files:', err);
+    logger.error('[MESSENGER] Error listing files:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -894,7 +895,7 @@ router.post('/messages/:id/task', async (req: Request, res: Response): Promise<v
 
     res.json(task);
   } catch (err) {
-    console.error('[MESSENGER] Error creating task:', err);
+    logger.error('[MESSENGER] Error creating task:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -925,7 +926,7 @@ router.get('/tasks', async (req: Request, res: Response): Promise<void> => {
 
     res.json(tasks);
   } catch (err) {
-    console.error('[MESSENGER] Error listing tasks:', err);
+    logger.error('[MESSENGER] Error listing tasks:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -946,7 +947,7 @@ router.put('/tasks/:id', async (req: Request, res: Response): Promise<void> => {
       res.status(403).json({ error: 'Accès refusé' }); return;
     }
 
-    const updateData: any = {};
+    const updateData: unknown = {};
     if (status && ['todo', 'in_progress', 'done', 'cancelled'].includes(status)) {
       updateData.status = status;
       if (status === 'done') updateData.completedAt = new Date();
@@ -977,13 +978,13 @@ router.put('/tasks/:id', async (req: Request, res: Response): Promise<void> => {
           eventType: 'task_completed',
           entityId: updated.id,
           entityLabel: updated.title || 'Tâche terminée',
-        }).catch(err => console.error('[MESSENGER] Auto-post error:', err));
+        }).catch(err => logger.error('[MESSENGER] Auto-post error:', err));
       }
     }
 
     res.json(updated);
   } catch (err) {
-    console.error('[MESSENGER] Error updating task:', err);
+    logger.error('[MESSENGER] Error updating task:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1009,7 +1010,7 @@ router.get('/templates', async (req: Request, res: Response): Promise<void> => {
 
     res.json(templates);
   } catch (err) {
-    console.error('[MESSENGER] Error listing templates:', err);
+    logger.error('[MESSENGER] Error listing templates:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1037,7 +1038,7 @@ router.post('/templates', async (req: Request, res: Response): Promise<void> => 
 
     res.json(template);
   } catch (err) {
-    console.error('[MESSENGER] Error creating template:', err);
+    logger.error('[MESSENGER] Error creating template:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1057,7 +1058,7 @@ router.delete('/templates/:id', async (req: Request, res: Response): Promise<voi
     await db.quickReplyTemplate.delete({ where: { id: req.params.id } });
     res.json({ success: true });
   } catch (err) {
-    console.error('[MESSENGER] Error deleting template:', err);
+    logger.error('[MESSENGER] Error deleting template:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1095,7 +1096,7 @@ router.put('/status', async (req: Request, res: Response): Promise<void> => {
       customStatusExpiresAt: streak.customStatusExpiresAt,
     });
   } catch (err) {
-    console.error('[MESSENGER] Error updating status:', err);
+    logger.error('[MESSENGER] Error updating status:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1136,7 +1137,7 @@ router.get('/online', async (req: Request, res: Response): Promise<void> => {
 
     res.json(result);
   } catch (err) {
-    console.error('[MESSENGER] Error listing online users:', err);
+    logger.error('[MESSENGER] Error listing online users:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1163,7 +1164,7 @@ router.put('/conversations/:id/permissions', async (req: Request, res: Response)
     }
 
     const allowedPerms = ['canPin', 'canManageMembers', 'canSeeFullHistory', 'canSendMedia', 'canCreateTasks', 'role'];
-    const updateData: any = {};
+    const updateData: unknown = {};
     for (const key of allowedPerms) {
       if (permissions[key] !== undefined) {
         updateData[key] = permissions[key];
@@ -1184,7 +1185,7 @@ router.put('/conversations/:id/permissions', async (req: Request, res: Response)
 
     res.json(updated);
   } catch (err) {
-    console.error('[MESSENGER] Error updating permissions:', err);
+    logger.error('[MESSENGER] Error updating permissions:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1242,7 +1243,7 @@ router.post('/conversations/:id/members', async (req: Request, res: Response): P
 
     res.json({ added });
   } catch (err) {
-    console.error('[MESSENGER] Error adding members:', err);
+    logger.error('[MESSENGER] Error adding members:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1277,7 +1278,7 @@ router.delete('/conversations/:id/members/:userId', async (req: Request, res: Re
 
     res.json({ success: true });
   } catch (err) {
-    console.error('[MESSENGER] Error removing member:', err);
+    logger.error('[MESSENGER] Error removing member:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -1336,7 +1337,7 @@ router.post('/messages/:id/transcribe', async (req: Request, res: Response): Pro
 
     res.json({ transcript });
   } catch (err) {
-    console.error('[MESSENGER] Error transcribing voice:', err);
+    logger.error('[MESSENGER] Error transcribing voice:', err);
     res.status(500).json({ error: 'Erreur de transcription' });
   }
 });

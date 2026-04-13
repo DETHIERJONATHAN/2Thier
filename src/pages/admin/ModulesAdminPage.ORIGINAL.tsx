@@ -107,13 +107,13 @@ interface ModuleData {
   orderInCategory?: number;
   active: boolean;
   superAdminOnly?: boolean; // ðŸ‘‘ Module rÃ©servÃ© aux super administrateurs
-  parameters?: any;
+  parameters?: unknown;
   organizationId?: string;
   createdAt: string;
   updatedAt: string;
-  Organization?: any;
-  OrganizationModuleStatus?: any[];
-  Permission?: any[];
+  Organization?: unknown;
+  OrganizationModuleStatus?: unknown[];
+  Permission?: unknown[];
   isActiveInOrg?: boolean;
   hasOrgSpecificConfig?: boolean;
 }
@@ -238,7 +238,7 @@ const AdminModulesPageDynamic: React.FC = () => {
   }, [loading]);
 
   // Fonctions CRUD
-  const handleSaveModule = async (values: any) => {
+  const handleSaveModule = async (values: unknown) => {
     try {
       const isEditing = !!editingModule;
       const endpoint = isEditing 
@@ -257,7 +257,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       setEditingModule(null);
       form.resetFields();
       loadModules();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[ADMIN-MODULES-UI] Erreur sauvegarde:', error);
       message.error(error.response?.data?.error || 'Erreur lors de la sauvegarde');
     }
@@ -268,7 +268,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       await api.delete(`/api/admin-modules/${module.id}`);
       message.success('Module supprimÃ© avec succÃ¨s');
       loadModules();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[ADMIN-MODULES-UI] Erreur suppression:', error);
       message.error(error.response?.data?.error || 'Erreur lors de la suppression');
     }
@@ -414,7 +414,7 @@ const AdminModulesPageDynamic: React.FC = () => {
         throw new Error('Erreur API lors de la sauvegarde');
       }
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[DRAG-DROP] Erreur rÃ©ordonnancement modules:', error);
       message.error('Erreur lors du rÃ©ordonnancement des modules');
       await loadModules(); // Recharger en cas d'erreur
@@ -427,7 +427,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       console.log('[DRAG-DROP] RÃ©organisation catÃ©gories:', sourceCategoryName, '->', targetCategoryName);
       // Cette logique sera implementÃ©e via le hook useModuleCategories
       message.info('RÃ©organisation des catÃ©gories Ã  implÃ©menter');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[DRAG-DROP] Erreur rÃ©organisation catÃ©gories:', error);
       message.error('Erreur lors de la rÃ©organisation des catÃ©gories');
     }
@@ -446,7 +446,7 @@ const AdminModulesPageDynamic: React.FC = () => {
         await loadCategories(); // Recharger les donnÃ©es
         message.success('Module dÃ©placÃ© avec succÃ¨s !');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[DRAG-DROP] Erreur dÃ©placement module:', error);
       message.error('Erreur lors du dÃ©placement du module');
     }
@@ -477,7 +477,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       
       // Recharger pour synchroniser avec la base
       await loadCategories();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[CATEGORY-ACTION] Erreur toggle visibilitÃ©:', error);
       message.error('Erreur lors du changement de visibilitÃ© de la catÃ©gorie');
     }
@@ -495,7 +495,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       
       // Recharger pour synchroniser
       await loadCategories();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[MODULE-SUPERADMIN] Erreur toggle:', error);
       message.error('Erreur lors du changement de statut Super Admin');
       
@@ -510,7 +510,7 @@ const AdminModulesPageDynamic: React.FC = () => {
       console.log('[CATEGORY-SUPERADMIN] Toggle category:', categoryName, superAdminOnly);
       
       message.success(`CatÃ©gorie ${superAdminOnly ? 'rÃ©servÃ©e aux' : 'accessible Ã  tous les'} super administrateurs`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[CATEGORY-SUPERADMIN] Erreur toggle:', error);
       message.error('Erreur lors du changement de statut Super Admin de la catÃ©gorie');
     }

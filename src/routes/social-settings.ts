@@ -21,6 +21,7 @@ import { authenticateToken } from '../middleware/auth';
 import { getSocialContext } from '../lib/feed-visibility';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -143,7 +144,7 @@ router.get('/all', authenticateToken, async (req: Request, res: Response) => {
 
     res.json({ settings: allSettings, orgsWithoutSettings });
   } catch (error) {
-    console.error('[SOCIAL-SETTINGS] Error fetching all:', error);
+    logger.error('[SOCIAL-SETTINGS] Error fetching all:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -171,7 +172,7 @@ router.get('/context/me', authenticateToken, async (req: Request, res: Response)
       settings: ctx.settings,
     });
   } catch (error) {
-    console.error('[SOCIAL-CONTEXT] Error:', error);
+    logger.error('[SOCIAL-CONTEXT] Error:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -196,7 +197,7 @@ router.get('/org-follow/my', authenticateToken, async (req: Request, res: Respon
 
     res.json(follows);
   } catch (error) {
-    console.error('[ORG-FOLLOW] Error fetching my follows:', error);
+    logger.error('[ORG-FOLLOW] Error fetching my follows:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -216,7 +217,7 @@ router.get('/org-follow/followers/:orgId', authenticateToken, async (req: Reques
 
     res.json({ count: followers.length, followers });
   } catch (error) {
-    console.error('[ORG-FOLLOW] Error fetching followers:', error);
+    logger.error('[ORG-FOLLOW] Error fetching followers:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -233,7 +234,7 @@ router.get('/org-follow/count/:orgId', authenticateToken, async (req: Request, r
     
     res.json({ count, isFollowing: !!isFollowing });
   } catch (error) {
-    console.error('[ORG-FOLLOW] Error counting:', error);
+    logger.error('[ORG-FOLLOW] Error counting:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -267,7 +268,7 @@ router.post('/org-follow/:orgId', authenticateToken, async (req: Request, res: R
 
     res.json({ followed: true, follow });
   } catch (error) {
-    console.error('[ORG-FOLLOW] Error following:', error);
+    logger.error('[ORG-FOLLOW] Error following:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -284,7 +285,7 @@ router.delete('/org-follow/:orgId', authenticateToken, async (req: Request, res:
 
     res.json({ followed: false });
   } catch (error) {
-    console.error('[ORG-FOLLOW] Error unfollowing:', error);
+    logger.error('[ORG-FOLLOW] Error unfollowing:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -315,7 +316,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 
     res.json(settings);
   } catch (error) {
-    console.error('[SOCIAL-SETTINGS] Error fetching current:', error);
+    logger.error('[SOCIAL-SETTINGS] Error fetching current:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -348,7 +349,7 @@ router.get('/:orgId', authenticateToken, async (req: Request, res: Response) => 
 
     res.json(settings);
   } catch (error) {
-    console.error('[SOCIAL-SETTINGS] Error fetching:', error);
+    logger.error('[SOCIAL-SETTINGS] Error fetching:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -377,7 +378,7 @@ router.put('/', authenticateToken, async (req: Request, res: Response) => {
 
     res.json(settings);
   } catch (error) {
-    console.error('[SOCIAL-SETTINGS] Error updating current:', error);
+    logger.error('[SOCIAL-SETTINGS] Error updating current:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -410,7 +411,7 @@ router.put('/:orgId', authenticateToken, async (req: Request, res: Response) => 
 
     res.json(settings);
   } catch (error) {
-    console.error('[SOCIAL-SETTINGS] Error updating:', error);
+    logger.error('[SOCIAL-SETTINGS] Error updating:', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

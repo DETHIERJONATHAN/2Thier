@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../lib/database';
 import { authMiddleware } from '../middlewares/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
 const prisma = db;
@@ -16,7 +17,7 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
     });
     res.json({ success: true, data: types });
   } catch (error) {
-    console.error('[API] Erreur GET /api/field-types:', error);
+    logger.error('[API] Erreur GET /api/field-types:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur lors de la récupération des types de champs' });
   }
 });

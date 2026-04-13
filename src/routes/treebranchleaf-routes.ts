@@ -1,25 +1,26 @@
 import { PrismaClient } from '@prisma/client';
+import { logger } from '../lib/logger';
 
 // ...existing code...
 
 async function mapJSONToColumns(
-  metadata: any,
+  metadata: unknown,
   existingNode: Node | null,
   prisma: PrismaClient,
   orgId: string
-): Promise<any> {
-  const columnData: any = {};
+): Promise<unknown> {
+  const columnData: unknown = {};
 
   // Correction: S'assurer que metadata n'est pas null/undefined avant de l'utiliser
   if (metadata && metadata.repeater) {
     const repeaterMeta = metadata.repeater;
-    console.log('🔍 [mapJSONToColumns] Traitement repeaterMeta:', repeaterMeta);
+    logger.info('🔍 [mapJSONToColumns] Traitement repeaterMeta:', repeaterMeta);
 
     if (repeaterMeta.templateNodeIds) {
       columnData.repeater_templateNodeIds = JSON.stringify(
         repeaterMeta.templateNodeIds
       );
-      console.log(
+      logger.info(
         '✅ [mapJSONToColumns] 🏷️ repeater_templateNodeIds sauvegardé:',
         repeaterMeta.templateNodeIds
       );
@@ -30,7 +31,7 @@ async function mapJSONToColumns(
       columnData.repeater_templateNodeLabels = JSON.stringify(
         repeaterMeta.templateNodeLabels
       );
-      console.log(
+      logger.info(
         '✅ [mapJSONToColumns] 🏷️ repeater_templateNodeLabels sauvegardé:',
         repeaterMeta.templateNodeLabels
       );
@@ -54,17 +55,17 @@ async function mapJSONToColumns(
     // ✅ NOUVEAUX PARAMÈTRES D'APPARENCE DU BOUTON
     if (typeof repeaterMeta.buttonSize !== 'undefined') {
       columnData.repeater_buttonSize = repeaterMeta.buttonSize;
-      console.log('✅ [mapJSONToColumns] 🎨 repeater_buttonSize sauvegardé:', repeaterMeta.buttonSize);
+      logger.info('✅ [mapJSONToColumns] 🎨 repeater_buttonSize sauvegardé:', repeaterMeta.buttonSize);
     }
 
     if (typeof repeaterMeta.buttonWidth !== 'undefined') {
       columnData.repeater_buttonWidth = repeaterMeta.buttonWidth;
-      console.log('✅ [mapJSONToColumns] 🎨 repeater_buttonWidth sauvegardé:', repeaterMeta.buttonWidth);
+      logger.info('✅ [mapJSONToColumns] 🎨 repeater_buttonWidth sauvegardé:', repeaterMeta.buttonWidth);
     }
 
     if (typeof repeaterMeta.iconOnly !== 'undefined') {
       columnData.repeater_iconOnly = repeaterMeta.iconOnly;
-      console.log('✅ [mapJSONToColumns] 🎨 repeater_iconOnly sauvegardé:', repeaterMeta.iconOnly);
+      logger.info('✅ [mapJSONToColumns] 🎨 repeater_iconOnly sauvegardé:', repeaterMeta.iconOnly);
     }
   }
 

@@ -9,7 +9,7 @@ export interface AIRecommendation {
   reasoning: string;
 }
 
-export const useAIRecommendations = (lead: any, selectedDate: any) => {
+export const useAIRecommendations = (lead: unknown, selectedDate: unknown) => {
   const { api } = useAuthenticatedApi();
   const [loading, setLoading] = useState(false);
   const [aiRecommendations, setAiRecommendations] = useState<AIRecommendation[]>([]);

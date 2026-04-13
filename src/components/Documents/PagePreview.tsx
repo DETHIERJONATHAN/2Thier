@@ -78,7 +78,7 @@ const PagePreview = ({
     };
   }, [page, globalTheme]);
 
-  const handleDragEnd = (result: any) => {
+  const handleDragEnd = (result: unknown) => {
     if (!result.destination || !onModulesReorder) return;
 
     const items = Array.from(page.modules);
@@ -94,7 +94,7 @@ const PagePreview = ({
     onModulesReorder(reordered);
   };
 
-  const renderModule = (module: ModuleInstance, index: number, provided?: any, snapshot?: any) => {
+  const renderModule = (module: ModuleInstance, index: number, provided?: unknown, snapshot?: unknown) => {
     const moduleDef = getModuleById(module.moduleId);
     if (!moduleDef) return null;
 
