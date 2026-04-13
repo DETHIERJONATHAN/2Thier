@@ -742,7 +742,7 @@ const AdminModulesV2: React.FC = () => {
                       <FileOutlined style={{ fontSize: 24 }} />
                     </Badge>
                     <div style={{ marginTop: 8 }}>
-                      <Text strong>Modules</Text>
+                      <Text strong>{t('entity.modules')}</Text>
                       <br />
                       <Text type="secondary">{stats.activeModules} actifs</Text>
                     </div>

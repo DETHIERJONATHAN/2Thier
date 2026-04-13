@@ -858,7 +858,7 @@ const ProductFilterPanel: React.FC<ProductFilterPanelProps> = ({ treeId, nodeId,
   // ─────────────────
 
   if (loading) {
-    return <div style={{ padding: 12, textAlign: 'center', color: '#999' }}>Chargement...</div>;
+    return <div style={{ padding: 12, textAlign: 'center', color: '#999' }}>{t('common.loading')}</div>;
   }
 
   const cardTitle = (

@@ -2003,7 +2003,7 @@ export default function DevisPage() {
                   {/* Image statique (admin) */}
                   {f.type === 'image_admin' && (f.advancedConfig && (f.advancedConfig as Record<string, unknown>).imageUrl) && (
                     <img
-                      src={(f.advancedConfig as Record<string, unknownalt="" >).imageUrl as string}
+                      src={(f.advancedConfig as Record<string, unknown>).imageUrl as string}
                       alt={f.label}
                       className="mt-2 max-h-56 object-contain border rounded"
                     />

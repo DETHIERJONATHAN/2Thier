@@ -843,7 +843,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
 
                     {/* Légende */}
                     <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 10, color: '#8c8c8c' }}>
-                      <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#1890ff', marginRight: 3 }} />Calendrier</span>
+                      <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#1890ff', marginRight: 3 }} />{t('entity.calendar')}</span>
                       <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#faad14', marginRight: 3 }} />Ce chantier</span>
                       <span style={{ marginLeft: 'auto' }}>Cliquez pour sélectionner un créneau</span>
                     </div>
@@ -917,7 +917,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
         style={{ maxWidth: 640, top: 20 }}
         styles={{ body: { maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' } }}
         footer={[
-          <Button key="cancel" onClick={() => setReviewModalVisible(false)}>Annuler</Button>,
+          <Button key="cancel" onClick={() => setReviewModalVisible(false)}>{t('common.cancel')}</Button>,
           <Button
             key="submit"
             type="primary"

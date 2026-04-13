@@ -136,7 +136,7 @@ export const EditLeadForm: React.FC<EditLeadFormProps> = ({
             <Select.Option value="website">Site web</Select.Option>
             <Select.Option value="referral">Recommandation</Select.Option>
             <Select.Option value="linkedin">LinkedIn</Select.Option>
-            <Select.Option value="email">Email</Select.Option>
+            <Select.Option value="email">{t('common.email')}</Select.Option>
             <Select.Option value="phone">Téléphone</Select.Option>
             <Select.Option value="other">Autre</Select.Option>
           </Select>

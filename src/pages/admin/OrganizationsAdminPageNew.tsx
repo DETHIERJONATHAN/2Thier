@@ -1080,7 +1080,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
           return (
             <Space>
               <Spin size="small" />
-              <Text type="secondary">Chargement...</Text>
+              <Text type="secondary">{t('common.loading')}</Text>
             </Space>
           );
         }
@@ -1567,7 +1567,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button onClick={() => setCreateModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Annuler</button>
+            <button onClick={() => setCreateModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>{t('common.cancel')}</button>
             <button type="submit" style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Créer l'Organisation</button>
           </div>
         </Form>
@@ -1638,8 +1638,8 @@ const OrganizationsAdminPageNew: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button onClick={() => setEditModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Annuler</button>
-            <button type="submit" style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Sauvegarder</button>
+            <button onClick={() => setEditModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>{t('common.cancel')}</button>
+            <button type="submit" style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>{t('common.save')}</button>
           </div>
         </Form>
       </Modal>
@@ -1650,7 +1650,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
         open={detailModal}
         onCancel={() => setDetailModal(false)}
         footer={
-          <button onClick={() => setDetailModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Fermer</button>
+          <button onClick={() => setDetailModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>{t('common.close')}</button>
         }
         width={900}
       >
@@ -1674,7 +1674,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
                 <div style={{ fontWeight: 700, fontSize: 15, color: FB.text, marginBottom: 12 }}>Statistiques</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div style={{ background: FB.white, borderRadius: 6, padding: 12, textAlign: 'center' }}>
-                    <div style={{ fontSize: 11, color: FB.textSecondary }}>Utilisateurs</div>
+                    <div style={{ fontSize: 11, color: FB.textSecondary }}>{t('entity.users')}</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: FB.blue }}><UserOutlined style={{ marginRight: 4 }} />{selectedOrganization.stats?.totalUsers || 0}</div>
                   </div>
                   <div style={{ background: FB.white, borderRadius: 6, padding: 12, textAlign: 'center' }}>
@@ -1744,7 +1744,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
         open={googleWorkspaceModal}
         onCancel={() => setGoogleWorkspaceModal(false)}
         footer={
-          <button onClick={() => setGoogleWorkspaceModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Fermer</button>
+          <button onClick={() => setGoogleWorkspaceModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>{t('common.close')}</button>
         }
         width={1000}
       >
@@ -1769,7 +1769,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
         open={modulesModal}
         onCancel={() => setModulesModal(false)}
         footer={
-          <button onClick={() => setModulesModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Fermer</button>
+          <button onClick={() => setModulesModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>{t('common.close')}</button>
         }
         width={800}
       >
@@ -1842,7 +1842,7 @@ const OrganizationsAdminPageNew: React.FC = () => {
         open={devis1minuteModal}
         onCancel={() => setDevis1minuteModal(false)}
         footer={
-          <button onClick={() => setDevis1minuteModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Fermer</button>
+          <button onClick={() => setDevis1minuteModal(false)} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>{t('common.close')}</button>
         }
         width={800}
       >

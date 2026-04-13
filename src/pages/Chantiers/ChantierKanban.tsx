@@ -2140,7 +2140,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               <Input value={techFormData.firstName} onChange={e => setTechFormData(d => ({ ...d, firstName: e.target.value }))} placeholder="Prénom" />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, fontWeight: 500 }}>Nom</label>
+              <label style={{ fontSize: 12, fontWeight: 500 }}>{t('common.name')}</label>
               <Input value={techFormData.lastName} onChange={e => setTechFormData(d => ({ ...d, lastName: e.target.value }))} placeholder={t('fields.name')} />
             </div>
           </div>
@@ -2196,7 +2196,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           )}
           <div style={{ display: 'flex', gap: 8 }}>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, fontWeight: 500 }}>Email</label>
+              <label style={{ fontSize: 12, fontWeight: 500 }}>{t('common.email')}</label>
               <Input value={techFormData.email} onChange={e => setTechFormData(d => ({ ...d, email: e.target.value }))} placeholder="email@exemple.com" />
             </div>
             <div style={{ flex: 1 }}>

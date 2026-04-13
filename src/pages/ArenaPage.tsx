@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
 import { SF } from '../components/zhiive/ZhiiveTheme';
+import { getSportConfig, TEAM_TYPE_SIZES } from '../services/arena/sportConfigs';
 import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
@@ -177,6 +178,8 @@ const ArenaPage: React.FC = () => {
   const [filterSport, setFilterSport] = useState<string | undefined>(undefined);
   const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const [availablePlayers, setAvailablePlayers] = useState<{ id: string; firstName: string; lastName: string; avatarUrl: string | null }[]>([]);
+  const [myRegistration, setMyRegistration] = useState<{ isRegistered: boolean; asPlayer: any; asTeamMember: any; isCaptain: boolean; team: any } | null>(null);
   const [scoreForm] = Form.useForm();
   const [createForm] = Form.useForm();
   const [courtsForm] = Form.useForm();
@@ -325,16 +328,45 @@ const ArenaPage: React.FC = () => {
     }
   }, [stableApi, selectedMatch, selectedTournament, fetchTournamentDetail, scoreForm, t, antMessage]);
 
+  // ── Charger mon inscription + joueurs disponibles quand on ouvre un tournoi ──
+  const fetchMyRegistration = useCallback(async (tournamentId: string) => {
+    try {
+      const res = await stableApi.get<any>(`/api/arena/tournaments/${tournamentId}/my-registration`);
+      setMyRegistration(res.data);
+    } catch {
+      setMyRegistration(null);
+    }
+  }, [stableApi]);
+
+  const fetchAvailablePlayers = useCallback(async (tournamentId: string, query = '') => {
+    try {
+      const res = await stableApi.get<any>(`/api/arena/tournaments/${tournamentId}/available-players?q=${encodeURIComponent(query)}`);
+      setAvailablePlayers(res.data || []);
+    } catch {
+      setAvailablePlayers([]);
+    }
+  }, [stableApi]);
+
+  // Quand on sélectionne un tournoi, charger l'inscription
+  useEffect(() => {
+    if (selectedTournament) {
+      fetchMyRegistration(selectedTournament.id);
+    } else {
+      setMyRegistration(null);
+    }
+  }, [selectedTournament, fetchMyRegistration]);
+
   const handleRegisterPlayer = useCallback(async () => {
     if (!selectedTournament) return;
     try {
       await stableApi.post(`/api/arena/tournaments/${selectedTournament.id}/players`);
       antMessage.success(t('arena.confirmed'));
       fetchTournamentDetail(selectedTournament.id);
+      fetchMyRegistration(selectedTournament.id);
     } catch (err: any) {
       antMessage.error(err.message || t('messages.loadingError'));
     }
-  }, [stableApi, selectedTournament, fetchTournamentDetail, t, antMessage]);
+  }, [stableApi, selectedTournament, fetchTournamentDetail, fetchMyRegistration, t, antMessage]);
 
   const handleRegisterTeam = useCallback(async (values: { name: string; memberIds?: string[] }) => {
     if (!selectedTournament) return;
@@ -344,10 +376,11 @@ const ArenaPage: React.FC = () => {
       setShowRegisterModal(false);
       registerForm.resetFields();
       fetchTournamentDetail(selectedTournament.id);
+      fetchMyRegistration(selectedTournament.id);
     } catch (err: any) {
       antMessage.error(err.message || t('messages.loadingError'));
     }
-  }, [stableApi, selectedTournament, fetchTournamentDetail, registerForm, t, antMessage]);
+  }, [stableApi, selectedTournament, fetchTournamentDetail, fetchMyRegistration, registerForm, t, antMessage]);
 
   const handleAddCourts = useCallback(async (values: { courtsCount: number; prefix: string }) => {
     if (!selectedTournament) return;
@@ -585,17 +618,44 @@ const ArenaPage: React.FC = () => {
             </Card>
           )}
 
-          {/* Inscription joueur/équipe */}
+          {/* Inscription joueur/équipe — adaptatif selon format */}
           {(t_.status === 'REGISTRATION_OPEN' || t_.status === 'DRAFT') && !isOrg && (
             <Card size="small" style={{ marginBottom: 16, borderRadius: SF.radius }}>
-              <Space>
-                <Button type="primary" icon={<UserAddOutlined />} onClick={handleRegisterPlayer}>
-                  {t('arena.registerPlayer')}
-                </Button>
-                <Button icon={<TeamOutlined />} onClick={() => setShowRegisterModal(true)}>
-                  {t('arena.registerTeam')}
-                </Button>
-              </Space>
+              {myRegistration?.isRegistered ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <Tag color="green" icon={<CheckCircleOutlined />}>{t('arena.alreadyRegistered')}</Tag>
+                  {myRegistration.isCaptain && myRegistration.team && (
+                    <Button size="small" icon={<EditOutlined />} onClick={() => {
+                      setShowRegisterModal(true);
+                      fetchAvailablePlayers(t_.id);
+                    }}>
+                      {t('arena.manageTeam')}
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <Space>
+                  {t_.format === 'RANDOM_DRAW' ? (
+                    /* Mêlée : inscription solo uniquement */
+                    <Button type="primary" icon={<UserAddOutlined />} onClick={handleRegisterPlayer}>
+                      {t('arena.registerMelee')}
+                    </Button>
+                  ) : t_.teamType === 'SOLO' ? (
+                    /* Solo : inscription individuelle */
+                    <Button type="primary" icon={<UserAddOutlined />} onClick={handleRegisterPlayer}>
+                      {t('arena.registerPlayer')}
+                    </Button>
+                  ) : (
+                    /* Équipes formées (DOUBLETTE, TRIPLETTE, etc.) : le capitaine inscrit son équipe */
+                    <Button type="primary" icon={<TeamOutlined />} onClick={() => {
+                      setShowRegisterModal(true);
+                      fetchAvailablePlayers(t_.id);
+                    }}>
+                      {t('arena.registerTeam')}
+                    </Button>
+                  )}
+                </Space>
+              )}
             </Card>
           )}
 
@@ -1078,23 +1138,108 @@ const ArenaPage: React.FC = () => {
     </Modal>
   );
 
-  const renderRegisterTeamModal = () => (
-    <Modal
-      open={showRegisterModal}
-      onCancel={() => setShowRegisterModal(false)}
-      title={<Space><TeamOutlined />{t('arena.registerTeam')}</Space>}
-      footer={null}
-    >
-      <Form form={registerForm} layout="vertical" onFinish={handleRegisterTeam}>
-        <Form.Item name="name" label={t('arena.team')} rules={[{ required: true }]}>
-          <Input placeholder={t('arena.team')} />
-        </Form.Item>
-        <Form.Item>
-          <Button type="primary" htmlType="submit" block>{t('arena.registerTeam')}</Button>
-        </Form.Item>
-      </Form>
-    </Modal>
-  );
+  const renderRegisterTeamModal = () => {
+    if (!selectedTournament) return null;
+    const t_ = selectedTournament;
+    const teamSize = TEAM_TYPE_SIZES[t_.teamType] || t_.playersPerTeam;
+    const membersNeeded = teamSize - 1; // -1 car le capitaine est déjà compté
+    const isManaging = myRegistration?.isCaptain && myRegistration?.team;
+
+    return (
+      <Modal
+        open={showRegisterModal}
+        onCancel={() => { setShowRegisterModal(false); registerForm.resetFields(); }}
+        title={
+          <Space>
+            <TeamOutlined />
+            {isManaging ? t('arena.manageTeam') : t('arena.registerTeam')}
+          </Space>
+        }
+        footer={null}
+        width={480}
+      >
+        <Form
+          form={registerForm}
+          layout="vertical"
+          onFinish={handleRegisterTeam}
+          initialValues={isManaging ? { name: myRegistration.team.name } : {}}
+        >
+          {/* Nom de l'équipe */}
+          <Form.Item
+            name="name"
+            label={t('arena.teamName')}
+            rules={[{ required: true, message: t('arena.teamName') }]}
+          >
+            <Input placeholder={t('arena.teamName')} disabled={!!isManaging} />
+          </Form.Item>
+
+          {/* Info : Vous êtes capitaine */}
+          <div style={{
+            background: `${SF.primary}10`,
+            borderRadius: SF.radius,
+            padding: '8px 12px',
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}>
+            <CrownOutlined style={{ color: SF.gold }} />
+            <Text style={{ color: SF.text, fontSize: 13 }}>
+              {t('arena.captain')} : {user?.firstName} {user?.lastName}
+            </Text>
+          </div>
+
+          {/* Sélecteur de coéquipiers */}
+          {membersNeeded > 0 && (
+            <Form.Item
+              name="memberIds"
+              label={t('arena.selectMembers')}
+              rules={[{
+                required: true,
+                type: 'array',
+                len: membersNeeded,
+                message: t('arena.membersRequired', { count: membersNeeded }),
+              }]}
+              extra={
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('arena.membersRequired', { count: membersNeeded })}
+                </Text>
+              }
+            >
+              <Select
+                mode="multiple"
+                placeholder={t('arena.searchMember')}
+                showSearch
+                filterOption={false}
+                onSearch={(q) => fetchAvailablePlayers(t_.id, q)}
+                onFocus={() => fetchAvailablePlayers(t_.id)}
+                maxCount={membersNeeded}
+                style={{ width: '100%' }}
+                optionLabelProp="label"
+              >
+                {availablePlayers.map(p => (
+                  <Select.Option key={p.id} value={p.id} label={`${p.firstName} ${p.lastName}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Avatar size="small" src={p.avatarUrl}>
+                        {(p.firstName?.[0] || '') + (p.lastName?.[0] || '')}
+                      </Avatar>
+                      <span>{p.firstName} {p.lastName}</span>
+                    </div>
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+          )}
+
+          <Form.Item>
+            <Button type="primary" htmlType="submit" block style={{ background: SF.gradientPrimary, border: 'none' }}>
+              {isManaging ? t('common.save') : t('arena.registerTeam')}
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+    );
+  };
 
   const renderCourtsModal = () => (
     <Modal

@@ -669,7 +669,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ treeId, nodeId, onChange, r
     return (
       <Card size="small" variant="outlined">
         <Title level={5}>🧮 Formule</Title>
-        <Text type="secondary">Chargement...</Text>
+        <Text type="secondary">{t('common.loading')}</Text>
       </Card>
     );
   }

@@ -7,6 +7,7 @@
  */
 
 import { SF } from '../../components/zhiive/ZhiiveTheme';
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import SignatureCanvas, { type SignatureCanvasRef } from '../../components/signature/SignatureCanvas';
@@ -138,7 +139,7 @@ const PublicSignaturePage: React.FC = () => {
       <div style={styles.page}>
         <div style={styles.card}>
           <div style={styles.spinner} />
-          <p style={{ textAlign: 'center', color: '#666', marginTop: 16 }}>Chargement...</p>
+          <p style={{ textAlign: 'center', color: '#666', marginTop: 16 }}>{t('common.loading')}</p>
         </div>
       </div>
     );

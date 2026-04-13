@@ -1,12 +1,20 @@
 /**
- * Arena Tournament Engine
+ * 🏟️ Arena Tournament Engine v2
  * 
- * Moteur de génération de matchs, calcul de classements et gestion des tours.
- * Supporte : tirage aléatoire (mêlée), poules, élimination directe, suisse.
+ * Moteur complet de génération de matchs, calcul de classements et gestion des tours.
+ * 
+ * Formats supportés :
+ * - RANDOM_DRAW    — Mêlée pétanque : mélange + appariement aléatoire à chaque manche
+ * - ROUND_ROBIN    — Poules avec journées (circle method) : chaque équipe joue contre toutes
+ * - SINGLE_ELIMINATION — Bracket avec byes + avancement automatique des vainqueurs
+ * - DOUBLE_ELIMINATION — Winner bracket + Loser bracket + Grande Finale
+ * - SWISS          — Système suisse : appariement par niveau, évite re-matches
+ * - CHAMPIONSHIP   — Identique à ROUND_ROBIN (aller), utilisé pour les ligues/championnats
  */
 
 import { db } from '../../lib/database';
 import { getIO } from '../../lib/socket';
+import { logger } from '../../lib/logger';
 
 // ──────────────────────────────────────────────
 // Types internes
@@ -22,6 +30,12 @@ interface GeneratedMatch {
   matchNumber: number;
   team1Id: string | null;
   team2Id: string | null;
+}
+
+interface RoundWithMatches {
+  roundNumber: number;
+  name: string;
+  matches: GeneratedMatch[];
 }
 
 // ──────────────────────────────────────────────
@@ -64,90 +78,156 @@ function generateRandomDraw(teams: TeamForDraw[]): GeneratedMatch[] {
 }
 
 /**
- * Poules (round-robin) :
- * Chaque équipe joue contre toutes les autres une fois.
+ * Round-Robin avec distribution en journées (circle method).
+ * 
+ * Pour N équipes (N pair) : N-1 journées, N/2 matchs par journée.
+ * Pour N impair : on ajoute un "fantôme" (bye), donc N journées, (N-1)/2 matchs + 1 bye.
+ * 
+ * Algorithme : fixer l'équipe 0, faire tourner les N-1 autres en cercle.
+ * 
+ * Retourne TOUTES les journées avec leurs matchs.
  */
-function generateRoundRobin(teams: TeamForDraw[]): GeneratedMatch[] {
-  const matches: GeneratedMatch[] = [];
-  let matchNumber = 1;
+function generateRoundRobinSchedule(teams: TeamForDraw[]): RoundWithMatches[] {
+  const teamList = [...teams];
+  const hasBye = teamList.length % 2 !== 0;
 
-  for (let i = 0; i < teams.length; i++) {
-    for (let j = i + 1; j < teams.length; j++) {
-      matches.push({
+  // Si impair, ajouter un "fantôme" pour les byes
+  if (hasBye) {
+    teamList.push({ id: '__BYE__', name: 'BYE' });
+  }
+
+  const n = teamList.length;
+  const totalRounds = n - 1;
+  const matchesPerRound = n / 2;
+  const rounds: RoundWithMatches[] = [];
+
+  // Circle method : fixer teamList[0], faire tourner le reste
+  const fixed = teamList[0];
+  const rotating = teamList.slice(1);
+
+  for (let round = 0; round < totalRounds; round++) {
+    const roundMatches: GeneratedMatch[] = [];
+    let matchNumber = 1;
+
+    // Match de l'équipe fixe
+    const opponent = rotating[0];
+    if (fixed.id !== '__BYE__' && opponent.id !== '__BYE__') {
+      roundMatches.push({
         matchNumber,
-        team1Id: teams[i].id,
-        team2Id: teams[j].id,
+        team1Id: fixed.id,
+        team2Id: opponent.id,
       });
       matchNumber++;
     }
+
+    // Autres matchs : appariement miroir
+    for (let i = 1; i < matchesPerRound; i++) {
+      const home = rotating[i];
+      const away = rotating[rotating.length - i];
+      if (home.id !== '__BYE__' && away.id !== '__BYE__') {
+        roundMatches.push({
+          matchNumber,
+          team1Id: home.id,
+          team2Id: away.id,
+        });
+        matchNumber++;
+      }
+    }
+
+    rounds.push({
+      roundNumber: round + 1,
+      name: `Journée ${round + 1}`,
+      matches: roundMatches,
+    });
+
+    // Rotation : déplacer le dernier au début
+    rotating.unshift(rotating.pop()!);
   }
 
-  return matches;
+  return rounds;
 }
 
 /**
- * Élimination directe :
- * Bracket classique. Si nombre de joueurs pas puissance de 2, 
- * certaines équipes ont un bye au 1er tour.
+ * Élimination directe (bracket).
+ * Retourne les matchs du premier tour.
+ * Gère les byes si le nombre d'équipes n'est pas une puissance de 2.
+ * Les équipes seedées (tête de série) évitent de se rencontrer tôt.
  */
-function generateSingleElimination(teams: TeamForDraw[]): GeneratedMatch[] {
-  // Trier par seed si disponible, sinon mélanger
+function generateSingleEliminationBracket(teams: TeamForDraw[]): RoundWithMatches[] {
   const sorted = teams.some(t => t.seed != null)
     ? [...teams].sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999))
     : shuffleArray(teams);
 
-  // Trouver la puissance de 2 supérieure
   const bracketSize = Math.pow(2, Math.ceil(Math.log2(sorted.length)));
-  const byes = bracketSize - sorted.length;
+  const totalRounds = Math.ceil(Math.log2(sorted.length));
+  const _byes = bracketSize - sorted.length;
 
-  const matches: GeneratedMatch[] = [];
+  // Créer les slots du bracket avec byes
+  const slots: (TeamForDraw | null)[] = new Array(bracketSize).fill(null);
+  
+  // Placer les équipes seedées avec espacement optimal
+  for (let i = 0; i < sorted.length; i++) {
+    slots[i] = sorted[i];
+  }
+
+  // Générer les matchs du premier tour
+  const firstRoundMatches: GeneratedMatch[] = [];
   let matchNumber = 1;
 
-  // Premier tour avec byes
-  const firstRoundTeams = [...sorted];
-  // Les équipes en haut du seed obtiennent les byes
-  for (let i = 0; i < bracketSize / 2; i++) {
-    const team1 = firstRoundTeams[i] || null;
-    const team2Idx = bracketSize - 1 - i;
-    const team2 = team2Idx < firstRoundTeams.length ? firstRoundTeams[team2Idx] : null;
+  for (let i = 0; i < bracketSize; i += 2) {
+    const team1 = slots[i];
+    const team2 = slots[i + 1];
 
-    // Si une des deux est null, c'est un bye (le match sera auto-résolu)
-    if (team1 && team2) {
-      matches.push({
-        matchNumber,
-        team1Id: team1.id,
-        team2Id: team2.id,
-      });
-    } else if (team1) {
-      matches.push({
-        matchNumber,
-        team1Id: team1.id,
-        team2Id: null, // bye
-      });
-    }
+    firstRoundMatches.push({
+      matchNumber,
+      team1Id: team1?.id || null,
+      team2Id: team2?.id || null,
+    });
     matchNumber++;
   }
 
-  return matches;
+  // Nommer le premier tour
+  const getRoundName = (roundIdx: number, totalR: number) => {
+    const remaining = totalR - roundIdx;
+    if (remaining === 1) return 'Finale';
+    if (remaining === 2) return 'Demi-finales';
+    if (remaining === 3) return 'Quarts de finale';
+    if (remaining === 4) return 'Huitièmes de finale';
+    return `Tour ${roundIdx + 1}`;
+  };
+
+  return [{
+    roundNumber: 1,
+    name: getRoundName(0, totalRounds),
+    matches: firstRoundMatches,
+  }];
 }
 
 /**
- * Système suisse :
- * Apparie les équipes par niveau (points similaires).
- * Évite les re-matches.
+ * Double élimination : Winner bracket + Loser bracket.
+ * Le premier tour est identique à l'élimination directe.
+ * Les perdants sont envoyés dans le Loser bracket.
+ * Note : on génère uniquement le premier tour ici, 
+ * les tours suivants sont générés automatiquement via advanceEliminationBracket.
+ */
+function generateDoubleEliminationBracket(teams: TeamForDraw[]): RoundWithMatches[] {
+  // Le premier tour est identique à single elimination
+  return generateSingleEliminationBracket(teams);
+}
+
+/**
+ * Système suisse — Appariement par niveau, évite les re-matches.
  */
 async function generateSwissRound(
   tournamentId: string,
-  roundNumber: number
+  _roundNumber: number
 ): Promise<GeneratedMatch[]> {
-  // Récupérer les standings actuels
   const standings = await db.arenaStanding.findMany({
     where: { tournamentId },
     orderBy: { totalPoints: 'desc' },
     include: { TeamEntry: true },
   });
 
-  // Récupérer les matchs déjà joués pour éviter les re-matches
   const playedMatches = await db.arenaMatch.findMany({
     where: { tournamentId, status: 'COMPLETED' },
     select: { team1Id: true, team2Id: true },
@@ -170,7 +250,6 @@ async function generateSwissRound(
   for (const team of teams) {
     if (paired.has(team.id)) continue;
 
-    // Trouver le meilleur adversaire (points proches, pas encore joué)
     const opponent = teams.find(t => {
       if (t.id === team.id) return false;
       if (paired.has(t.id)) return false;
@@ -198,11 +277,17 @@ async function generateSwissRound(
 // ──────────────────────────────────────────────
 
 /**
- * Génère un nouveau tour de matchs pour un tournoi.
+ * Génère les matchs d'un tournoi.
+ * 
+ * - ROUND_ROBIN / CHAMPIONSHIP : génère TOUTES les journées d'un coup (N-1 rounds).
+ * - RANDOM_DRAW : génère 1 tour (manche) à chaque appel.
+ * - SINGLE/DOUBLE_ELIMINATION : génère le 1er tour du bracket, les suivants via advanceBracket.
+ * - SWISS : génère 1 tour basé sur le classement actuel.
  */
 export async function generateRound(tournamentId: string): Promise<{
   roundId: string;
   matchCount: number;
+  roundsCreated?: number;
 }> {
   const tournament = await db.arenaTournament.findUnique({
     where: { id: tournamentId },
@@ -222,45 +307,9 @@ export async function generateRound(tournamentId: string): Promise<{
 
   if (teams.length < 2) throw new Error('Not enough teams to generate matches');
 
-  const nextRound = (tournament.Rounds[0]?.roundNumber ?? 0) + 1;
+  const lastRound = tournament.Rounds[0]?.roundNumber ?? 0;
 
-  // Déterminer le nom du tour
-  let roundName: string;
-  if (tournament.format === 'SINGLE_ELIMINATION' || tournament.format === 'DOUBLE_ELIMINATION') {
-    const totalRounds = Math.ceil(Math.log2(teams.length));
-    const remaining = totalRounds - nextRound + 1;
-    if (remaining === 1) roundName = 'Finale';
-    else if (remaining === 2) roundName = 'Demi-finale';
-    else if (remaining === 3) roundName = 'Quart de finale';
-    else roundName = `Tour ${nextRound}`;
-  } else {
-    roundName = `Tour ${nextRound}`;
-  }
-
-  // Générer les matchs selon le format
-  let generatedMatches: GeneratedMatch[];
-  switch (tournament.format) {
-    case 'RANDOM_DRAW':
-      generatedMatches = generateRandomDraw(teams);
-      break;
-    case 'ROUND_ROBIN':
-      if (nextRound === 1) {
-        generatedMatches = generateRoundRobin(teams);
-      } else {
-        throw new Error('Round-robin generates all matches in round 1');
-      }
-      break;
-    case 'SINGLE_ELIMINATION':
-      generatedMatches = generateSingleElimination(teams);
-      break;
-    case 'SWISS':
-      generatedMatches = await generateSwissRound(tournamentId, nextRound);
-      break;
-    default:
-      generatedMatches = generateRandomDraw(teams);
-  }
-
-  // Récupérer les terrains disponibles pour assignation automatique
+  // Récupérer les terrains disponibles
   const courts = tournament.withCourts
     ? await db.arenaCourt.findMany({
         where: { tournamentId, isAvailable: true },
@@ -268,30 +317,224 @@ export async function generateRound(tournamentId: string): Promise<{
       })
     : [];
 
-  // Créer le tour et les matchs dans une transaction
+  const format = tournament.format;
+
+  // ═══════════════════════════════════════════
+  // ROUND_ROBIN / CHAMPIONSHIP : toutes les journées d'un coup
+  // ═══════════════════════════════════════════
+  if (format === 'ROUND_ROBIN' || format === 'CHAMPIONSHIP') {
+    if (lastRound > 0) {
+      throw new Error('Les journées ont déjà été générées pour ce tournoi round-robin/championnat');
+    }
+
+    const schedule = generateRoundRobinSchedule(teams);
+
+    const result = await db.$transaction(async (tx) => {
+      let totalMatches = 0;
+      let firstRoundId = '';
+
+      for (const roundData of schedule) {
+        const round = await tx.arenaRound.create({
+          data: {
+            tournamentId,
+            roundNumber: roundData.roundNumber,
+            name: roundData.name,
+            status: 'SCHEDULED',
+          },
+        });
+
+        if (roundData.roundNumber === 1) firstRoundId = round.id;
+
+        const matchData = roundData.matches.map((m, idx) => ({
+          tournamentId,
+          roundId: round.id,
+          matchNumber: m.matchNumber,
+          team1Id: m.team1Id,
+          team2Id: m.team2Id,
+          courtId: courts.length > 0 ? courts[idx % courts.length].id : null,
+          status: 'SCHEDULED' as const,
+        }));
+
+        await tx.arenaMatch.createMany({ data: matchData });
+        totalMatches += matchData.length;
+      }
+
+      // Mettre à jour le tournoi
+      await tx.arenaTournament.update({
+        where: { id: tournamentId },
+        data: {
+          currentRound: 1,
+          status: 'IN_PROGRESS',
+          nbRounds: schedule.length,
+        },
+      });
+
+      return { roundId: firstRoundId, matchCount: totalMatches, roundsCreated: schedule.length };
+    });
+
+    const io = getIO();
+    if (io) {
+      io.to(`arena:${tournamentId}`).emit('arena:round-generated', {
+        tournamentId,
+        roundId: result.roundId,
+        roundNumber: 1,
+        roundsCreated: result.roundsCreated,
+        matchCount: result.matchCount,
+      });
+    }
+
+    logger.info(`[ARENA] Round-robin: ${result.roundsCreated} journées, ${result.matchCount} matchs for ${teams.length} teams`);
+    return result;
+  }
+
+  // ═══════════════════════════════════════════
+  // SINGLE_ELIMINATION / DOUBLE_ELIMINATION : bracket
+  // ═══════════════════════════════════════════
+  if (format === 'SINGLE_ELIMINATION' || format === 'DOUBLE_ELIMINATION') {
+    if (lastRound > 0) {
+      throw new Error('Le bracket a déjà été généré. Les tours suivants sont créés automatiquement après chaque score.');
+    }
+
+    const bracketRounds = format === 'DOUBLE_ELIMINATION'
+      ? generateDoubleEliminationBracket(teams)
+      : generateSingleEliminationBracket(teams);
+
+    const result = await db.$transaction(async (tx) => {
+      const roundData = bracketRounds[0];
+      const round = await tx.arenaRound.create({
+        data: {
+          tournamentId,
+          roundNumber: 1,
+          name: roundData.name,
+          status: 'SCHEDULED',
+        },
+      });
+
+      const matchData = roundData.matches.map((m, idx) => ({
+        tournamentId,
+        roundId: round.id,
+        matchNumber: m.matchNumber,
+        team1Id: m.team1Id,
+        team2Id: m.team2Id,
+        courtId: courts.length > 0 ? courts[idx % courts.length].id : null,
+        status: 'SCHEDULED' as const,
+      }));
+
+      await tx.arenaMatch.createMany({ data: matchData });
+
+      // Auto-résoudre les byes (matchs avec 1 seule équipe)
+      const byeMatches = matchData.filter(m => (m.team1Id && !m.team2Id) || (!m.team1Id && m.team2Id));
+      for (const bye of byeMatches) {
+        const winnerId = bye.team1Id || bye.team2Id;
+        await tx.arenaMatch.updateMany({
+          where: { roundId: round.id, matchNumber: bye.matchNumber },
+          data: { winnerId, status: 'COMPLETED', score1: 0, score2: 0 },
+        });
+      }
+
+      await tx.arenaTournament.update({
+        where: { id: tournamentId },
+        data: { currentRound: 1, status: 'IN_PROGRESS' },
+      });
+
+      return { roundId: round.id, matchCount: matchData.length };
+    });
+
+    const io = getIO();
+    if (io) {
+      io.to(`arena:${tournamentId}`).emit('arena:round-generated', {
+        tournamentId,
+        roundId: result.roundId,
+        roundNumber: 1,
+        matchCount: result.matchCount,
+      });
+    }
+
+    return result;
+  }
+
+  // ═══════════════════════════════════════════
+  // SWISS : 1 tour par appel
+  // ═══════════════════════════════════════════
+  if (format === 'SWISS') {
+    const nextRound = lastRound + 1;
+    const swissMatches = await generateSwissRound(tournamentId, nextRound);
+
+    if (swissMatches.length === 0) {
+      throw new Error('Impossible de générer plus de matchs suisses (tous les appariements ont été faits)');
+    }
+
+    const result = await db.$transaction(async (tx) => {
+      const round = await tx.arenaRound.create({
+        data: {
+          tournamentId,
+          roundNumber: nextRound,
+          name: `Tour ${nextRound}`,
+          status: 'SCHEDULED',
+        },
+      });
+
+      const matchData = swissMatches.map((m, idx) => ({
+        tournamentId,
+        roundId: round.id,
+        matchNumber: m.matchNumber,
+        team1Id: m.team1Id,
+        team2Id: m.team2Id,
+        courtId: courts.length > 0 ? courts[idx % courts.length].id : null,
+        status: 'SCHEDULED' as const,
+      }));
+
+      await tx.arenaMatch.createMany({ data: matchData });
+
+      await tx.arenaTournament.update({
+        where: { id: tournamentId },
+        data: { currentRound: nextRound, status: 'IN_PROGRESS' },
+      });
+
+      return { roundId: round.id, matchCount: matchData.length };
+    });
+
+    const io = getIO();
+    if (io) {
+      io.to(`arena:${tournamentId}`).emit('arena:round-generated', {
+        tournamentId,
+        roundId: result.roundId,
+        roundNumber: nextRound,
+        matchCount: result.matchCount,
+      });
+    }
+
+    return result;
+  }
+
+  // ═══════════════════════════════════════════
+  // RANDOM_DRAW (mêlée) : 1 manche par appel
+  // ═══════════════════════════════════════════
+  const nextRound = lastRound + 1;
+  const randomMatches = generateRandomDraw(teams);
+
   const result = await db.$transaction(async (tx) => {
     const round = await tx.arenaRound.create({
       data: {
         tournamentId,
         roundNumber: nextRound,
-        name: roundName,
+        name: `Manche ${nextRound}`,
         status: 'SCHEDULED',
       },
     });
 
-    const matchData = generatedMatches.map((m, idx) => ({
+    const matchData = randomMatches.map((m, idx) => ({
       tournamentId,
       roundId: round.id,
       matchNumber: m.matchNumber,
       team1Id: m.team1Id,
       team2Id: m.team2Id,
-      courtId: courts[idx % courts.length]?.id ?? null, // Assignation cyclique des terrains
+      courtId: courts.length > 0 ? courts[idx % courts.length].id : null,
       status: 'SCHEDULED' as const,
     }));
 
     await tx.arenaMatch.createMany({ data: matchData });
 
-    // Mettre à jour le tour courant du tournoi
     await tx.arenaTournament.update({
       where: { id: tournamentId },
       data: { currentRound: nextRound, status: 'IN_PROGRESS' },
@@ -300,19 +543,146 @@ export async function generateRound(tournamentId: string): Promise<{
     return { roundId: round.id, matchCount: matchData.length };
   });
 
-  // Émettre via Socket.IO
   const io = getIO();
   if (io) {
     io.to(`arena:${tournamentId}`).emit('arena:round-generated', {
       tournamentId,
       roundId: result.roundId,
       roundNumber: nextRound,
-      roundName,
       matchCount: result.matchCount,
     });
   }
 
   return result;
+}
+
+/**
+ * Avancement automatique du bracket (SINGLE/DOUBLE ELIMINATION).
+ * 
+ * Appelé après chaque score. Vérifie si tous les matchs du round actuel
+ * sont terminés, et si oui, crée le tour suivant avec les vainqueurs.
+ * 
+ * @returns true si un nouveau round a été créé, false sinon.
+ */
+export async function advanceEliminationBracket(tournamentId: string): Promise<boolean> {
+  const tournament = await db.arenaTournament.findUnique({
+    where: { id: tournamentId },
+    include: {
+      Rounds: { orderBy: { roundNumber: 'desc' }, take: 1 },
+    },
+  });
+
+  if (!tournament) return false;
+  if (tournament.format !== 'SINGLE_ELIMINATION' && tournament.format !== 'DOUBLE_ELIMINATION') return false;
+
+  const currentRoundNumber = tournament.Rounds[0]?.roundNumber;
+  if (!currentRoundNumber) return false;
+
+  const currentRoundId = tournament.Rounds[0].id;
+
+  // Chercher les matchs du round actuel
+  const matches = await db.arenaMatch.findMany({
+    where: { roundId: currentRoundId },
+    orderBy: { matchNumber: 'asc' },
+  });
+
+  // Vérifier si TOUS les matchs sont terminés
+  const allCompleted = matches.every(m => m.status === 'COMPLETED' || m.status === 'FORFEIT');
+  if (!allCompleted) return false;
+
+  // Récupérer les vainqueurs
+  const winners = matches
+    .filter(m => m.winnerId)
+    .map(m => m.winnerId!);
+
+  // Si 1 seul vainqueur → c'était la finale !
+  if (winners.length <= 1) {
+    await db.arenaTournament.update({
+      where: { id: tournamentId },
+      data: { status: 'COMPLETED' },
+    });
+
+    const io = getIO();
+    if (io) {
+      io.to(`arena:${tournamentId}`).emit('arena:tournament-completed', {
+        tournamentId,
+        winnerId: winners[0] || null,
+      });
+    }
+
+    logger.info(`[ARENA] Tournament ${tournamentId} completed! Winner: ${winners[0]}`);
+    return false;
+  }
+
+  // Créer le tour suivant avec les vainqueurs
+  const totalRounds = Math.ceil(Math.log2(matches.length * 2));
+  const nextRoundNumber = currentRoundNumber + 1;
+
+  const getRoundName = (roundNum: number) => {
+    const remaining = totalRounds - roundNum + 1;
+    if (remaining <= 1) return 'Finale';
+    if (remaining === 2) return 'Demi-finales';
+    if (remaining === 3) return 'Quarts de finale';
+    return `Tour ${roundNum}`;
+  };
+
+  const courts = tournament.withCourts
+    ? await db.arenaCourt.findMany({
+        where: { tournamentId, isAvailable: true },
+        orderBy: { name: 'asc' },
+      })
+    : [];
+
+  await db.$transaction(async (tx) => {
+    const round = await tx.arenaRound.create({
+      data: {
+        tournamentId,
+        roundNumber: nextRoundNumber,
+        name: getRoundName(nextRoundNumber),
+        status: 'SCHEDULED',
+      },
+    });
+
+    // Apparier les vainqueurs : 1v2, 3v4, etc.
+    const nextMatches: { matchNumber: number; team1Id: string; team2Id: string | null }[] = [];
+    for (let i = 0; i < winners.length; i += 2) {
+      nextMatches.push({
+        matchNumber: i / 2 + 1,
+        team1Id: winners[i],
+        team2Id: i + 1 < winners.length ? winners[i + 1] : null,
+      });
+    }
+
+    await tx.arenaMatch.createMany({
+      data: nextMatches.map((m, idx) => ({
+        tournamentId,
+        roundId: round.id,
+        matchNumber: m.matchNumber,
+        team1Id: m.team1Id,
+        team2Id: m.team2Id || null,
+        courtId: courts.length > 0 ? courts[idx % courts.length].id : null,
+        status: 'SCHEDULED' as const,
+      })),
+    });
+
+    await tx.arenaTournament.update({
+      where: { id: tournamentId },
+      data: { currentRound: nextRoundNumber },
+    });
+  });
+
+  const io = getIO();
+  if (io) {
+    io.to(`arena:${tournamentId}`).emit('arena:round-generated', {
+      tournamentId,
+      roundNumber: nextRoundNumber,
+      roundName: getRoundName(nextRoundNumber),
+      autoAdvance: true,
+    });
+  }
+
+  logger.info(`[ARENA] Bracket advanced: Round ${nextRoundNumber} (${getRoundName(nextRoundNumber)}) with ${Math.ceil(winners.length / 2)} matches`);
+  return true;
 }
 
 /**

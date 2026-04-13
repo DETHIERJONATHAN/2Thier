@@ -1074,7 +1074,7 @@ export default function LeadsHomePage({
               Intégration Google Calendar prochaine. Vous pouvez continuer vers la page dédiée pour ce lead.
             </p>
             <Space>
-              <Button onClick={() => setIsAgendaModalOpen(false)}>Fermer</Button>
+              <Button onClick={() => setIsAgendaModalOpen(false)}>{t('common.close')}</Button>
               <Button
                 type="primary"
                 onClick={() => {

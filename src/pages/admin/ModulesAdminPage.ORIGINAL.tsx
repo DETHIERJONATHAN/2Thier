@@ -1024,7 +1024,7 @@ const AdminModulesPageDynamic: React.FC = () => {
         }}
         extra={
           <Space>
-            <Button onClick={() => setDrawerVisible(false)}>Annuler</Button>
+            <Button onClick={() => setDrawerVisible(false)}>{t('common.cancel')}</Button>
             <Button type="primary" onClick={() => form.submit()}>
               {editingModule ? 'Modifier' : 'CrÃ©er'}
             </Button>

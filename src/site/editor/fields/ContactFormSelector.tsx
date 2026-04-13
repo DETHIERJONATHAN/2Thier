@@ -747,7 +747,7 @@ const ContactFormSelector: React.FC<ContactFormSelectorProps> = ({
           >
             <Select placeholder="Sélectionnez un type">
               <Option value="text">Texte</Option>
-              <Option value="email">Email</Option>
+              <Option value="email">{t('common.email')}</Option>
               <Option value="tel">Téléphone</Option>
               <Option value="textarea">Zone de texte</Option>
               <Option value="select">Sélection</Option>

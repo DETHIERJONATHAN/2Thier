@@ -156,7 +156,7 @@ export const ContactRenderer: React.FC<ContactRendererProps> = ({ content }) => 
                         <MailOutlined style={{ fontSize: '24px', color: accentColor }} />
                       </div>
                       <div>
-                        <Text type="secondary" style={{ fontSize: '14px' }}>Email</Text>
+                        <Text type="secondary" style={{ fontSize: '14px' }}>{t('common.email')}</Text>
                         <div>
                           <a href={`mailto:${email}`} style={{ color: textColor, fontWeight: 500, fontSize: '16px' }}>
                             {email}
@@ -208,7 +208,7 @@ export const ContactRenderer: React.FC<ContactRendererProps> = ({ content }) => 
                         <EnvironmentOutlined style={{ fontSize: '24px', color: accentColor }} />
                       </div>
                       <div>
-                        <Text type="secondary" style={{ fontSize: '14px' }}>Adresse</Text>
+                        <Text type="secondary" style={{ fontSize: '14px' }}>{t('common.address')}</Text>
                         <div style={{ color: textColor, fontWeight: 500, fontSize: '16px' }}>
                           {address}
                         </div>

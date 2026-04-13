@@ -1910,7 +1910,7 @@ const FacturePage: React.FC = () => {
 
           {/* Client info */}
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: FB.text, marginBottom: 10 }}>Client</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: FB.text, marginBottom: 10 }}>{t('entity.client')}</div>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
               <div style={{ position: 'relative' }}>
                 <label style={{ fontSize: 12, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Nom *</label>
@@ -2029,7 +2029,7 @@ const FacturePage: React.FC = () => {
                 )}
               </div>
               <div>
-                <label style={{ fontSize: 12, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Email</label>
+                <label style={{ fontSize: 12, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>{t('common.email')}</label>
                 <input
                   value={formData.clientEmail}
                   onChange={e => setFormData(p => ({ ...p, clientEmail: e.target.value }))}
@@ -2059,7 +2059,7 @@ const FacturePage: React.FC = () => {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 12, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Adresse</label>
+                <label style={{ fontSize: 12, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>{t('common.address')}</label>
                 <input
                   value={formData.clientAddress}
                   onChange={e => setFormData(p => ({ ...p, clientAddress: e.target.value }))}
@@ -2078,7 +2078,7 @@ const FacturePage: React.FC = () => {
 
           {/* Invoice details */}
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: FB.text, marginBottom: 10 }}>Détails</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: FB.text, marginBottom: 10 }}>{t('common.details')}</div>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
               <div style={{ gridColumn: isMobile ? undefined : '1 / -1' }}>
                 <label style={{ fontSize: 12, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Description / Objet</label>
@@ -2140,7 +2140,7 @@ const FacturePage: React.FC = () => {
                 gap: 8, marginBottom: 8, alignItems: 'end',
               }}>
                 <div>
-                  {idx === 0 && <label style={{ fontSize: 11, color: FB.textSecondary, display: 'block', marginBottom: 2 }}>Description</label>}
+                  {idx === 0 && <label style={{ fontSize: 11, color: FB.textSecondary, display: 'block', marginBottom: 2 }}>{t('common.description')}</label>}
                   <input
                     value={line.description}
                     onChange={e => {
@@ -2376,7 +2376,7 @@ const FacturePage: React.FC = () => {
                 <div style={{
                   background: FB.bg, borderRadius: FB.radius, padding: 16, marginBottom: 16,
                 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: FB.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Client</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: FB.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('entity.client')}</div>
                   <div style={{ fontSize: 17, fontWeight: 700, color: FB.text, marginBottom: 4 }}>{inv.clientName}</div>
                   {inv.clientVat && <div style={{ fontSize: 13, color: FB.textSecondary }}>TVA : {inv.clientVat}</div>}
                   {inv.clientAddress && <div style={{ fontSize: 13, color: FB.textSecondary }}>{inv.clientAddress}</div>}
@@ -2403,10 +2403,10 @@ const FacturePage: React.FC = () => {
                           display: 'grid', gridTemplateColumns: '1fr 80px 100px 100px',
                           background: FB.bg, padding: '8px 12px', fontSize: 12, fontWeight: 600, color: FB.textSecondary,
                         }}>
-                          <div>Description</div>
+                          <div>{t('common.description')}</div>
                           <div style={{ textAlign: 'center' }}>Qté</div>
                           <div style={{ textAlign: 'right' }}>Prix unit.</div>
-                          <div style={{ textAlign: 'right' }}>Total</div>
+                          <div style={{ textAlign: 'right' }}>{t('common.total')}</div>
                         </div>
                       )}
                       {inv.lines.map((line, i) => (
@@ -3289,7 +3289,7 @@ const FacturePage: React.FC = () => {
 
                 {/* Description */}
                 <div style={{ gridColumn: isMobile ? undefined : '1 / -1' }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>Description</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary, display: 'block', marginBottom: 4 }}>{t('common.description')}</label>
                   <input
                     value={expenseForm.description}
                     onChange={e => setExpenseForm(p => ({ ...p, description: e.target.value }))}
@@ -3352,7 +3352,7 @@ const FacturePage: React.FC = () => {
                       padding: '10px 20px', background: FB.btnGray, border: 'none',
                       borderRadius: 6, fontSize: 14, fontWeight: 600, color: FB.text, cursor: 'pointer',
                     }}
-                  >Annuler</button>
+                  >{t('common.cancel')}</button>
                 )}
                 {scanResult && (
                   <button
@@ -3434,7 +3434,7 @@ const FacturePage: React.FC = () => {
 
               {selectedExpense.description && (
                 <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary }}>Description</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: FB.textSecondary }}>{t('common.description')}</div>
                   <div style={{ fontSize: 14, color: FB.text }}>{selectedExpense.description}</div>
                 </div>
               )}

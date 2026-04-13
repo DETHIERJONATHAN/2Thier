@@ -793,4 +793,214 @@ router.put('/matches/:id/reassign', authenticateToken, async (req: Request, res:
   }
 });
 
+// ═══════════════════════════════════════════════════════════
+// GET /tournaments/:id/my-registration — Mon inscription dans ce tournoi
+// ═══════════════════════════════════════════════════════════
+
+router.get('/tournaments/:id/my-registration', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const tournamentId = req.params.id;
+
+    // Chercher en tant que joueur solo
+    const playerEntry = await db.arenaPlayerEntry.findUnique({
+      where: { tournamentId_userId: { tournamentId, userId } },
+    });
+
+    // Chercher en tant que membre d'équipe
+    const teamMembership = await db.arenaTeamMember.findFirst({
+      where: {
+        userId,
+        TeamEntry: { tournamentId },
+      },
+      include: {
+        TeamEntry: {
+          include: {
+            Members: {
+              include: {
+                User: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        isRegistered: !!(playerEntry || teamMembership),
+        asPlayer: playerEntry || null,
+        asTeamMember: teamMembership || null,
+        isCaptain: teamMembership?.isCaptain || false,
+        team: teamMembership?.TeamEntry || null,
+      },
+    });
+  } catch (error: any) {
+    logger.error('[ARENA] GET /my-registration error:', error.message);
+    res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// PUT /teams/:id/members — Ajouter des membres à une équipe (capitaine)
+// ═══════════════════════════════════════════════════════════
+
+router.put('/teams/:id/members', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const teamEntryId = req.params.id;
+    const { addUserIds, removeUserIds } = req.body;
+
+    // Vérifier que c'est le capitaine ou l'organisateur
+    const teamEntry = await db.arenaTeamEntry.findUnique({
+      where: { id: teamEntryId },
+      include: {
+        Members: true,
+        Tournament: true,
+      },
+    });
+
+    if (!teamEntry) return res.status(404).json({ success: false, message: 'Équipe introuvable' });
+
+    const isCaptain = teamEntry.Members.some(m => m.userId === userId && m.isCaptain);
+    const isOrganizer = teamEntry.Tournament.creatorId === userId || (req as any).user?.role === 'super_admin';
+
+    if (!isCaptain && !isOrganizer) {
+      return res.status(403).json({ success: false, message: 'Seul le capitaine ou l\'organisateur peut gérer l\'équipe' });
+    }
+
+    // Vérifier que le tournoi est encore en inscription
+    if (!['DRAFT', 'REGISTRATION_OPEN'].includes(teamEntry.Tournament.status)) {
+      return res.status(400).json({ success: false, message: 'Le tournoi n\'est plus en phase d\'inscription' });
+    }
+
+    // Vérifier la limite de joueurs par équipe
+    const currentCount = teamEntry.Members.length;
+    const addCount = (addUserIds || []).length;
+    const removeCount = (removeUserIds || []).length;
+    const newCount = currentCount + addCount - removeCount;
+
+    if (newCount > teamEntry.Tournament.playersPerTeam) {
+      return res.status(400).json({
+        success: false,
+        message: `Maximum ${teamEntry.Tournament.playersPerTeam} joueurs par équipe (actuellement ${currentCount})`,
+      });
+    }
+
+    await db.$transaction(async (tx) => {
+      // Ajouter des membres
+      if (addUserIds && addUserIds.length > 0) {
+        // Vérifier que les utilisateurs ne sont pas déjà dans une autre équipe du même tournoi
+        for (const newUserId of addUserIds) {
+          const existingMembership = await tx.arenaTeamMember.findFirst({
+            where: {
+              userId: newUserId,
+              TeamEntry: { tournamentId: teamEntry.tournamentId },
+            },
+          });
+          if (existingMembership) {
+            throw new Error(`L'utilisateur est déjà dans une équipe de ce tournoi`);
+          }
+        }
+
+        await tx.arenaTeamMember.createMany({
+          data: addUserIds.map((uid: string) => ({
+            teamEntryId,
+            userId: uid,
+            isCaptain: false,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      // Retirer des membres (pas le capitaine !)
+      if (removeUserIds && removeUserIds.length > 0) {
+        // Empêcher de retirer le capitaine
+        const captainMember = teamEntry.Members.find(m => m.isCaptain);
+        if (captainMember && removeUserIds.includes(captainMember.userId)) {
+          throw new Error('Impossible de retirer le capitaine');
+        }
+
+        await tx.arenaTeamMember.deleteMany({
+          where: {
+            teamEntryId,
+            userId: { in: removeUserIds },
+          },
+        });
+      }
+    });
+
+    // Retourner l'équipe mise à jour
+    const updated = await db.arenaTeamEntry.findUnique({
+      where: { id: teamEntryId },
+      include: {
+        Members: {
+          include: {
+            User: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+          },
+        },
+      },
+    });
+
+    res.json({ success: true, data: updated });
+  } catch (error: any) {
+    logger.error('[ARENA] PUT /teams/:id/members error:', error.message);
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// GET /tournaments/:id/available-players — Joueurs disponibles pour ajout en équipe
+// ═══════════════════════════════════════════════════════════
+
+router.get('/tournaments/:id/available-players', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const organizationId = getOrganizationId(req);
+    const tournamentId = req.params.id;
+
+    if (!organizationId) {
+      return res.status(400).json({ success: false, message: 'Organisation requise' });
+    }
+
+    // Récupérer les utilisateurs de l'organisation
+    const query = (req.query.q as string || '').trim().toLowerCase();
+
+    // Exclure les utilisateurs déjà inscrits dans une équipe de ce tournoi
+    const alreadyInTeam = await db.arenaTeamMember.findMany({
+      where: { TeamEntry: { tournamentId } },
+      select: { userId: true },
+    });
+    const excludeIds = new Set(alreadyInTeam.map(m => m.userId));
+
+    // Aussi exclure les joueurs déjà inscrits individuellement
+    const alreadyAsPlayer = await db.arenaPlayerEntry.findMany({
+      where: { tournamentId },
+      select: { userId: true },
+    });
+    alreadyAsPlayer.forEach(p => excludeIds.add(p.userId));
+
+    const users = await db.user.findMany({
+      where: {
+        organizationId,
+        id: { notIn: Array.from(excludeIds) },
+        isActive: true,
+        ...(query ? {
+          OR: [
+            { firstName: { contains: query, mode: 'insensitive' as const } },
+            { lastName: { contains: query, mode: 'insensitive' as const } },
+          ],
+        } : {}),
+      },
+      select: { id: true, firstName: true, lastName: true, avatarUrl: true },
+      take: 20,
+    });
+
+    res.json({ success: true, data: users });
+  } catch (error: any) {
+    logger.error('[ARENA] GET /available-players error:', error.message);
+    res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
 export default router;

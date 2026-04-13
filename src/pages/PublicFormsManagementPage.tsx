@@ -339,7 +339,7 @@ const PublicFormsManagementPage: React.FC = () => {
                 rules={[{ required: true, message: 'La catégorie est requise' }]}
               >
                 <Select>
-                  <Select.Option value="contact">Contact</Select.Option>
+                  <Select.Option value="contact">{t('entity.contact')}</Select.Option>
                   <Select.Option value="lead">Lead</Select.Option>
                   <Select.Option value="support">Support</Select.Option>
                   <Select.Option value="feedback">Feedback</Select.Option>

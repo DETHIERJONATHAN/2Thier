@@ -265,7 +265,7 @@ const AgendaPage: React.FC = () => {
                 style={{ width: 120 }}
               >
                 <Option value="confirmé">Confirmé</Option>
-                <Option value="en attente">En attente</Option>
+                <Option value="en attente">{t('common.pending')}</Option>
                 <Option value="annulé">Annulé</Option>
               </Select>
 
@@ -405,7 +405,7 @@ const AgendaPage: React.FC = () => {
               <Form.Item name="status" label={t('fields.status')}>
                 <Select placeholder="Statut de l'événement">
                   <Option value="confirmé">Confirmé</Option>
-                  <Option value="en attente">En attente</Option>
+                  <Option value="en attente">{t('common.pending')}</Option>
                   <Option value="annulé">Annulé</Option>
                 </Select>
               </Form.Item>

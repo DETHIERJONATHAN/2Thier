@@ -352,7 +352,7 @@ const SubTabsEditor: React.FC<{ value?: string[]; onChange: (next: string[]) => 
           onPressEnter={add}
           placeholder="Ajouter un sous-onglet" 
         />
-        <Button size="small" onClick={add}>Ajouter</Button>
+        <Button size="small" onClick={add}>{t('common.add')}</Button>
       </div>
     </div>
   );
@@ -1901,7 +1901,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             </div>
             
             <div>
-              <strong style={{ fontSize: 12 }}>Description</strong>
+              <strong style={{ fontSize: 12 }}>{t('common.description')}</strong>
               <Input.TextArea
                 value={description}
                 onChange={(e) => handleDescriptionChange(e.target.value)}
@@ -2586,7 +2586,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
             
             <div style={{ padding: 8 }}>
               {LazyAppearancePanel ? (
-                <React.Suspense fallback={<div style={{ padding: 8, fontSize: 11, textAlign: 'center' }}>Chargement...</div>}>
+                <React.Suspense fallback={<div style={{ padding: 8, fontSize: 11, textAlign: 'center' }}>{t('common.loading')}</div>}>
                   <div 
                     style={{ 
                       fontSize: '11px',

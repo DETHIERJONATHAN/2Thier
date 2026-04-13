@@ -468,7 +468,7 @@ const NotificationsBell = () => {
               <ArrowLeftOutlined style={{ fontSize: 18, color: '#050505' }} />
             </div>
           )}
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#050505', margin: 0, flex: 1 }}>Notifications</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#050505', margin: 0, flex: 1 }}>{t('common.notifications')}</h2>
           <Tooltip title="Tout marquer comme lu">
             <div
               role="button" tabIndex={0} onClick={e => { e.stopPropagation(); if (unreadCount > 0) markAllAsRead(); }}

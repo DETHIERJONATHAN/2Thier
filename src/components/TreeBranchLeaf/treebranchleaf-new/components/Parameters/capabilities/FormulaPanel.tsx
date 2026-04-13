@@ -1125,7 +1125,7 @@ const FormulaPanel: React.FC<FormulaPanelProps> = ({ nodeId, treeId, onChange, r
             logger.error('Erreur création formule:', err);
             message.error('Impossible de créer une nouvelle formule');
           }
-        }}>Ajouter</Button>
+        }}>{t('common.add')}</Button>
         
         <Button 
           size="small" 

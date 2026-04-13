@@ -187,9 +187,9 @@ export const WebsitesAdminPage: React.FC = () => {
       key: 'status',
       render: (_: unknown, record: Website) => (
         <Space>
-          {record.isActive && <Tag color="success">Actif</Tag>}
+          {record.isActive && <Tag color="success">{t('common.active')}</Tag>}
           {record.isPublished && <Tag color="processing">Publié</Tag>}
-          {!record.isActive && <Tag>Inactif</Tag>}
+          {!record.isActive && <Tag>{t('common.inactive')}</Tag>}
         </Space>
       )
     },
@@ -200,7 +200,7 @@ export const WebsitesAdminPage: React.FC = () => {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <button onClick={() => handleView(record)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: '#e7f3ff', color: FB.blue, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span>👁️</span><span>Voir</span></button>
           <button onClick={() => handleEdit(record)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: '#f9f0ff', color: FB.purple, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span>✏️</span><span>Éditer</span></button>
-          <button onClick={() => handleDelete(record)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: '#ffeef0', color: FB.red, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span>🗑️</span><span>Supprimer</span></button>
+          <button onClick={() => handleDelete(record)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: '#ffeef0', color: FB.red, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span>🗑️</span><span>{t('common.delete')}</span></button>
         </div>
       )
     }
@@ -421,7 +421,7 @@ export const WebsitesAdminPage: React.FC = () => {
                 </Col>
 
                 <Col xs={24}>
-                  <Divider orientation="left">Paramètres</Divider>
+                  <Divider orientation="left">{t('common.settings')}</Divider>
                 </Col>
 
                 <Col xs={24} md={8}>

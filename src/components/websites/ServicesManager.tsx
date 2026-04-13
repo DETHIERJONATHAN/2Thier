@@ -94,7 +94,7 @@ const SortableItem: React.FC<{ service: Service; onEdit: () => void; onDelete: (
             <div>
               <Space>
                 <strong>{service.title}</strong>
-                {!service.isActive && <Tag color="default">Inactif</Tag>}
+                {!service.isActive && <Tag color="default">{t('common.inactive')}</Tag>}
               </Space>
               <div style={{ fontSize: '12px', color: '#666' }}>{service.description}</div>
             </div>

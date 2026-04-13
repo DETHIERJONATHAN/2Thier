@@ -96,7 +96,7 @@ const SortableItem: React.FC<{ project: Project; onEdit: () => void; onDelete: (
               <Space>
                 <strong>{project.title}</strong>
                 {project.isFeatured && <StarFilled style={{ color: '#faad14' }} />}
-                {!project.isActive && <Tag color="default">Inactif</Tag>}
+                {!project.isActive && <Tag color="default">{t('common.inactive')}</Tag>}
               </Space>
               <div style={{ fontSize: '12px', color: '#666' }}>
                 {project.location} • {project.completedAt ? dayjs(project.completedAt).format('MMMM YYYY') : 'Date inconnue'}

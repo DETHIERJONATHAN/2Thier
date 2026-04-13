@@ -564,9 +564,9 @@ export default function TreesAdminPage() {
                           <span style={{ fontWeight: 600 }}>{access.organization?.name || access.organizationId}</span>
                           {access.isOwner && <Tag color="gold">Propriétaire</Tag>}
                           {access.active ? (
-                            <Tag color="green" icon={<CheckCircleOutlined />}>Actif</Tag>
+                            <Tag color="green" icon={<CheckCircleOutlined />}>{t('common.active')}</Tag>
                           ) : (
-                            <Tag color="red" icon={<CloseCircleOutlined />}>Inactif</Tag>
+                            <Tag color="red" icon={<CloseCircleOutlined />}>{t('common.inactive')}</Tag>
                           )}
                         </Space>
                       }

@@ -528,7 +528,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
             )}
             {editingPlan && (
               <>
-                <Button size="small" onClick={() => { setEditingPlan(false); fetchBillingPlan(); }}>Annuler</Button>
+                <Button size="small" onClick={() => { setEditingPlan(false); fetchBillingPlan(); }}>{t('common.cancel')}</Button>
                 <Button size="small" type="primary" icon={<SaveOutlined />} loading={savingPlan} onClick={handleSavePlan}>
                   Sauvegarder
                 </Button>
@@ -700,7 +700,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
           <div><Text strong style={{ fontSize: 18, color: '#52c41a' }}>{stats.paid.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text></div>
         </Card>
         <Card size="small" style={{ flex: 1, minWidth: 150 }}>
-          <Text type="secondary">En attente</Text>
+          <Text type="secondary">{t('common.pending')}</Text>
           <div><Text strong style={{ fontSize: 18, color: stats.pending > 0 ? '#faad14' : '#52c41a' }}>{stats.pending.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €</Text></div>
         </Card>
         {chantierAmount && (
@@ -762,7 +762,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                     {inv.status === 'DRAFT' && (
-                      <Button size="small" icon={<SendOutlined />} onClick={() => handleStatusChange(inv.id, 'SENT')} style={{ minHeight: 32 }}>Envoyer</Button>
+                      <Button size="small" icon={<SendOutlined />} onClick={() => handleStatusChange(inv.id, 'SENT')} style={{ minHeight: 32 }}>{t('common.send')}</Button>
                     )}
                     {(inv.status === 'SENT' || inv.status === 'OVERDUE') && (
                       <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleStatusChange(inv.id, 'PAID')} style={{ minHeight: 32 }}>Payée</Button>

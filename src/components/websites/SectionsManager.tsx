@@ -130,7 +130,7 @@ const SortableItem: React.FC<{
                 <span style={{ fontSize: '18px' }}>{sectionType?.icon}</span>
                 <strong>{section.name}</strong>
                 <Tag color="blue">{sectionType?.label}</Tag>
-                {!section.isActive && <Tag color="default">Inactif</Tag>}
+                {!section.isActive && <Tag color="default">{t('common.inactive')}</Tag>}
                 {section.isLocked && <LockOutlined style={{ color: '#999' }} />}
               </Space>
               <div style={{ fontSize: '11px', color: '#999', marginTop: 4 }}>

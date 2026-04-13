@@ -92,8 +92,8 @@ export default function Devis1minuteAdminDispatch() {
     { title: 'Actions', key: 'actions', render: (_: unknown, rec: Rule) => (
       <Space>
         <Button icon={<ExperimentOutlined />} onClick={() => simulate()}>Simuler</Button>
-        <Button icon={<EditOutlined />} onClick={() => onEdit(rec)}>Modifier</Button>
-        <Button danger icon={<DeleteOutlined />} onClick={() => onDelete(rec)}>Supprimer</Button>
+        <Button icon={<EditOutlined />} onClick={() => onEdit(rec)}>{t('common.edit')}</Button>
+        <Button danger icon={<DeleteOutlined />} onClick={() => onDelete(rec)}>{t('common.delete')}</Button>
       </Space>
     ) }
   ]), [onDelete, onEdit, simulate]);

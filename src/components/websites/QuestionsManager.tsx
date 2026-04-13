@@ -837,7 +837,7 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
             >
               Prévisualiser
             </Button>
-            <Button onClick={onClose}>Fermer</Button>
+            <Button onClick={onClose}>{t('common.close')}</Button>
           </Space>
         }
       >
@@ -1025,7 +1025,7 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
 
           <div style={{ textAlign: 'right', marginTop: '16px' }}>
             <Space>
-              <Button onClick={() => setQuestionModalVisible(false)}>Annuler</Button>
+              <Button onClick={() => setQuestionModalVisible(false)}>{t('common.cancel')}</Button>
               <Button type="primary" htmlType="submit">
                 {editingQuestion ? 'Mettre à jour' : 'Créer'}
               </Button>
@@ -1084,8 +1084,8 @@ const QuestionsManagerModal: React.FC<QuestionsManagerModalProps> = ({
 
           <div style={{ textAlign: 'right' }}>
             <Space>
-              <Button onClick={() => setNavigationModalVisible(false)}>Annuler</Button>
-              <Button type="primary" htmlType="submit">Sauvegarder</Button>
+              <Button onClick={() => setNavigationModalVisible(false)}>{t('common.cancel')}</Button>
+              <Button type="primary" htmlType="submit">{t('common.save')}</Button>
             </Space>
           </div>
         </Form>

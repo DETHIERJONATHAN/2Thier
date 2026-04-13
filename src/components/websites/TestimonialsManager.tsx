@@ -98,7 +98,7 @@ const SortableItem: React.FC<{ testimonial: Testimonial; onEdit: () => void; onD
                 <strong>{testimonial.customerName}</strong>
                 <Rate disabled value={testimonial.rating} style={{ fontSize: 14 }} />
                 {testimonial.isFeatured && <StarFilled style={{ color: '#faad14' }} />}
-                {!testimonial.isActive && <Tag color="default">Inactif</Tag>}
+                {!testimonial.isActive && <Tag color="default">{t('common.inactive')}</Tag>}
               </Space>
               <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
                 "{testimonial.text.substring(0, 100)}{testimonial.text.length > 100 ? '...' : ''}"

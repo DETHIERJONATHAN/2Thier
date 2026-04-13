@@ -3522,14 +3522,14 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
               <Space wrap>
                 <Button type={selectedTool === 'select' ? 'primary' : 'default'} icon={<DragOutlined />} onClick={() => { setSelectedTool('select'); setMobileMenuOpen(false); }} size="large">Sélectionner</Button>
                 <Button type={selectedTool === 'addPoint' ? 'primary' : 'default'} icon={<PlusOutlined />} onClick={() => { setSelectedTool('addPoint'); setMobileMenuOpen(false); }} size="large">Ajouter point</Button>
-                <Button icon={<DeleteOutlined />} danger disabled={!selectedPointId && !selectedZoneId} onClick={() => { if (selectedPointId) removePoint(selectedPointId); if (selectedZoneId) removeZone(selectedZoneId); setMobileMenuOpen(false); }} size="large">Supprimer</Button>
+                <Button icon={<DeleteOutlined />} danger disabled={!selectedPointId && !selectedZoneId} onClick={() => { if (selectedPointId) removePoint(selectedPointId); if (selectedZoneId) removeZone(selectedZoneId); setMobileMenuOpen(false); }} size="large">{t('common.delete')}</Button>
               </Space>
             </Card>
             
             {/* Historique */}
             <Card size="small" title="Historique">
               <Space>
-                <Button icon={<UndoOutlined />} onClick={undo} disabled={historyIndex <= 0} size="large">Annuler</Button>
+                <Button icon={<UndoOutlined />} onClick={undo} disabled={historyIndex <= 0} size="large">{t('common.cancel')}</Button>
                 <Button icon={<RedoOutlined />} onClick={redo} disabled={historyIndex >= history.length - 1} size="large">Rétablir</Button>
               </Space>
             </Card>

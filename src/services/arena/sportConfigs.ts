@@ -42,11 +42,13 @@ export interface SportConfig {
   };
   /** Clé i18n pour la terminologie spécifique */
   terminology: {
-    /** Clé i18n pour "round" / "manche" / "journée" */
+    /** Clé i18n pour "round" singular */
     roundKey: string;
+    /** Clé i18n pour "rounds" plural (label du formulaire) */
+    roundsLabel: string;
     /** Clé i18n pour "court" / "terrain" / "pitch" */
     courtKey: string;
-    /** Clé i18n pour "pointsToWin" / "score" */
+    /** Clé i18n pour le champ score dans le formulaire */
     scoreKey: string;
     /** Clé i18n pour "team" type */
     teamTypeKey: string;
@@ -80,6 +82,7 @@ export const SPORT_CONFIGS: Record<string, SportConfig> = {
     },
     terminology: {
       roundKey: 'arena.round',
+      roundsLabel: 'arena.rounds',
       courtKey: 'arena.court',
       scoreKey: 'arena.pointsToWin',
       teamTypeKey: 'arena.teamType',
@@ -104,7 +107,7 @@ export const SPORT_CONFIGS: Record<string, SportConfig> = {
       teamType: false,
       playersPerTeam: true,
       pointsToWin: false,
-      nbRounds: true,
+      nbRounds: false,
       matchDuration: true,
       periods: true,
       allowMixedTeams: true,
@@ -112,6 +115,7 @@ export const SPORT_CONFIGS: Record<string, SportConfig> = {
     },
     terminology: {
       roundKey: 'arena.matchDay',
+      roundsLabel: 'arena.matchDays',
       courtKey: 'arena.pitch',
       scoreKey: 'arena.goals',
       teamTypeKey: 'arena.squadSize',
@@ -144,6 +148,7 @@ export const SPORT_CONFIGS: Record<string, SportConfig> = {
     },
     terminology: {
       roundKey: 'arena.round',
+      roundsLabel: 'arena.rounds',
       courtKey: 'arena.court',
       scoreKey: 'arena.goals',
       teamTypeKey: 'arena.squadSize',
@@ -176,6 +181,7 @@ export const SPORT_CONFIGS: Record<string, SportConfig> = {
     },
     terminology: {
       roundKey: 'arena.round',
+      roundsLabel: 'arena.rounds',
       courtKey: 'arena.court',
       scoreKey: 'arena.pointsPerSet',
       teamTypeKey: 'arena.squadSize',
@@ -208,6 +214,7 @@ export const SPORT_CONFIGS: Record<string, SportConfig> = {
     },
     terminology: {
       roundKey: 'arena.round',
+      roundsLabel: 'arena.rounds',
       courtKey: 'arena.court',
       scoreKey: 'arena.setsToWin',
       teamTypeKey: 'arena.teamType',
@@ -240,6 +247,7 @@ export const SPORT_CONFIGS: Record<string, SportConfig> = {
     },
     terminology: {
       roundKey: 'arena.round',
+      roundsLabel: 'arena.rounds',
       courtKey: 'arena.court',
       scoreKey: 'arena.pointsToWin',
       teamTypeKey: 'arena.teamType',
@@ -272,6 +280,7 @@ export const SPORT_CONFIGS: Record<string, SportConfig> = {
     },
     terminology: {
       roundKey: 'arena.round',
+      roundsLabel: 'arena.rounds',
       courtKey: 'arena.court',
       scoreKey: 'arena.pointsToWin',
       teamTypeKey: 'arena.teamType',

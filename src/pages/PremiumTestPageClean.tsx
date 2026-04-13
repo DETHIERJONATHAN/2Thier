@@ -198,7 +198,7 @@ const PremiumTestPageClean: React.FC = () => {
             title={
               <Space>
                 <span className="text-orange-500">⚠️</span>
-                <span className="text-gray-900">Notifications</span>
+                <span className="text-gray-900">{t('common.notifications')}</span>
               </Space>
             }
             className="shadow-sm border border-gray-200"
@@ -264,8 +264,8 @@ const PremiumTestPageClean: React.FC = () => {
               <Form.Item label={t('fields.status')} name="status">
                 <Select placeholder="Sélectionnez un statut">
                   <Option value="prospect">Prospect</Option>
-                  <Option value="client">Client</Option>
-                  <Option value="inactif">Inactif</Option>
+                  <Option value="client">{t('entity.client')}</Option>
+                  <Option value="inactif">{t('common.inactive')}</Option>
                 </Select>
               </Form.Item>
             </Form>

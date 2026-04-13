@@ -310,7 +310,7 @@ const FormsManager: React.FC<FormsManagerProps> = ({ websiteId }) => {
           <FormOutlined style={{ color: '#1890ff' }} />
           <span style={{ fontWeight: 500 }}>{name}</span>
           {!record.isActive && (
-            <Tag color="default">Inactif</Tag>
+            <Tag color="default">{t('common.inactive')}</Tag>
           )}
         </Space>
       )
@@ -833,7 +833,7 @@ const StepsManagerModal: React.FC<StepsManagerModalProps> = ({
         onCancel={onClose}
         width={900}
         footer={
-          <Button onClick={onClose}>Fermer</Button>
+          <Button onClick={onClose}>{t('common.close')}</Button>
         }
       >
         <div style={{ marginBottom: '16px' }}>
@@ -1155,7 +1155,7 @@ const FieldsManagerModal: React.FC<FieldsManagerModalProps> = ({
         onCancel={onClose}
         width={1000}
         footer={
-          <Button onClick={onClose}>Fermer</Button>
+          <Button onClick={onClose}>{t('common.close')}</Button>
         }
       >
         <div style={{ marginBottom: '16px' }}>

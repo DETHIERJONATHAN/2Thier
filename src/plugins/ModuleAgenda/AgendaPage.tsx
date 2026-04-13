@@ -746,7 +746,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
               transition: 'all 0.18s',
             }}>
               <PlusOutlined style={{ fontSize: 12 }} />
-              {!isMobile && <span>Nouveau</span>}
+              {!isMobile && <span>{t('common.new')}</span>}
             </div>
           </Dropdown>
         </div>
@@ -891,7 +891,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Space>
                 <CheckSquareOutlined style={{ color: '#722ed1', fontSize: 16 }} />
-                <span style={{ fontWeight: 600, fontSize: 15 }}>Tâches</span>
+                <span style={{ fontWeight: 600, fontSize: 15 }}>{t('entity.tasks')}</span>
                 {pendingTasks.length > 0 && <Badge count={pendingTasks.length} style={{ backgroundColor: '#722ed1' }} />}
               </Space>
               <Button type="primary" size="small" icon={<PlusOutlined />} onClick={openNewTask}
@@ -1094,7 +1094,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
                     Supprimer
                   </Button>
                 )}
-                <Button block size="large" style={{ borderRadius: 8, height: 44 }} onClick={() => setModalVisible(false)}>Annuler</Button>
+                <Button block size="large" style={{ borderRadius: 8, height: 44 }} onClick={() => setModalVisible(false)}>{t('common.cancel')}</Button>
               </div>
             ) : (
               <Space wrap>
@@ -1112,7 +1112,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
                     Supprimer
                   </Button>
                 )}
-                <Button onClick={() => setModalVisible(false)}>Annuler</Button>
+                <Button onClick={() => setModalVisible(false)}>{t('common.cancel')}</Button>
               </Space>
             )}
           </Form.Item>

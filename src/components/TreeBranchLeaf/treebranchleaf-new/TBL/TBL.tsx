@@ -4502,7 +4502,7 @@ const TBL: React.FC<TBLProps> = ({
                     label: (
                       <div className="flex items-center gap-2" style={{ padding: '8px 12px' }}>
                         <UserOutlined />
-                        <span>Client</span>
+                        <span>{t('entity.client')}</span>
                       </div>
                     ),
                     children: (
@@ -4894,7 +4894,7 @@ const TBL: React.FC<TBLProps> = ({
               icon={<SearchOutlined />}
               block={isMobile}
             >
-              <span className="hidden sm:inline">Rechercher</span>
+              <span className="hidden sm:inline">{t('common.search')}</span>
             </Button>
           </div>
           
@@ -4919,10 +4919,10 @@ const TBL: React.FC<TBLProps> = ({
               {!isMobile && (
                 <div className="bg-gray-50 border-b border-gray-200">
                   <div className="grid grid-cols-4 gap-4 px-4 py-3 text-sm font-medium text-gray-600" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto' }}>
-                    <div>Nom</div>
-                    <div>Contact</div>
+                    <div>{t('common.name')}</div>
+                    <div>{t('entity.contact')}</div>
                     <div>Entreprise</div>
-                    <div>Actions</div>
+                    <div>{t('common.actions')}</div>
                   </div>
                 </div>
               )}
@@ -5540,7 +5540,7 @@ const TBL: React.FC<TBLProps> = ({
         title="📄 Choisir le PDF à envoyer"
         open={devisPdfSelectorVisible}
         onCancel={() => setDevisPdfSelectorVisible(false)}
-        footer={<Button onClick={() => setDevisPdfSelectorVisible(false)}>Annuler</Button>}
+        footer={<Button onClick={() => setDevisPdfSelectorVisible(false)}>{t('common.cancel')}</Button>}
         width={500}
       >
         <div className="space-y-2">

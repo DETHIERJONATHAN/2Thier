@@ -372,11 +372,11 @@ const RolesSettings: React.FC = () => {
                           <button onClick={() => setDeleteConfirm(null)} style={{
                             flex: 1, padding: '6px 0', borderRadius: 6, border: 'none', background: FB.btnGray,
                             color: FB.text, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                          }}>Annuler</button>
+                          }}>{t('common.cancel')}</button>
                           <button onClick={() => handleDelete(role)} style={{
                             flex: 1, padding: '6px 0', borderRadius: 6, border: 'none', background: FB.red,
                             color: FB.white, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                          }}>Supprimer</button>
+                          }}>{t('common.delete')}</button>
                         </div>
                       </div>
                     )}
@@ -418,7 +418,7 @@ const RolesSettings: React.FC = () => {
             style={{ width: '100%', border: '1px solid ' + FB.border, borderRadius: 6, padding: '10px 12px', fontSize: 15, color: FB.text, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
         </div>
         <div style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>Description</label>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>{t('common.description')}</label>
           <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)}
             placeholder="Description du rôle" rows={3}
             style={{ width: '100%', border: '1px solid ' + FB.border, borderRadius: 6, padding: '10px 12px', fontSize: 15, color: FB.text, outline: 'none', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
@@ -428,7 +428,7 @@ const RolesSettings: React.FC = () => {
           <button onClick={() => setFormModal(false)} style={{
             padding: '8px 16px', borderRadius: 6, border: 'none', background: FB.btnGray,
             color: FB.text, fontSize: 14, fontWeight: 600, cursor: 'pointer',
-          }}>Annuler</button>
+          }}>{t('common.cancel')}</button>
           <button onClick={handleSave} disabled={saving} style={{
             padding: '8px 20px', borderRadius: 6, border: 'none', background: FB.blue,
             color: FB.white, fontSize: 14, fontWeight: 600, cursor: 'pointer',
@@ -448,7 +448,7 @@ const RolesSettings: React.FC = () => {
             <button onClick={() => setPermRole(null)} style={{
               padding: '8px 16px', borderRadius: 6, border: 'none', background: FB.btnGray,
               color: FB.text, fontSize: 14, fontWeight: 600, cursor: 'pointer',
-            }}>Annuler</button>
+            }}>{t('common.cancel')}</button>
             <button onClick={savePermissions} disabled={permSaving} style={{
               padding: '8px 20px', borderRadius: 6, border: 'none', background: FB.blue,
               color: FB.white, fontSize: 14, fontWeight: 600, cursor: 'pointer',

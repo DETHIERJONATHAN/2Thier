@@ -861,7 +861,7 @@ const UserRightsSummaryPage: React.FC = () => {
 
           <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'flex-end' }}>
             <div style={{ marginBottom: 8 }}>
-              <span style={{ fontWeight: 600, color: FB.text }}>Actions</span>
+              <span style={{ fontWeight: 600, color: FB.text }}>{t('common.actions')}</span>
             </div>
             <Space>
               <Button 
@@ -1100,7 +1100,7 @@ const UserRightsSummaryPage: React.FC = () => {
                           {rightsSummary.organizationInfo.status || 'Statut inconnu'}
                         </Tag>
                         <Badge count={rightsSummary.organizationInfo.totalUsers || 0} showZero color="#108ee9">
-                          <span>Utilisateurs</span>
+                          <span>{t('entity.users')}</span>
                         </Badge>
                       </Space>
                     </div>

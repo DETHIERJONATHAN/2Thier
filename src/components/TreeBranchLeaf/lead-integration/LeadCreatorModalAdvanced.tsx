@@ -681,7 +681,7 @@ const LeadCreatorModalAdvanced: React.FC<LeadCreatorModalPropsExtended> = ({
                 <Option value="website">Site web</Option>
                 <Option value="referral">Recommandation</Option>
                 <Option value="linkedin">LinkedIn</Option>
-                <Option value="email">Email</Option>
+                <Option value="email">{t('common.email')}</Option>
                 <Option value="phone">Téléphone</Option>
                 <Option value="other">Autre</Option>
               </Select>

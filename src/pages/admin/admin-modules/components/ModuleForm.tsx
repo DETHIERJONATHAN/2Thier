@@ -152,7 +152,7 @@ export function ModuleForm({ initial, onSave, onCancel }:{
         >
           Enregistrer
         </Button>
-        <Button onClick={onCancel}>Annuler</Button>
+        <Button onClick={onCancel}>{t('common.cancel')}</Button>
       </div>
       </Form>
     </Card>

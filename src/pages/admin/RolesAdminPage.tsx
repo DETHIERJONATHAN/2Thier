@@ -159,7 +159,7 @@ function RoleFormModal({
       styles={{ body: { padding: isMobile ? 16 : undefined } }}
       footer={
         <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: isMobile ? 'stretch' : 'flex-end', gap: 12, width: '100%' }}>
-          <button onClick={onCancel} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14, width: isMobile ? '100%' : 'auto' }}>Annuler</button>
+          <button onClick={onCancel} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14, width: isMobile ? '100%' : 'auto' }}>{t('common.cancel')}</button>
           <button type="submit" form="role-form-modal" disabled={!!confirmLoading} style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: confirmLoading ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 14, opacity: confirmLoading ? 0.7 : 1, width: isMobile ? '100%' : 'auto' }}>{confirmLoading ? '⏳' : ''} {isEditing ? 'Enregistrer' : 'Créer'}</button>
         </div>
       }
@@ -391,7 +391,7 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
       onCancel={onClose}
       footer={
         <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: isMobile ? 'stretch' : 'flex-end', gap: 12, width: '100%' }}>
-          <button onClick={onClose} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14, width: isMobile ? '100%' : 'auto' }}>Annuler</button>
+          <button onClick={onClose} style={{ padding: '8px 20px', borderRadius: 6, border: `1px solid ${FB.border}`, background: FB.btnGray, color: FB.text, cursor: 'pointer', fontWeight: 600, fontSize: 14, width: isMobile ? '100%' : 'auto' }}>{t('common.cancel')}</button>
           <button onClick={handleSave} disabled={saving} style={{ padding: '8px 20px', borderRadius: 6, border: 'none', background: FB.blue, color: '#fff', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 14, opacity: saving ? 0.7 : 1, width: isMobile ? '100%' : 'auto' }}>{saving ? '⏳ ' : ''}Sauvegarder</button>
         </div>
       }
@@ -731,7 +731,7 @@ export default function RolesAdminPage() {
                 disabled={disabledPerm}
                 style={ABtnStyle({ disabled: disabledPerm })}
               >
-                <span>📋</span><span>Modules</span>
+                <span>📋</span><span>{t('entity.modules')}</span>
               </button>
               <button
                 onClick={() => { if (!disabledEdit) { setEditingRole(r); setIsRoleModalOpen(true); } }}
@@ -739,7 +739,7 @@ export default function RolesAdminPage() {
                 disabled={disabledEdit}
                 style={ABtnStyle({ disabled: disabledEdit })}
               >
-                <span>✏️</span><span>Modifier</span>
+                <span>✏️</span><span>{t('common.edit')}</span>
               </button>
               <button
                 onClick={() => !disabledEdit && handleDeleteRole(r)}
@@ -747,7 +747,7 @@ export default function RolesAdminPage() {
                 disabled={disabledEdit}
                 style={ABtnStyle({ danger: true, disabled: disabledEdit })}
               >
-                <span>🗑️</span><span>Supprimer</span>
+                <span>🗑️</span><span>{t('common.delete')}</span>
               </button>
             </div>
           );

@@ -60,7 +60,7 @@ const InvitationsList: React.FC<InvitationsListProps> = ({ refreshKey }) => {
   const getStatusTag = (status: Invitation['status']) => {
     switch (status) {
       case 'PENDING':
-        return <Tag color="blue">En attente</Tag>;
+        return <Tag color="blue">{t('common.pending')}</Tag>;
       case 'ACCEPTED':
         return <Tag color="green">Acceptée</Tag>;
       case 'EXPIRED':

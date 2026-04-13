@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import { useAuth } from './auth/useAuth';
@@ -43,14 +44,17 @@ const PublicSignaturePage = lazy(() => import('./pages/public/PublicSignaturePag
 
 
 // Composant Loading
-const LoadingSpinner = () => (
-  <div className="flex h-screen w-screen items-center justify-center bg-gray-50">
-    <div className="text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-      <p className="text-gray-600">Chargement...</p>
+const LoadingSpinner = () => {
+  const { t } = useTranslation();
+  return (
+    <div className="flex h-screen w-screen items-center justify-center bg-gray-50">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+        <p className="text-gray-600">{t('common.loading')}</p>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // Composant pour les routes publiques
 const PublicRoute = ({ children }: { children: React.ReactElement }) => {

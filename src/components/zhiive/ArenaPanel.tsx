@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { SF } from './ZhiiveTheme';
+import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -85,6 +86,7 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
   const { api } = useAuthenticatedApi();
   const { user, isSuperAdmin } = useAuth();
   const { message: antMessage } = App.useApp();
+  const navigate = useNavigate();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const stableApi = useMemo(() => api, []);
@@ -163,7 +165,7 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
         }}
         bodyStyle={{ padding: compact ? 10 : 14 }}
         onClick={() => {
-          window.location.href = `/arena?id=${tournament.id}`;
+          navigate(`/arena?id=${tournament.id}`);
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

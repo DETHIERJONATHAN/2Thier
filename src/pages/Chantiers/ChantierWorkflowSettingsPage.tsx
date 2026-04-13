@@ -413,7 +413,7 @@ const ChantierWorkflowSettingsPage: React.FC<{ onBack?: () => void }> = ({ onBac
         open={resetConfirmVisible}
         onCancel={() => setResetConfirmVisible(false)}
         footer={[
-          <Button key="cancel" onClick={() => setResetConfirmVisible(false)}>Annuler</Button>,
+          <Button key="cancel" onClick={() => setResetConfirmVisible(false)}>{t('common.cancel')}</Button>,
           <Button key="reset" danger type="primary" loading={seeding} onClick={() => handleSeedWorkflow(true)}>
             Oui, réinitialiser le workflow
           </Button>,

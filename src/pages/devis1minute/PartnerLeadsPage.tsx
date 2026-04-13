@@ -153,7 +153,7 @@ const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
               rules={[{ required: true, message: 'Veuillez sélectionner un statut' }]}
             >
               <Select placeholder="Sélectionner un statut">
-                <Select.Option value="new">Nouveau</Select.Option>
+                <Select.Option value="new">{t('common.new')}</Select.Option>
                 <Select.Option value="contacted">Contacté</Select.Option>
                 <Select.Option value="meeting_scheduled">RDV planifié</Select.Option>
                 <Select.Option value="proposal_sent">Devis envoyé</Select.Option>

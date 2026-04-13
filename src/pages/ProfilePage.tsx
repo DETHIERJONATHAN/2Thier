@@ -910,8 +910,8 @@ const ProfilePage = () => {
 
             {!isViewingOther ? (
               <div style={{ display: 'flex', gap: 8, paddingBottom: isMobile ? 8 : 16, alignItems: 'flex-end' }}>
-                <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>Paramètres</FBButton>
-                <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>Modifier</FBButton>
+                <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>{t('common.settings')}</FBButton>
+                <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>{t('common.edit')}</FBButton>
                 {canFoundColony && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)} isMobile={isMobile} mobileIconOnly
                   style={{ background: '#0f766e', color: '#fff' }}>Business</FBButton>}
                 <FBButton icon={<EllipsisOutlined />} />
@@ -1256,7 +1256,7 @@ const ProfilePage = () => {
                         <span style={{ fontSize: 15, fontWeight: isActive ? 600 : 400, color: isActive ? FB.blue : FB.text }}>
                           {org.name}
                         </span>
-                        {isActive && <span style={{ marginLeft: 'auto', fontSize: 13, color: FB.blue }}>Actif</span>}
+                        {isActive && <span style={{ marginLeft: 'auto', fontSize: 13, color: FB.blue }}>{t('common.active')}</span>}
                       </div>
                     );
                   })}

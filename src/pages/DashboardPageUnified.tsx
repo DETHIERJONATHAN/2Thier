@@ -3155,7 +3155,7 @@ export default function DashboardPageUnified() {
               {wallSearchLoading && (
                 <div style={{ textAlign: "center", padding: "24px 16px" }}>
                   <Spin size="default" />
-                  <div style={{ color: FB.textSecondary, fontSize: 13, marginTop: 8 }}>Chargement...</div>
+                  <div style={{ color: FB.textSecondary, fontSize: 13, marginTop: 8 }}>{t('common.loading')}</div>
                 </div>
               )}
 

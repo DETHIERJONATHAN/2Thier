@@ -127,7 +127,7 @@ export default function ModulesHeader(props: ModulesHeaderProps) {
 							</button>
 						</Badge>
 						<button onClick={onAddModule} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: 'none', background: FB.btnGray, color: FB.text, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-							<span>📦</span><span>Module</span>
+							<span>📦</span><span>{t('entity.module')}</span>
 						</button>
 					</div>
 				</div>

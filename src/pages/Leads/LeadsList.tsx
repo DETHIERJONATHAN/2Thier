@@ -448,7 +448,7 @@ export default function LeadsList() {
                       </div>
                     </th>
                     <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <span className="hidden md:inline">Actions</span>
+                      <span className="hidden md:inline">{t('common.actions')}</span>
                       <span className="md:hidden">Act.</span>
                       <div className="text-xs text-gray-400 font-normal normal-case mt-1 hidden lg:block">
                         Cliquez sur une ligne pour voir le détail

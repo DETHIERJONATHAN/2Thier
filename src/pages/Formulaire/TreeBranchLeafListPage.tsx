@@ -510,7 +510,7 @@ const TreeBranchLeafListPage: React.FC = () => {
                 label={t('fields.status')}
               >
                 <Select>
-                  <Option value="draft">Brouillon</Option>
+                  <Option value="draft">{t('common.draft')}</Option>
                   <Option value="published">Publié</Option>
                   <Option value="archived">Archivé</Option>
                 </Select>

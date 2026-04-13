@@ -364,7 +364,7 @@ const FormBuilderModal: React.FC<FormBuilderModalProps> = ({
                       style={{ width: '100%' }}
                     >
                       <Select.Option value="text">Texte</Select.Option>
-                      <Select.Option value="email">Email</Select.Option>
+                      <Select.Option value="email">{t('common.email')}</Select.Option>
                       <Select.Option value="phone">Téléphone</Select.Option>
                       <Select.Option value="textarea">Zone de texte</Select.Option>
                       <Select.Option value="number">Nombre</Select.Option>

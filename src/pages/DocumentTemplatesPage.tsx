@@ -381,7 +381,7 @@ const DocumentTemplatesPage = () => {
               {record.type === 'QUOTE' ? 'Devis' : record.type === 'INVOICE' ? 'Facture' : record.type}
             </Tag>
           )}
-          {!record.isActive && <Tag color="red" style={{ marginTop: 4 }}>Inactif</Tag>}
+          {!record.isActive && <Tag color="red" style={{ marginTop: 4 }}>{t('common.inactive')}</Tag>}
         </div>
       )
     },

@@ -576,7 +576,7 @@ export default function LandingPagesPage() {
             initialValue="DRAFT"
           >
             <Select>
-              <Select.Option value="DRAFT">Brouillon</Select.Option>
+              <Select.Option value="DRAFT">{t('common.draft')}</Select.Option>
               <Select.Option value="PUBLISHED">Publié</Select.Option>
               <Select.Option value="ARCHIVED">Archivé</Select.Option>
             </Select>

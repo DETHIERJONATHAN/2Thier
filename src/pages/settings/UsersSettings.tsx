@@ -188,7 +188,7 @@ const UsersSettings: React.FC = () => {
       <FBCard>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: FB.text }}>Utilisateurs</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: FB.text }}>{t('entity.users')}</div>
             <div style={{ fontSize: 14, color: FB.textSecondary }}>
               Gérez les membres de {currentOrganization?.name || 'votre Colony'}
             </div>
@@ -324,11 +324,11 @@ const UsersSettings: React.FC = () => {
                       <button onClick={() => setDeleteConfirm(null)} style={{
                         flex: 1, padding: '6px 0', borderRadius: 6, border: 'none',
                         background: FB.btnGray, color: FB.text, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      }}>Annuler</button>
+                      }}>{t('common.cancel')}</button>
                       <button onClick={() => handleDelete(u.id)} style={{
                         flex: 1, padding: '6px 0', borderRadius: 6, border: 'none',
                         background: FB.red, color: FB.white, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      }}>Supprimer</button>
+                      }}>{t('common.delete')}</button>
                     </div>
                   </div>
                 ) : null}
@@ -398,7 +398,7 @@ const UsersSettings: React.FC = () => {
                     style={{ width: '100%', border: '1px solid ' + FB.border, borderRadius: 6, padding: '10px 12px', fontSize: 15, color: FB.text, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>Nom</label>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>{t('common.name')}</label>
                   <input value={inviteLastName} onChange={e => setInviteLastName(e.target.value)}
                     placeholder={t('fields.name')}
                     style={{ width: '100%', border: '1px solid ' + FB.border, borderRadius: 6, padding: '10px 12px', fontSize: 15, color: FB.text, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
@@ -424,7 +424,7 @@ const UsersSettings: React.FC = () => {
                 <button onClick={() => setInviteModal(false)} style={{
                   padding: '8px 16px', borderRadius: 6, border: 'none',
                   background: FB.btnGray, color: FB.text, fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                }}>Annuler</button>
+                }}>{t('common.cancel')}</button>
                 <button onClick={handleInvite} disabled={inviting} style={{
                   padding: '8px 20px', borderRadius: 6, border: 'none',
                   background: FB.blue, color: FB.white, fontSize: 14, fontWeight: 600,

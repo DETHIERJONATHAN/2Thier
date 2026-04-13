@@ -221,7 +221,7 @@ const AssistantAmeliorationIA: React.FC = () => {
                   <button
                     onClick={() => analyzeCurrentFeature?.()}
                     className="text-[11px] px-2 py-1 rounded border bg-gray-50 hover:bg-gray-100"
-                  >Module</button>
+                  >{t('entity.module')}</button>
                   <button
                     onClick={() => analyzeWorkspaceQuick?.()}
                     className="text-[11px] px-2 py-1 rounded border bg-gray-50 hover:bg-gray-100"
@@ -441,7 +441,7 @@ const Header: React.FC = () => {
                 onClick={() => setModulesOpen(!modulesOpen)}
                 className="px-3 py-2 rounded-md text-sm font-medium text-white/90 hover:text-white hover:bg-white/10 flex items-center space-x-1"
               >
-                <span>Modules</span>
+                <span>{t('entity.modules')}</span>
                 <FaChevronDown className={`w-4 h-4 transition-transform ${modulesOpen ? 'rotate-180' : ''}`} />
               </button>
               

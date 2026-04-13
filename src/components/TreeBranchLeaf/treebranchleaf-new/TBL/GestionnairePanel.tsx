@@ -729,7 +729,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
                               placeholder="Libellé personnalisé"
                             />
                             <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => handleSaveLabel(c)} loading={saving === c.constId}>OK</Button>
-                            <Button size="small" onClick={() => { setEditingLabel(null); setEditLabelValue(''); }}>Annuler</Button>
+                            <Button size="small" onClick={() => { setEditingLabel(null); setEditLabelValue(''); }}>{t('common.cancel')}</Button>
                           </Space>
                         ) : (
                           <span

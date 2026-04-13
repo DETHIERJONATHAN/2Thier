@@ -98,9 +98,9 @@ export default function Devis1minuteAdminSite() {
     { title: 'Actions', key: 'actions', render: (_: unknown, rec: Landing) => (
       <Space>
         <Button icon={<ShareAltOutlined />} onClick={() => window.open(`/api/landing-pages/public/${rec.slug}`, '_blank')}>Voir</Button>
-        <Button icon={<EditOutlined />} onClick={() => onEdit(rec)}>Modifier</Button>
+        <Button icon={<EditOutlined />} onClick={() => onEdit(rec)}>{t('common.edit')}</Button>
         <Button onClick={() => onPublish(rec, rec.status !== 'PUBLISHED')}>{rec.status === 'PUBLISHED' ? 'Dépublier' : 'Publier'}</Button>
-        <Button danger icon={<DeleteOutlined />} onClick={() => onDelete(rec)}>Supprimer</Button>
+        <Button danger icon={<DeleteOutlined />} onClick={() => onDelete(rec)}>{t('common.delete')}</Button>
       </Space>
     ) }
   ]), [onDelete, onEdit, onPublish]);

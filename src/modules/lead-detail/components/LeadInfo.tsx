@@ -58,7 +58,7 @@ export const LeadInfo: React.FC<LeadInfoProps> = ({ leadId }) => {
               )}
             </div>
           </div>
-          <Button icon={<EditOutlined />}>Modifier</Button>
+          <Button icon={<EditOutlined />}>{t('common.edit')}</Button>
         </div>
       }
     >

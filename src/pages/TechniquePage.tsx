@@ -177,7 +177,7 @@ const TechniquePage: React.FC = () => {
       render: () => (
         <Space>
           <Button size="small">Voir</Button>
-          <Button size="small">Modifier</Button>
+          <Button size="small">{t('common.edit')}</Button>
           <Button size="small">Clôturer</Button>
         </Space>
       )
