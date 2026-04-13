@@ -1,6 +1,6 @@
 import type { Response, NextFunction } from 'express';
 import type { AuthenticatedRequest } from './auth';
-import { logger } from '../lib/logger';
+import { logger } from '../../lib/logger';
 
 export function requirePermission(action: string, resource = 'global') {
   const requiredPermission = resource ? `${action}:${resource}` : action;

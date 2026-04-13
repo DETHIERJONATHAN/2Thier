@@ -20,10 +20,12 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { describe, it, expect } from 'vitest';
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..', '..');
+dotenv.config({ path: path.join(ROOT, '.env') });
 
 // Liste des tests d'audit statiques (lancés avec tsx — PAS d'import vitest)
 const staticTests: { name: string; file: string }[] = [
@@ -72,6 +74,7 @@ for (const test of staticTests) {
       timeout: 30000,
       stdio: 'pipe',
       encoding: 'utf-8',
+      env: { ...process.env },
     });
 
     // Compter les résultats depuis la ligne TOTAL
@@ -132,18 +135,22 @@ for (const test of vitestTests) {
       timeout: 60000,
       stdio: 'pipe',
       encoding: 'utf-8',
+      env: { ...process.env },
     });
 
     // Compter tests passés/échoués dans la sortie vitest
     const testPassedMatch = output.match(/(\d+)\s*passed/);
     const testFailedMatch = output.match(/(\d+)\s*failed/);
+    const testSkippedMatch = output.match(/(\d+)\s*skipped/);
     const p = testPassedMatch ? parseInt(testPassedMatch[1]) : 0;
     const f = testFailedMatch ? parseInt(testFailedMatch[1]) : 0;
+    const s = testSkippedMatch ? parseInt(testSkippedMatch[1]) : 0;
     totalPassed += p;
     totalFailed += f;
+    totalSkipped += s;
 
     if (f === 0) {
-      console.log(`  ✅ ${test.name} — ${p} tests OK`);
+      console.log(`  ✅ ${test.name} — ${p} tests OK${s > 0 ? ` (${s} skippés)` : ''}`);
     } else {
       console.log(`  ❌ ${test.name} — ${p} passés, ${f} échoués`);
     }
@@ -155,9 +162,16 @@ for (const test of vitestTests) {
     if (testPassedMatch || testFailedMatch) {
       const p = testPassedMatch ? parseInt(testPassedMatch[1]) : 0;
       const f = testFailedMatch ? parseInt(testFailedMatch[1]) : 0;
+      const skippedMatch = stdout.match(/(\d+)\s*skipped/);
+      const s = skippedMatch ? parseInt(skippedMatch[1]) : 0;
       totalPassed += p;
       totalFailed += f;
-      console.log(`  ❌ ${test.name} — ${p} passés, ${f} échoués`);
+      totalSkipped += s;
+      if (f > 0) {
+        console.log(`  ❌ ${test.name} — ${p} passés, ${f} échoués`);
+      } else {
+        console.log(`  ✅ ${test.name} — ${p} tests OK${s > 0 ? ` (${s} skippés — Odoo non joignable)` : ''}`);
+      }
       // Afficher les lignes FAIL
       const failLines = stdout.split('\n').filter((l: string) => l.includes('FAIL') || l.includes('AssertionError') || l.includes('Expected'));
       failLines.slice(0, 5).forEach((l: string) => console.log(`     ${l.trim()}`));

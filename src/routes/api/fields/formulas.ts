@@ -3,7 +3,7 @@ import { db } from '../../../lib/database';
 import { authMiddleware } from '../../../middlewares/auth.js';
 import { requireRole } from '../../../middlewares/requireRole.js';
 import * as mockFormulas from '../../../global-mock-formulas.js';
-import { logger } from '../../lib/logger';
+import { logger } from '../../../lib/logger';
 
 // Interface pour les requêtes avec paramètres fusionnés
 interface MergedParamsRequest extends Request {

@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { db } from '../../lib/database';
 import bcrypt from 'bcryptjs';
 import { JWT_SECRET } from '../../config';
-import { logger } from '../lib/logger';
+import { logger } from '../../lib/logger';
 
 const prisma = db;
 

@@ -2,7 +2,7 @@ import express from 'express';
 import { authMiddleware } from '../../middlewares/auth.js';
 import formulasRouter from './formulas.js';
 import { db } from '../../lib/database';
-import { logger } from '../lib/logger';
+import { logger } from '../../lib/logger';
 
 const router = express.Router();
 const prisma = db;

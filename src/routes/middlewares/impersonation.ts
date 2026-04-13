@@ -1,7 +1,7 @@
 import type { Request as ExpressRequest, Response, NextFunction } from 'express';
 import { db } from '../../lib/database';
 import type { AuthenticatedRequest } from './auth';
-import { logger } from '../lib/logger';
+import { logger } from '../../lib/logger';
 
 const prisma = db;
 
