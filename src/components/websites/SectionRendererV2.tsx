@@ -287,7 +287,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
 
             <Paragraph
               style={{
-                color: getColor(subtitle, 'rgba(255,255,255,0.95)'),
+                color: getColor(subtitle, SF.overlayLightNearOpaque),
                 fontSize: getFontSize(subtitle, 'clamp(16px, 4vw, 20px)'),
                 maxWidth: subtitle.maxWidth || '800px',
                 margin: '0 auto',
@@ -324,7 +324,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
               <div style={{ marginTop: '20px' }}>
                 <Text
                   style={{
-                    color: badge.color || 'rgba(255,255,255,0.9)',
+                    color: badge.color || SF.overlayLightStrong,
                     fontSize: badge.fontSize || '16px'
                   }}
                 >
@@ -376,7 +376,7 @@ const SectionRendererV2: React.FC<SectionRendererProps> = ({ section, previewMod
                     minHeight: style.minHeight || cardStyle.minHeight,
                     background: style.cardBackground || cardStyle.backgroundColor || 'white',
                     borderRadius: style.borderRadius || cardStyle.borderRadius || '12px',
-                    boxShadow: style.boxShadow || cardStyle.boxShadow || '0 4px 12px rgba(0,0,0,0.08)'
+                    boxShadow: style.boxShadow || cardStyle.boxShadow || '0 4px 12px ${SF.overlayDarkFaint}'
                   }}
                   styles={{
                     body: {

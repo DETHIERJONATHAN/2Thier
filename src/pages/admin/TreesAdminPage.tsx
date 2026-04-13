@@ -1,4 +1,3 @@
-import { FB } from '../../components/zhiive/ZhiiveTheme';
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Card, Table, Button, Modal, Form, Select, Tag, Space,
@@ -16,6 +15,7 @@ import {
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { useTranslation } from 'react-i18next';
+import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
 
 const { Text } = Typography;
 const { Panel } = Collapse;
@@ -31,7 +31,7 @@ const FBToggle = ({ checked, onChange, disabled, size = 'small' }: {
   const dot = size === 'small' ? 16 : 20;
   return (
     <div
-      onClick={() => !disabled && onChange(!checked)}
+      role="button" tabIndex={0} onClick={() => !disabled && onChange(!checked)}
       style={{
         width: w, height: h, borderRadius: h,
         background: disabled ? '#ccc' : checked ? FB.blue : '#ccc',
@@ -44,7 +44,7 @@ const FBToggle = ({ checked, onChange, disabled, size = 'small' }: {
         width: dot, height: dot, borderRadius: '50%', background: FB.white,
         position: 'absolute', top: (h - dot) / 2,
         left: checked ? w - dot - (h - dot) / 2 : (h - dot) / 2,
-        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        transition: 'left 0.2s', boxShadow: '0 1px 3px ${SF.overlayDark}',
       }} />
     </div>
   );
@@ -570,7 +570,7 @@ export default function TreesAdminPage() {
                         </Space>
                       }
                       extra={
-                        <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 6 }}>
+                        <div role="button" tabIndex={0} onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 6 }}>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

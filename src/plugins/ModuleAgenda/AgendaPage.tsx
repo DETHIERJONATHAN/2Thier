@@ -690,7 +690,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
           ].map(f => (
             <Tooltip key={f.key} title={f.label}>
               <div
-                onClick={f.toggle}
+                role="button" tabIndex={0} onClick={f.toggle}
                 style={{
                   display: 'flex', alignItems: 'center', gap: isMobile ? 0 : 5,
                   padding: isMobile ? '0 8px' : '0 12px', height: 30, borderRadius: 15, cursor: 'pointer',
@@ -711,7 +711,7 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           {isMobile && (
             <div
-              onClick={() => setTaskDrawerOpen(true)}
+              role="button" tabIndex={0} onClick={() => setTaskDrawerOpen(true)}
               style={{ position: 'relative', cursor: 'pointer', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
               <CheckSquareOutlined style={{ fontSize: 18, color: '#722ed1' }} />

@@ -19,6 +19,7 @@ import {
   SwapOutlined
 } from '@ant-design/icons';
 import type { GuidanceState } from './useRealTimeGuidance';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 const { Text } = Typography;
 
@@ -67,7 +68,7 @@ export const RealTimeGuidanceOverlay: React.FC<RealTimeGuidanceOverlayProps> = (
         bottom: 0,
         left: 0,
         right: 0,
-        background: 'linear-gradient(transparent, rgba(0,0,0,0.8))',
+        background: 'linear-gradient(transparent, ${SF.overlayDarkExtraHeavy})',
         padding: '16px 12px',
         color: 'white'
       }}>
@@ -136,7 +137,7 @@ export const RealTimeGuidanceOverlay: React.FC<RealTimeGuidanceOverlayProps> = (
       bottom: 0,
       left: 0,
       right: 0,
-      background: 'linear-gradient(transparent, rgba(0,0,0,0.9))',
+      background: 'linear-gradient(transparent, ${SF.overlayDarkNearOpaque})',
       padding: '24px 16px',
       color: 'white',
       borderRadius: '12px 12px 0 0'

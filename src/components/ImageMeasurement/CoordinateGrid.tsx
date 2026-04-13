@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 interface Corner {
   x: number;
@@ -142,7 +143,7 @@ export const CoordinateGrid: React.FC<CoordinateGridProps> = ({
                 fontWeight="bold"
                 textAnchor="middle"
                 style={{
-                  textShadow: '0 0 3px rgba(0,0,0,0.8)',
+                  textShadow: '0 0 3px ${SF.overlayDarkExtraHeavy}',
                   userSelect: 'none',
                 }}
               >
@@ -155,7 +156,7 @@ export const CoordinateGrid: React.FC<CoordinateGridProps> = ({
                 fill="#00ff00"
                 textAnchor="middle"
                 style={{
-                  textShadow: '0 0 2px rgba(0,0,0,0.8)',
+                  textShadow: '0 0 2px ${SF.overlayDarkExtraHeavy}',
                   userSelect: 'none',
                 }}
               >
@@ -174,7 +175,7 @@ export const CoordinateGrid: React.FC<CoordinateGridProps> = ({
               fill="#00ff00"
               textAnchor="middle"
               style={{
-                textShadow: '0 0 2px rgba(0,0,0,0.8)',
+                textShadow: '0 0 2px ${SF.overlayDarkExtraHeavy}',
                 userSelect: 'none',
               }}
             >
@@ -188,7 +189,7 @@ export const CoordinateGrid: React.FC<CoordinateGridProps> = ({
               fill="#00ff00"
               textAnchor="middle"
               style={{
-                textShadow: '0 0 2px rgba(0,0,0,0.8)',
+                textShadow: '0 0 2px ${SF.overlayDarkExtraHeavy}',
                 userSelect: 'none',
               }}
             >
@@ -202,7 +203,7 @@ export const CoordinateGrid: React.FC<CoordinateGridProps> = ({
               fill="#00ff00"
               textAnchor="middle"
               style={{
-                textShadow: '0 0 2px rgba(0,0,0,0.8)',
+                textShadow: '0 0 2px ${SF.overlayDarkExtraHeavy}',
                 userSelect: 'none',
               }}
             >
@@ -216,7 +217,7 @@ export const CoordinateGrid: React.FC<CoordinateGridProps> = ({
               fill="#00ff00"
               textAnchor="middle"
               style={{
-                textShadow: '0 0 2px rgba(0,0,0,0.8)',
+                textShadow: '0 0 2px ${SF.overlayDarkExtraHeavy}',
                 userSelect: 'none',
               }}
             >
@@ -300,7 +301,7 @@ export const CoordinateGrid: React.FC<CoordinateGridProps> = ({
                 fontWeight="bold"
                 textAnchor="middle"
                 style={{
-                  textShadow: '0 0 3px rgba(0,0,0,0.8)',
+                  textShadow: '0 0 3px ${SF.overlayDarkExtraHeavy}',
                   userSelect: 'none',
                 }}
               >
@@ -314,7 +315,7 @@ export const CoordinateGrid: React.FC<CoordinateGridProps> = ({
                 fill="#ff00ff"
                 textAnchor="middle"
                 style={{
-                  textShadow: '0 0 2px rgba(0,0,0,0.8)',
+                  textShadow: '0 0 2px ${SF.overlayDarkExtraHeavy}',
                   userSelect: 'none',
                 }}
               >
@@ -343,7 +344,7 @@ export const CoordinateGrid: React.FC<CoordinateGridProps> = ({
               fontWeight="bold"
               textAnchor="middle"
               style={{
-                textShadow: '0 0 2px rgba(0,0,0,0.8)',
+                textShadow: '0 0 2px ${SF.overlayDarkExtraHeavy}',
                 userSelect: 'none',
               }}
             >
@@ -368,7 +369,7 @@ export const CoordinateGrid: React.FC<CoordinateGridProps> = ({
               fontWeight="bold"
               textAnchor="middle"
               style={{
-                textShadow: '0 0 2px rgba(0,0,0,0.8)',
+                textShadow: '0 0 2px ${SF.overlayDarkExtraHeavy}',
                 userSelect: 'none',
               }}
             >
@@ -393,7 +394,7 @@ export const CoordinateGrid: React.FC<CoordinateGridProps> = ({
               fontWeight="bold"
               textAnchor="middle"
               style={{
-                textShadow: '0 0 2px rgba(0,0,0,0.8)',
+                textShadow: '0 0 2px ${SF.overlayDarkExtraHeavy}',
                 userSelect: 'none',
               }}
             >
@@ -418,7 +419,7 @@ export const CoordinateGrid: React.FC<CoordinateGridProps> = ({
               fontWeight="bold"
               textAnchor="middle"
               style={{
-                textShadow: '0 0 2px rgba(0,0,0,0.8)',
+                textShadow: '0 0 2px ${SF.overlayDarkExtraHeavy}',
                 userSelect: 'none',
               }}
             >

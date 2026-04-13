@@ -121,7 +121,7 @@ export default function Connexion() {
           <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', gap: 28, textAlign: 'left' }}>
             {features.map((f, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-                <div style={{ width: 46, height: 46, borderRadius: 12, background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: 46, height: 46, borderRadius: 12, background: SF.overlayLightest, backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {f.icon}
                 </div>
                 <div>

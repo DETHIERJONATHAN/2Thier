@@ -1,4 +1,3 @@
-import { FB } from '../../../../components/zhiive/ZhiiveTheme';
 import React, { useEffect, useState } from 'react';
 import { Card, Form, Input, InputNumber, Button, ColorPicker, Select } from 'antd';
 import IconPicker from '../components/shared/IconPicker';
@@ -6,12 +5,13 @@ import IconRenderer from '../components/shared/IconRenderer';
 import { useAuth } from '../../../../auth/useAuth';
 import { ModuleWithStatus } from '../types';
 import { useTranslation } from 'react-i18next';
+import { FB, SF } from '../../../../components/zhiive/ZhiiveTheme';
 
 // ── FB Tokens + Toggle ──
 const FBToggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => {
   const w = 44, h = 24, dot = 20;
   return (
-    <div onClick={() => onChange(!checked)} style={{
+    <div role="button" tabIndex={0} onClick={() => onChange(!checked)} style={{
       width: w, height: h, borderRadius: h,
       background: checked ? FB.blue : '#ccc',
       cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0,
@@ -20,7 +20,7 @@ const FBToggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boole
         width: dot, height: dot, borderRadius: '50%', background: FB.white,
         position: 'absolute', top: (h - dot) / 2,
         left: checked ? w - dot - (h - dot) / 2 : (h - dot) / 2,
-        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        transition: 'left 0.2s', boxShadow: '0 1px 3px ${SF.overlayDark}',
       }} />
     </div>
   );

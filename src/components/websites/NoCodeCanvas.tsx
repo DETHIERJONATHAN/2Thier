@@ -22,6 +22,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import SectionRendererV2 from './SectionRendererV2';
 import { useTranslation } from 'react-i18next';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 const { Text } = Typography;
 
@@ -95,10 +96,10 @@ const SortableItem: React.FC<SortableItemProps> = ({
             top: '8px',
             right: '8px',
             zIndex: 10,
-            background: 'rgba(255, 255, 255, 0.95)',
+            background: SF.overlayLightNearOpaque,
             padding: '4px',
             borderRadius: '8px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+            boxShadow: '0 2px 8px ${SF.overlayDarkLight}'
           }}>
             <Space size="small">
               <Tooltip title="Déplacer">
@@ -162,7 +163,7 @@ const SortableItem: React.FC<SortableItemProps> = ({
 
         {/* 🎨 RENDU RÉEL DE LA SECTION avec SectionRendererV2 */}
         <div 
-          onClick={() => onEdit(section)} 
+          role="button" tabIndex={0} onClick={() => onEdit(section)} 
           style={{ 
             cursor: 'pointer',
             opacity: section.isActive ? 1 : 0.6,

@@ -738,7 +738,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
           return (
             <div
               key={folderId}
-              onClick={() => {
+              role="button" tabIndex={0} onClick={() => {
                 handleLabelClick(folderId);
                 setMobileSidebarOpen(false);
               }}
@@ -923,7 +923,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
             return (
               <div
                 key={msg.id}
-                onClick={() => handleOpenMessage(msg)}
+                role="button" tabIndex={0} onClick={() => handleOpenMessage(msg)}
                 className="group cursor-pointer transition-colors"
                 style={{
                   display: 'flex',
@@ -945,7 +945,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
               >
                 {/* Checkbox */}
                 <div
-                  onClick={(e) => e.stopPropagation()}
+                  role="button" tabIndex={0} onClick={(e) => e.stopPropagation()}
                   style={{ display: 'flex', alignItems: 'center', padding: isMobile ? '4px 4px 0' : '0 4px', flexShrink: 0 }}
                 >
                   <Checkbox
@@ -956,7 +956,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
 
                 {/* Étoile */}
                 <div
-                  onClick={(e) => {
+                  role="button" tabIndex={0} onClick={(e) => {
                     e.stopPropagation();
                     handleToggleStar(msg.id, msg.isStarred || false);
                   }}
@@ -1067,7 +1067,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
                     {/* Actions au survol (desktop uniquement) */}
                     <div
                       className="hidden group-hover:flex items-center gap-0"
-                      onClick={(e) => e.stopPropagation()}
+                      role="button" tabIndex={0} onClick={(e) => e.stopPropagation()}
                       style={{ flexShrink: 0 }}
                     >
                       <Tooltip title={msg.isRead ? 'Marquer non lu' : 'Marquer lu'}>
@@ -1438,7 +1438,7 @@ document.querySelectorAll('img').forEach(function(img) {
                     >
                       {/* Clic sur le nom/icône → preview */}
                       <div
-                        onClick={async () => {
+                        role="button" tabIndex={0} onClick={async () => {
                           setPreviewLoading(true);
                           try {
                             // Détecter le MIME depuis l'extension du fichier (plus fiable que le header)
@@ -1670,7 +1670,7 @@ document.querySelectorAll('img').forEach(function(img) {
                 onClick={() => {
                   const url = prompt('URL de l\'image :');
                   if (url) {
-                    setComposeBody(prev => prev + `<img loading="lazy" src="${url}" style="max-width:100%;" />`);
+                    setComposeBody(prev => prev + `<img loading="lazy" src="${url}" alt="" style="max-width:100%;" />`);
                   }
                 }}
               />
@@ -1834,7 +1834,7 @@ document.querySelectorAll('img').forEach(function(img) {
             marginBottom: 8,
             transition: 'border-color 0.2s, background 0.2s',
           }}
-          onClick={() => fileInputRef.current?.click()}
+          role="button" tabIndex={0} onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderColor = '#1a73e8'; e.currentTarget.style.background = '#e8f0fe'; }}
           onDragLeave={(e) => { e.currentTarget.style.borderColor = '#d9d9d9'; e.currentTarget.style.background = 'transparent'; }}
           onDrop={(e) => {
@@ -1872,8 +1872,8 @@ document.querySelectorAll('img').forEach(function(img) {
         {/* Sidebar mobile (colonne glissante) */}
         {mobileSidebarOpen && (
           <div
-            onClick={() => setMobileSidebarOpen(false)}
-            style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.3)', zIndex: 10 }}
+            role="button" tabIndex={0} onClick={() => setMobileSidebarOpen(false)}
+            style={{ position: 'absolute', inset: 0, backgroundColor: SF.overlayDark, zIndex: 10 }}
           />
         )}
         <div style={{
@@ -1957,11 +1957,11 @@ document.querySelectorAll('img').forEach(function(img) {
           {/* Overlay sombre */}
           {mobileSidebarOpen && (
             <div
-              onClick={() => setMobileSidebarOpen(false)}
+              role="button" tabIndex={0} onClick={() => setMobileSidebarOpen(false)}
               style={{
                 position: 'absolute',
                 inset: 0,
-                backgroundColor: 'rgba(0,0,0,0.3)',
+                backgroundColor: SF.overlayDark,
                 zIndex: 10,
                 transition: 'opacity 0.2s',
               }}
@@ -2162,7 +2162,7 @@ document.querySelectorAll('img').forEach(function(img) {
       {previewLoading && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.4)', zIndex: 9999,
+          background: SF.overlayDarkMedium, zIndex: 9999,
           display: 'flex', justifyContent: 'center', alignItems: 'center',
         }}>
           <Spin size="large" />

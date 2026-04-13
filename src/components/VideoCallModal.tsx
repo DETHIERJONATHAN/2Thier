@@ -846,13 +846,13 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
   if (isIncoming && status === 'ringing') {
     return (
       <div style={{
-        position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.85)',
+        position: 'fixed', inset: 0, zIndex: 9999, background: SF.overlayDarkVeryHeavy,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <div style={{
           background: COLORS.surface, borderRadius: 20, padding: '40px 60px',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+          boxShadow: '0 20px 60px ${SF.overlayDarkMd}',
         }}>
           <div style={{ position: 'relative' }}>
             <Avatar size={80} src={callData?.initiator?.avatarUrl}
@@ -874,7 +874,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
           </div>
 
           <div style={{ display: 'flex', gap: 30, marginTop: 10 }}>
-            <div onClick={rejectCall} style={{
+            <div role="button" tabIndex={0} onClick={rejectCall} style={{
               width: 56, height: 56, borderRadius: '50%', background: COLORS.red,
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
               transition: 'transform 0.2s',
@@ -883,7 +883,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
               onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
               <PhoneOutlined style={{ fontSize: 24, color: '#fff', transform: 'rotate(135deg)' }} />
             </div>
-            <div onClick={joinCall} style={{
+            <div role="button" tabIndex={0} onClick={joinCall} style={{
               width: 56, height: 56, borderRadius: '50%', background: COLORS.green,
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
               transition: 'transform 0.2s',
@@ -979,7 +979,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
       {/* Top bar */}
       <div style={{
         padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: 'rgba(0,0,0,0.3)', flexShrink: 0,
+        background: SF.overlayDark, flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <TeamOutlined style={{ color: COLORS.text, fontSize: 18 }} />
@@ -1027,7 +1027,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
             <Avatar size={80} icon={<UserOutlined />} style={{ background: COLORS.accent }} />
           )}
           <div style={{
-            position: 'absolute', bottom: 8, left: 8, background: 'rgba(0,0,0,0.6)',
+            position: 'absolute', bottom: 8, left: 8, background: SF.overlayDarkStrong,
             color: '#fff', padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
             display: 'flex', alignItems: 'center', gap: 6,
           }}>
@@ -1095,7 +1095,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
                 style={{ background: COLORS.accent }} />
             )}
             <div style={{
-              position: 'absolute', bottom: 8, left: 8, background: 'rgba(0,0,0,0.6)',
+              position: 'absolute', bottom: 8, left: 8, background: SF.overlayDarkStrong,
               color: '#fff', padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
             }}>
               {p.user.firstName} {p.user.lastName} {p.isMuted && '🔇'}
@@ -1120,7 +1120,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
       {/* Audio blocked warning */}
       {audioBlocked && (
         <div
-          onClick={() => {
+          role="button" tabIndex={0} onClick={() => {
             // User interaction unlocks audio autoplay
             remoteAudiosRef.current.forEach(el => el.play().catch(() => {}));
             setAudioBlocked(false);
@@ -1137,7 +1137,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
       {/* Controls bar */}
       <div style={{
         padding: '16px 0 24px', display: 'flex', justifyContent: 'center', gap: 16,
-        background: 'rgba(0,0,0,0.3)', flexShrink: 0, alignItems: 'center',
+        background: SF.overlayDark, flexShrink: 0, alignItems: 'center',
       }}>
         {/* Mic level mini-bar (always visible) */}
         <div style={{
@@ -1150,10 +1150,10 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
                 width: 4,
                 height: 6 + i * 3,
                 borderRadius: 2,
-                background: isMuted ? 'rgba(255,255,255,0.15)'
+                background: isMuted ? SF.overlayLighter
                   : micLevel >= threshold
                     ? (micLevel > 60 ? '#4caf50' : micLevel > 30 ? '#8bc34a' : '#ffc107')
-                    : 'rgba(255,255,255,0.15)',
+                    : SF.overlayLighter,
                 transition: 'background 0.08s',
               }} />
             ))}
@@ -1165,7 +1165,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
         {/* Speaker test button */}
         <Tooltip title={t('videocall.testSpeakers')}>
-          <div onClick={() => {
+          <div role="button" tabIndex={0} onClick={() => {
             try {
               const ctx = new AudioContext();
               const osc = ctx.createOscillator();
@@ -1181,20 +1181,20 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
             } catch { /* silent */ }
           }} style={{
             width: 42, height: 42, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.1)',
+            background: SF.overlayLightSubtle,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', transition: 'all 0.2s',
           }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}>
+            onMouseEnter={e => e.currentTarget.style.background = SF.overlayLight}
+            onMouseLeave={e => e.currentTarget.style.background = SF.overlayLightSubtle}>
             <SoundOutlined style={{ fontSize: 18, color: '#fff' }} />
           </div>
         </Tooltip>
 
         <Tooltip title={isMuted ? t('videocall.unmute') : t('videocall.mute')}>
-          <div onClick={toggleMute} style={{
+          <div role="button" tabIndex={0} onClick={toggleMute} style={{
             width: 52, height: 52, borderRadius: '50%',
-            background: isMuted ? COLORS.red : 'rgba(255,255,255,0.15)',
+            background: isMuted ? COLORS.red : SF.overlayLighter,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', transition: 'all 0.2s',
           }}
@@ -1206,9 +1206,9 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
         {callType === 'video' && (
           <Tooltip title={isVideoOff ? t('videocall.cameraOn') : t('videocall.cameraOff')}>
-            <div onClick={toggleVideo} style={{
+            <div role="button" tabIndex={0} onClick={toggleVideo} style={{
               width: 52, height: 52, borderRadius: '50%',
-              background: isVideoOff ? COLORS.red : 'rgba(255,255,255,0.15)',
+              background: isVideoOff ? COLORS.red : SF.overlayLighter,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', transition: 'all 0.2s',
             }}
@@ -1220,9 +1220,9 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
         )}
 
         <Tooltip title={isScreenSharing ? t('videocall.stopSharing') : t('videocall.shareScreen')}>
-          <div onClick={toggleScreenShare} style={{
+          <div role="button" tabIndex={0} onClick={toggleScreenShare} style={{
             width: 52, height: 52, borderRadius: '50%',
-            background: isScreenSharing ? COLORS.blue : 'rgba(255,255,255,0.15)',
+            background: isScreenSharing ? COLORS.blue : SF.overlayLighter,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', transition: 'all 0.2s',
           }}
@@ -1234,9 +1234,9 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
         {/* Recording toggle */}
         <Tooltip title={isRecording ? t('videocall.stopRecording') : t('videocall.startRecording')}>
-          <div onClick={toggleRecording} style={{
+          <div role="button" tabIndex={0} onClick={toggleRecording} style={{
             width: 52, height: 52, borderRadius: '50%',
-            background: isRecording ? '#e53935' : 'rgba(255,255,255,0.15)',
+            background: isRecording ? '#e53935' : SF.overlayLighter,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', transition: 'all 0.2s',
             border: isRecording ? '2px solid #ff6659' : 'none',
@@ -1262,7 +1262,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
         {/* End call */}
         <Tooltip title={t('videocall.hangUp')}>
-          <div onClick={leaveCall} style={{
+          <div role="button" tabIndex={0} onClick={leaveCall} style={{
             width: 62, height: 52, borderRadius: 26,
             background: COLORS.red, display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', transition: 'all 0.2s',

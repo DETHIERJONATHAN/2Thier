@@ -5,6 +5,7 @@
  */
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { DeleteOutlined, SendOutlined, PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 interface VoiceRecorderProps {
   onSend: (audioBlob: Blob, durationSeconds: number) => void;
@@ -144,12 +145,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
         style={{
           width: 32, height: 32, borderRadius: '50%', display: 'flex',
           alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-          background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff',
+          background: SF.overlayLight, border: 'none', color: '#fff',
           fontSize: 14, transition: 'background 0.2s',
           flexShrink: 0,
         }}
         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.35)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+        onMouseLeave={e => e.currentTarget.style.background = SF.overlayLight}
       >
         <DeleteOutlined />
       </button>
@@ -183,13 +184,13 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
           <button
             onClick={togglePlayback}
             style={{
-              background: 'rgba(255,255,255,0.2)', border: 'none', cursor: 'pointer',
+              background: SF.overlayLight, border: 'none', cursor: 'pointer',
               borderRadius: '50%', width: 36, height: 36, display: 'flex',
               alignItems: 'center', justifyContent: 'center', color: '#fff',
               transition: 'background 0.2s', flexShrink: 0,
             }}
             onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.35)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+            onMouseLeave={e => e.currentTarget.style.background = SF.overlayLight}
           >
             {playing ? <PauseCircleOutlined style={{ fontSize: 22 }} /> : <PlayCircleOutlined style={{ fontSize: 22 }} />}
           </button>
@@ -199,7 +200,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
         <span style={{
           color: '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'monospace',
           whiteSpace: 'nowrap', letterSpacing: 1, flexShrink: 0,
-          textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+          textShadow: '0 1px 2px ${SF.overlayDarkSubtle}',
         }}>
           {formatTime(duration)}
         </span>

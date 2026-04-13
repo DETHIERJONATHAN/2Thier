@@ -212,7 +212,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
             },
             paint: {
               'text-color': '#ffffff',
-              'text-halo-color': 'rgba(0,0,0,0.7)',
+              'text-halo-color': SF.overlayDarkHeavy,
               'text-halo-width': 1.5,
             },
           },
@@ -232,7 +232,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
             },
             paint: {
               'text-color': '#ffffff',
-              'text-halo-color': 'rgba(0,0,0,0.8)',
+              'text-halo-color': SF.overlayDarkExtraHeavy,
               'text-halo-width': 2,
             },
           },
@@ -380,9 +380,9 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
     if (!liveSelfMarkerRef.current) {
       el.className = 'wax-live-self-marker';
       el.innerHTML = `
-        <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.95);border:3px solid ${SF.primary};box-shadow:0 0 0 8px ${SF.primary}30,0 4px 14px rgba(0,0,0,0.25);overflow:hidden;display:flex;align-items:center;justify-content:center;">
+        <div style="width:40px;height:40px;border-radius:50%;background:${SF.overlayLightNearOpaque};border:3px solid ${SF.primary};box-shadow:0 0 0 8px ${SF.primary}30,0 4px 14px rgba(0,0,0,0.25);overflow:hidden;display:flex;align-items:center;justify-content:center;">
           ${selfUser?.avatarUrl
-            ? `<img src="${selfUser.avatarUrl}" style="width:100%;height:100%;object-fit:cover;" />`
+            ? `<img src="${selfUser.avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;" />`
             : `<span style="color:${SF.primary};font-weight:800;font-size:14px;">${(selfUser?.firstName || selfUser?.name || 'You')[0]}</span>`
           }
         </div>
@@ -767,7 +767,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
         const el = createEl(
           `<div style="width:44px;height:44px;background:${SF.primary};clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 12px ${SF.primary}60;">
             ${c.logoUrl
-              ? `<img src="${c.logoUrl}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;" />`
+              ? `<img src="${c.logoUrl}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;" />`
               : `<span style="color:white;font-weight:800;font-size:14px;">${(c.name || '?')[0]}</span>`
             }
           </div>`,
@@ -786,9 +786,9 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
       otherBees.forEach(b => {
         const borderColor = b.online ? SF.success : SF.textMuted;
         const el = createEl(
-          `<div style="width:32px;height:32px;border-radius:50%;border:2.5px solid ${borderColor};overflow:hidden;cursor:pointer;background:${SF.primary};display:flex;align-items:center;justify-content:center;box-shadow:0 1px 6px rgba(0,0,0,0.3);">
+          `<div style="width:32px;height:32px;border-radius:50%;border:2.5px solid ${borderColor};overflow:hidden;cursor:pointer;background:${SF.primary};display:flex;align-items:center;justify-content:center;box-shadow:0 1px 6px ${SF.overlayDark};">
             ${b.avatarUrl
-              ? `<img src="${b.avatarUrl}" style="width:100%;height:100%;object-fit:cover;" />`
+              ? `<img src="${b.avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;" />`
               : `<span style="color:white;font-size:12px;font-weight:700;">${(b.name || '?')[0]}</span>`
             }
           </div>`,
@@ -828,7 +828,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
           `<div style="width:36px;height:36px;border-radius:50%;background:radial-gradient(circle,#FDCB6E,#e17055);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 16px 4px #FDCB6E80;animation:waxGlow 2s ease-in-out infinite alternate;">
             <span style="font-size:16px;">${getPinEmoji(p.pinType)}</span>
           </div>
-          <div style="position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);color:#FDCB6E;font-size:9px;padding:1px 5px;border-radius:8px;white-space:nowrap;font-weight:600;">${remaining}h</div>`,
+          <div style="position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);background:${SF.overlayDarkHeavy};color:#FDCB6E;font-size:9px;padding:1px 5px;border-radius:8px;white-space:nowrap;font-weight:600;">${remaining}h</div>`,
           'wax-pin-marker',
         );
         el.style.position = 'relative';
@@ -1660,7 +1660,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center' }}>
             {/* Tap on route info to re-fit map to route bounds */}
             <div
-              onClick={() => {
+              role="button" tabIndex={0} onClick={() => {
                 const coords = routeData.geometry.coordinates as [number, number][];
                 if (coords.length >= 2) {
                   const bounds = coords.reduce(
@@ -1678,7 +1678,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
                   ? formatDuration(simTimeRemaining)
                   : formatDuration(routeData.duration)}
               </span>
-              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>
+              <span style={{ color: SF.overlayLightBorder, fontSize: 10 }}>
                 {simulating && simDistRemaining != null
                   ? formatDistance(simDistRemaining)
                   : formatDistance(routeData.distance)}
@@ -1691,12 +1691,12 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
             </div>
             {/* Voice toggle */}
             <div
-              onClick={() => { setVoiceEnabled(v => !v); if (voiceEnabled) window.speechSynthesis?.cancel(); }}
+              role="button" tabIndex={0} onClick={() => { setVoiceEnabled(v => !v); if (voiceEnabled) window.speechSynthesis?.cancel(); }}
               style={{
                 width: 28, height: 28, borderRadius: '50%', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: voiceEnabled ? `${SF.primary}30` : 'rgba(255,255,255,0.1)',
-                color: voiceEnabled ? SF.primary : 'rgba(255,255,255,0.4)', fontSize: 12,
+                background: voiceEnabled ? `${SF.primary}30` : SF.overlayLightSubtle,
+                color: voiceEnabled ? SF.primary : SF.overlayLightBorder, fontSize: 12,
               }}
             >
               {voiceEnabled ? <SoundOutlined /> : <AudioMutedOutlined />}
@@ -1705,7 +1705,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
             {!navigating ? (
               <>
                 <div
-                  onClick={startNavigation}
+                  role="button" tabIndex={0} onClick={startNavigation}
                   style={{
                     padding: '3px 10px', borderRadius: 14, cursor: 'pointer',
                     background: SF.success, color: 'white', fontSize: 10, fontWeight: 700,
@@ -1715,7 +1715,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
                 </div>
                 {isSuperAdmin && (
                   <div
-                    onClick={() => startSimulation(50)}
+                    role="button" tabIndex={0} onClick={() => startSimulation(50)}
                     style={{
                       padding: '3px 10px', borderRadius: 14, cursor: 'pointer',
                       background: '#FDCB6E20', color: '#FDCB6E', fontSize: 10, fontWeight: 700,
@@ -1729,7 +1729,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
               </>
             ) : (
               <div
-                onClick={stopNavigation}
+                role="button" tabIndex={0} onClick={stopNavigation}
                 style={{
                   padding: '3px 10px', borderRadius: 14, cursor: 'pointer',
                   background: '#e17055', color: 'white', fontSize: 10, fontWeight: 700,
@@ -1741,7 +1741,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
             {/* Close route */}
             <CloseOutlined
               onClick={stopNavigation}
-              style={{ color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 12 }}
+              style={{ color: SF.overlayLightBorder, cursor: 'pointer', fontSize: 12 }}
             />
           </div>
         )}
@@ -1750,13 +1750,13 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
           {/* Ghost mode toggle */}
           <Tooltip title={ghostMode === 'ghost' ? t('wax.ghostTooltip') : t('wax.visibleTooltip')} placement="bottom">
             <div
-              onClick={() => toggleGhostMode(ghostMode === 'ghost' ? 'visible' : 'ghost')}
+              role="button" tabIndex={0} onClick={() => toggleGhostMode(ghostMode === 'ghost' ? 'visible' : 'ghost')}
               style={{
                 display: 'flex', alignItems: 'center', gap: 3, padding: '3px 6px',
                 borderRadius: 14, cursor: 'pointer', fontSize: 10, fontWeight: 600,
-                background: ghostMode === 'ghost' ? 'rgba(255,255,255,0.15)' : 'rgba(0,184,148,0.2)',
+                background: ghostMode === 'ghost' ? SF.overlayLighter : 'rgba(0,184,148,0.2)',
                 color: ghostMode === 'ghost' ? '#dfe6e9' : SF.success,
-                border: `1px solid ${ghostMode === 'ghost' ? 'rgba(255,255,255,0.2)' : SF.success + '40'}`,
+                border: `1px solid ${ghostMode === 'ghost' ? SF.overlayLight : SF.success + '40'}`,
                 whiteSpace: 'nowrap',
               }}
             >
@@ -1767,7 +1767,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
           {/* Share location button */}
           {!sharing && ghostMode !== 'ghost' && (
             <Tooltip title={t('wax.shareLocationTooltip')} placement="bottom">
-              <div onClick={shareLocation} style={{
+              <div role="button" tabIndex={0} onClick={shareLocation} style={{
                 padding: '3px 6px', borderRadius: 14, cursor: 'pointer', fontSize: 10,
                 fontWeight: 600, background: '#FDCB6E20', color: '#FDCB6E', border: '1px solid #FDCB6E40',
                 whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3,
@@ -1797,7 +1797,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
         }}>
           {/* Arrow icon */}
           <div
-            onClick={() => {
+            role="button" tabIndex={0} onClick={() => {
               // Re-center on user position along the route
               const livePos = userPositionRef.current;
               if (livePos) {
@@ -1850,14 +1850,14 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
                   16,
                 )}
               </div>
-              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 700 }}>
+              <span style={{ color: SF.textLightDimmed, fontSize: 11, fontWeight: 700 }}>
                 {formatDistance(liveDistToFollowingStep ?? routeData.steps[hudNextStepIndex]?.distance ?? 0)}
               </span>
             </div>
           )}
           {/* Alert report quick button — RED */}
           <div
-            onClick={() => setReportingAlert(r => !r)}
+            role="button" tabIndex={0} onClick={() => setReportingAlert(r => !r)}
             style={{
               width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1880,12 +1880,12 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
           overflowX: 'auto', overflowY: 'hidden',
           WebkitOverflowScrolling: 'touch',
           background: 'rgba(15,15,30,0.95)', backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          borderBottom: '1px solid ${SF.overlayLightest}',
         }}>
           {ALERT_TYPES.map(at => (
             <div
               key={at.type}
-              onClick={async () => {
+              role="button" tabIndex={0} onClick={async () => {
                 const pos = userPositionRef.current || (mapRef.current ? { lat: mapRef.current.getCenter().lat, lng: mapRef.current.getCenter().lng } : null);
                 if (!pos) { message.warning(t('wax.nav.noPosition')); return; }
                 try {
@@ -1923,7 +1923,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
         {!routeData && !routingOpen && (
           <Tooltip title={t('wax.nav.routeTooltip')} placement="right">
             <div
-              onClick={() => {
+              role="button" tabIndex={0} onClick={() => {
                 setRoutingOpen(true);
                 // Pre-fetch GPS position so route starts from real location
                 if (!userPositionRef.current && navigator.geolocation) {
@@ -1950,7 +1950,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
         {/* 3D car-view toggle */}
         <Tooltip title={carView ? t('wax.nav.view2D') : t('wax.nav.view3D')} placement="right">
           <div
-            onClick={() => {
+            role="button" tabIndex={0} onClick={() => {
               const next = !carView;
               setCarView(next);
               const map = mapRef.current;
@@ -1975,9 +1975,9 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
             style={{
               display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px',
               borderRadius: 12, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-              background: carView ? 'rgba(108,92,231,0.3)' : 'rgba(0,0,0,0.6)',
-              color: carView ? SF.primary : 'rgba(255,255,255,0.6)',
-              border: `1px solid ${carView ? SF.primary + '50' : 'rgba(255,255,255,0.15)'}`,
+              background: carView ? 'rgba(108,92,231,0.3)' : SF.overlayDarkStrong,
+              color: carView ? SF.primary : SF.overlayLightMedium,
+              border: `1px solid ${carView ? SF.primary + '50' : SF.overlayLighter}`,
               backdropFilter: 'blur(8px)', transition: 'all 0.2s', whiteSpace: 'nowrap',
               marginBottom: 2,
             }}
@@ -1989,13 +1989,13 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
         {/* Satellite / Map toggle */}
         <Tooltip title={mapStyle === 'satellite' ? t('wax.mapVector') : t('wax.mapSatellite')} placement="right">
           <div
-            onClick={() => switchMapStyle(mapStyle === 'satellite' ? 'vector' : 'satellite')}
+            role="button" tabIndex={0} onClick={() => switchMapStyle(mapStyle === 'satellite' ? 'vector' : 'satellite')}
             style={{
               display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px',
               borderRadius: 12, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-              background: mapStyle === 'satellite' ? 'rgba(0,180,148,0.25)' : 'rgba(0,0,0,0.6)',
-              color: mapStyle === 'satellite' ? SF.success : 'rgba(255,255,255,0.6)',
-              border: `1px solid ${mapStyle === 'satellite' ? SF.success + '50' : 'rgba(255,255,255,0.15)'}`,
+              background: mapStyle === 'satellite' ? 'rgba(0,180,148,0.25)' : SF.overlayDarkStrong,
+              color: mapStyle === 'satellite' ? SF.success : SF.overlayLightMedium,
+              border: `1px solid ${mapStyle === 'satellite' ? SF.success + '50' : SF.overlayLighter}`,
               backdropFilter: 'blur(8px)', transition: 'all 0.2s', whiteSpace: 'nowrap',
               marginBottom: 2,
             }}
@@ -2012,14 +2012,14 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
         ].map(layer => (
           <Tooltip key={layer.key} title={t(layer.tooltipKey)} placement="right" mouseEnterDelay={0.4}>
             <div
-              onClick={() => setShowLayer(prev => ({ ...prev, [layer.key]: !prev[layer.key as keyof typeof prev] }))}
+              role="button" tabIndex={0} onClick={() => setShowLayer(prev => ({ ...prev, [layer.key]: !prev[layer.key as keyof typeof prev] }))}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px',
                 borderRadius: 12, cursor: 'pointer', fontSize: 11, fontWeight: 600,
                 background: showLayer[layer.key as keyof typeof showLayer]
-                  ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.4)',
+                  ? 'rgba(0,0,0,0.75)' : SF.overlayDarkMedium,
                 color: showLayer[layer.key as keyof typeof showLayer]
-                  ? layer.color : 'rgba(255,255,255,0.4)',
+                  ? layer.color : SF.overlayLightBorder,
                 backdropFilter: 'blur(8px)',
                 transition: 'all 0.2s',
                 whiteSpace: 'nowrap',
@@ -2043,11 +2043,11 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
           position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
           width: 'calc(100% - 24px)', maxWidth: 360, background: 'rgba(15,15,30,0.95)',
           borderRadius: 16, padding: 14, zIndex: 20, backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          border: '1px solid ${SF.overlayLightSubtle}', boxShadow: '0 8px 32px ${SF.overlayDarkMedium}',
         }}>
-          <div onClick={() => setSelectedEntity(null)} style={{
+          <div role="button" tabIndex={0} onClick={() => setSelectedEntity(null)} style={{
             position: 'absolute', top: 8, right: 10, cursor: 'pointer',
-            color: 'rgba(255,255,255,0.5)', fontSize: 14,
+            color: SF.textLightDimmed, fontSize: 14,
           }}>
             <CloseOutlined />
           </div>
@@ -2065,12 +2065,12 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>{selectedEntity.name}</div>
                 <Tooltip title={t('wax.coloniesTooltip')} placement="top">
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+                  <div style={{ fontSize: 11, color: SF.textLightDimmed }}>
                     <TeamOutlined /> {selectedEntity.memberCount} {t('wax.members')}
                   </div>
                 </Tooltip>
                 {selectedEntity.description && (
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: SF.overlayLightBorder, marginTop: 2 }}>
                     {selectedEntity.description.substring(0, 80)}
                   </div>
                 )}
@@ -2084,7 +2084,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
                 style={{ background: !selectedEntity.avatarUrl ? SF.primary : undefined, border: `2px solid ${selectedEntity.online ? SF.success : SF.textMuted}` }} />
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>{selectedEntity.name}</div>
-                <div style={{ fontSize: 11, color: selectedEntity.online ? SF.success : 'rgba(255,255,255,0.4)' }}>
+                <div style={{ fontSize: 11, color: selectedEntity.online ? SF.success : SF.overlayLightBorder }}>
                   {selectedEntity.online ? t('wax.online') : t('wax.offline')}
                   {selectedEntity.approximate && ` · ${t('wax.approximate')}`}
                 </div>
@@ -2096,7 +2096,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>🔨 {selectedEntity.name}</div>
               {selectedEntity.address && (
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+                <div style={{ fontSize: 11, color: SF.textLightDimmed, marginTop: 2 }}>
                   <EnvironmentOutlined /> {selectedEntity.address}
                 </div>
               )}
@@ -2112,7 +2112,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#FDCB6E' }}>
                     {selectedEntity.title || 'Wax Pin'}
                   </div>
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
+                  <div style={{ fontSize: 11, color: SF.overlayLightBorder }}>
                     {selectedEntity.user?.name}
                     {selectedEntity.organization ? ` · ${selectedEntity.organization.name}` : ''}
                   </div>
@@ -2123,7 +2123,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
                   width: '100%', height: 120, objectFit: 'cover', borderRadius: 8, marginBottom: 6,
                 }} />
               )}
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>
+              <div style={{ fontSize: 10, color: SF.overlayLightActive }}>
                 <EyeOutlined /> {selectedEntity.viewCount} {t('wax.pinViews')} ·
                 ⏳ {t('wax.pinExpires')} {Math.max(0, Math.ceil((new Date(selectedEntity.expiresAt).getTime() - Date.now()) / 3600000))}{t('wax.hours')}
               </div>
@@ -2133,7 +2133,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
           {/* Navigate-to button — all entities with coordinates */}
           {selectedEntity.latitude != null && selectedEntity.longitude != null && (
             <div
-              onClick={() => {
+              role="button" tabIndex={0} onClick={() => {
                 const dest = { lat: selectedEntity.latitude, lng: selectedEntity.longitude };
                 setSelectedEntity(null);
                 computeRoute(dest);
@@ -2160,7 +2160,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
             height: 48,
             background: 'rgba(10, 10, 25, 0.92)',
             backdropFilter: 'blur(12px)',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            borderBottom: '1px solid ${SF.overlayLightest}',
             display: 'flex', alignItems: 'center',
             padding: '0 10px', gap: 8,
           }}>
@@ -2179,32 +2179,32 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
             />
             {geocodeLoading
               ? <LoadingOutlined spin style={{ color: SF.primary, fontSize: 14 }} />
-              : <SearchOutlined onClick={triggerSearch} style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, cursor: 'pointer' }} />
+              : <SearchOutlined onClick={triggerSearch} style={{ color: SF.textLightDimmed, fontSize: 14, cursor: 'pointer' }} />
             }
-            <CloseOutlined onClick={() => setRoutingOpen(false)} style={{ color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 13 }} />
+            <CloseOutlined onClick={() => setRoutingOpen(false)} style={{ color: SF.overlayLightBorder, cursor: 'pointer', fontSize: 13 }} />
           </div>
 
           {/* Suggestions dropdown (below the bar) */}
           {(suggestions.length > 0 || (geocodeLoading) || (!geocodeLoading && geocodeSearched && suggestions.length === 0 && destQuery.trim().length >= 2)) && (
             <div style={{
               background: 'rgba(15, 15, 30, 0.97)', backdropFilter: 'blur(16px)',
-              borderBottom: '1px solid rgba(255,255,255,0.1)',
+              borderBottom: '1px solid ${SF.overlayLightSubtle}',
               maxHeight: '40vh', overflowY: 'auto',
             }}>
               {geocodeLoading && (
-                <div style={{ textAlign: 'center', padding: 10, color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>
+                <div style={{ textAlign: 'center', padding: 10, color: SF.overlayLightBorder, fontSize: 11 }}>
                   <LoadingOutlined spin style={{ marginRight: 6 }} />{t('wax.nav.searching')}
                 </div>
               )}
               {!geocodeLoading && geocodeSearched && suggestions.length === 0 && destQuery.trim().length >= 2 && (
-                <div style={{ textAlign: 'center', padding: 10, color: 'rgba(255,255,255,0.3)', fontSize: 11 }}>
+                <div style={{ textAlign: 'center', padding: 10, color: SF.overlayLightActive, fontSize: 11 }}>
                   {t('wax.nav.noResults')}
                 </div>
               )}
               {suggestions.map((s, i) => (
                 <div
                   key={i}
-                  onClick={() => {
+                  role="button" tabIndex={0} onClick={() => {
                     setDestQuery(s.displayName.split(',')[0]);
                     setSuggestions([]);
                     computeRoute({ lat: s.lat, lng: s.lng });
@@ -2215,7 +2215,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
                     background: 'rgba(255,255,255,0.03)',
                     borderBottom: '1px solid rgba(255,255,255,0.05)',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = SF.overlayLightest)}
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
                 >
                   <EnvironmentOutlined style={{ color: SF.primary, fontSize: 14, marginTop: 2, flexShrink: 0 }} />

@@ -740,7 +740,7 @@ Avez-vous quelques minutes pour échanger à ce sujet ?"
                       {/* Cercle d'action principal */}
                       <div className="relative">
                         <div className="w-32 h-32 mx-auto bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center hover:scale-110 transition-transform duration-300 cursor-pointer shadow-2xl"
-                             onClick={startCall}>
+                             role="button" tabIndex={0} onClick={startCall}>
                           <PhoneOutlined className="text-white text-4xl" />
                         </div>
                         <div className="absolute inset-0 w-32 h-32 mx-auto border-4 border-blue-300 rounded-full animate-ping opacity-20"></div>

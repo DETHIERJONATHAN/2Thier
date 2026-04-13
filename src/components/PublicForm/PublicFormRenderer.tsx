@@ -34,6 +34,7 @@ import {
   Row,
   Col
 } from 'antd';
+import { SF } from '../zhiive/ZhiiveTheme';
 import {
   ArrowLeftOutlined,
   ArrowRightOutlined,
@@ -183,7 +184,7 @@ const styles = {
     maxWidth: '900px',
     width: '100%',
     borderRadius: '16px',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+    boxShadow: '0 20px 60px ${SF.overlayDark}',
     overflow: 'hidden'
   } as React.CSSProperties,
   
@@ -478,7 +479,7 @@ const PublicFormRenderer: React.FC = () => {
                 {(field.options as CardOption[] || []).map((option) => (
                   <div
                     key={option.value}
-                    onClick={() => handleValueChange(field.name, option.value)}
+                    role="button" tabIndex={0} onClick={() => handleValueChange(field.name, option.value)}
                     style={styles.optionCard(value === option.value)}
                     onMouseEnter={(e) => {
                       if (value !== option.value) {

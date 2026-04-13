@@ -30,6 +30,7 @@ import type {
   CalibrationData,
   ImageAnnotations
 } from '../../types/measurement';
+import { SF } from '../zhiive/ZhiiveTheme';
 import {
   formatMeasurement,
   convertUnit
@@ -386,7 +387,7 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
         const textWidth = ctx.measureText(text).width;
         const padding = 6 / scale;
         
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillStyle = SF.overlayDarkHeavy;
         roundRect(ctx, midX - textWidth/2 - padding, midY - fontSize/2 - padding, textWidth + padding*2, fontSize + padding*2, 4/scale);
         ctx.fill();
 
@@ -726,7 +727,7 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
       <div
         style={{
           padding: '12px 16px',
-          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          backgroundColor: SF.overlayDarkNearOpaque,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -762,7 +763,7 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
       </div>
 
       {/* Progress bar */}
-      <div style={{ padding: '8px 16px', backgroundColor: 'rgba(0, 0, 0, 0.8)' }}>
+      <div style={{ padding: '8px 16px', backgroundColor: SF.overlayDarkExtraHeavy }}>
         <Progress 
           percent={Math.min(100, progress)} 
           size="small" 
@@ -787,7 +788,7 @@ export const ImageMeasurementCanvasMobile: React.FC<ImageMeasurementCanvasMobile
             color: '#fff',
             textAlign: 'center'
           }}
-          onClick={() => setShowInstructions(false)}
+          role="button" tabIndex={0} onClick={() => setShowInstructions(false)}
         >
           <div style={{ fontSize: 20, marginBottom: 8 }}>👆 Glissez les points</div>
           <Text style={{ color: '#fff' }}>

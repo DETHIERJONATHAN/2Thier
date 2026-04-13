@@ -125,7 +125,7 @@ const FormulaTestPage: React.FC = () => {
                         ? 'border-blue-500 bg-blue-50' 
                         : 'hover:bg-gray-50'
                     }`}
-                    onClick={() => {
+                    role="button" tabIndex={0} onClick={() => {
                       setSelectedFormulaId(formula.id);
                       setTestResults(null);
                     }}

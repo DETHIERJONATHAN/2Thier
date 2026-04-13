@@ -1,4 +1,3 @@
-import { FB } from '../../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
@@ -18,6 +17,7 @@ import {
   CheckOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
 
 const useScreenSize = () => {
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -38,14 +38,14 @@ const FBToggle: React.FC<{
   const s = size === 'small';
   const w = s ? 36 : 44; const h = s ? 20 : 24; const d = s ? 16 : 20; const p = 2;
   return (
-    <div onClick={() => onChange(!checked)} style={{
+    <div role="button" tabIndex={0} onClick={() => onChange(!checked)} style={{
       width: w, height: h, borderRadius: h, background: checked ? FB.blue : '#bec3c9',
       cursor: 'pointer', position: 'relative', transition: 'background 0.25s', flexShrink: 0,
     }}>
       <div style={{
         position: 'absolute', top: p, left: checked ? w - d - p : p,
         width: d, height: d, borderRadius: '50%', background: FB.white,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transition: 'left 0.25s',
+        boxShadow: '0 1px 3px ${SF.overlayDark}', transition: 'left 0.25s',
       }} />
     </div>
   );
@@ -55,7 +55,7 @@ const FBToggle: React.FC<{
 const FBCheckbox: React.FC<{
   checked: boolean; onChange: () => void; label: string;
 }> = ({ checked, onChange, label }) => (
-  <div onClick={onChange} style={{
+  <div role="button" tabIndex={0} onClick={onChange} style={{
     display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
     borderRadius: 6, cursor: 'pointer', transition: 'background 0.15s',
   }}
@@ -84,13 +84,13 @@ const FBModal: React.FC<{
   if (!open) return null;
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      position: 'fixed', inset: 0, background: SF.overlayDarkMd,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       zIndex: 1000, padding: 16,
-    }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{
+    }} role="button" tabIndex={0} onClick={onClose}>
+      <div role="button" tabIndex={0} onClick={e => e.stopPropagation()} style={{
         background: FB.white, borderRadius: FB.radius, width: '100%',
-        maxWidth: width, boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+        maxWidth: width, boxShadow: '0 8px 32px ${SF.overlayDarkSubtle}',
         maxHeight: '90vh', display: 'flex', flexDirection: 'column',
       }}>
         <div style={{
@@ -98,7 +98,7 @@ const FBModal: React.FC<{
           padding: '16px 20px', borderBottom: '1px solid ' + FB.border, flexShrink: 0,
         }}>
           <div style={{ fontSize: 18, fontWeight: 700, color: FB.text }}>{title}</div>
-          <div onClick={onClose} style={{
+          <div role="button" tabIndex={0} onClick={onClose} style={{
             width: 32, height: 32, borderRadius: '50%', background: FB.btnGray,
             display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
           }}>
@@ -363,7 +363,7 @@ const RolesSettings: React.FC = () => {
                     {deleteConfirm === role.id && (
                       <div style={{
                         position: 'absolute', right: 0, top: -8,
-                        background: FB.white, borderRadius: FB.radius, boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+                        background: FB.white, borderRadius: FB.radius, boxShadow: '0 2px 12px ${SF.overlayDarkLight}',
                         padding: 12, zIndex: 10, width: 220,
                       }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 4 }}>Supprimer ce rôle ?</div>
@@ -472,7 +472,7 @@ const RolesSettings: React.FC = () => {
               <div key={mod.id} style={{ marginBottom: 8, border: '1px solid ' + FB.border, borderRadius: FB.radius, overflow: 'hidden' }}>
                 {/* Module header */}
                 <div
-                  onClick={() => toggleModule(mod.id)}
+                  role="button" tabIndex={0} onClick={() => toggleModule(mod.id)}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '12px 16px', cursor: 'pointer', background: FB.btnGray + '60',

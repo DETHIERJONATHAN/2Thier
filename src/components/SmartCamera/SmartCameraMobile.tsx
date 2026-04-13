@@ -22,6 +22,7 @@ import {
 } from '@ant-design/icons';
 import { useDeviceOrientation } from '../../hooks/useDeviceOrientation';
 import { useMobileModalLock } from '../../hooks/useMobileModalLock';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 const { Text, Title } = Typography;
 
@@ -671,7 +672,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       {/* Header avec indicateur gyroscope discret */}
       <div style={{
         padding: '16px',
-        background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.7))',
+        background: 'linear-gradient(to bottom, ${SF.overlayDarkNearOpaque}, ${SF.overlayDarkHeavy})',
         color: '#fff'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -746,7 +747,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
           {/* Header camera */}
           <div style={{
             padding: 16,
-            background: 'linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)',
+            background: 'linear-gradient(to bottom, ${SF.overlayDarkExtraHeavy}, transparent)',
             color: '#fff',
             display: 'flex',
             justifyContent: 'space-between',
@@ -805,7 +806,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
           }}>
             {/* Indicateur photos prises */}
             <div style={{
-              background: 'rgba(0,0,0,0.7)',
+              background: SF.overlayDarkHeavy,
               color: '#fff',
               padding: '8px 16px',
               borderRadius: 20,
@@ -829,7 +830,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
                   background: focusStatus === 'ready' ? '#52c41a' : (isCapturing ? '#faad14' : '#fff'),
                   border: `4px solid ${focusStatus === 'ready' ? '#52c41a' : (isCapturing ? '#faad14' : '#1890ff')}`,
                   color: isCapturing ? '#fff' : '#1890ff',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                  boxShadow: '0 4px 20px ${SF.overlayDark}',
                   fontSize: countdown ? 32 : undefined,
                   fontWeight: countdown ? 'bold' : undefined,
                   transition: 'all 0.2s ease',
@@ -847,8 +848,8 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
                   color: '#fff',
                   fontSize: 12,
                   whiteSpace: 'nowrap',
-                  textShadow: '0 1px 3px rgba(0,0,0,0.8)',
-                  background: 'rgba(0,0,0,0.6)',
+                  textShadow: '0 1px 3px ${SF.overlayDarkExtraHeavy}',
+                  background: SF.overlayDarkStrong,
                   padding: '4px 12px',
                   borderRadius: 12
                 }}>
@@ -949,7 +950,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
                 position: 'absolute',
                 bottom: 4,
                 left: 4,
-                background: 'rgba(0,0,0,0.7)',
+                background: SF.overlayDarkHeavy,
                 color: '#fff',
                 padding: '2px 8px',
                 borderRadius: 4,
@@ -1012,7 +1013,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
       {/* Footer avec boutons */}
       <div style={{
         padding: '16px',
-        background: 'linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.7))',
+        background: 'linear-gradient(to top, ${SF.overlayDarkNearOpaque}, ${SF.overlayDarkHeavy})',
         display: 'flex',
         gap: 12
       }}>

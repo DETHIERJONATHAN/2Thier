@@ -9,6 +9,7 @@ import DOMPurify from 'dompurify';
 import { Modal, Button, Space, Row, Col, Card, Tooltip, message } from 'antd';
 import { SwapOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { ALL_THEMES, DocumentTheme } from './DocumentThemes';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 interface ThemeSelectorProps {
   currentThemeId?: string;
@@ -116,7 +117,7 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({
                       transform: 'translate(-50%, -50%)',
                       fontSize: '32px',
                       color: '#fff',
-                      textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                      textShadow: '0 2px 4px ${SF.overlayDark}',
                     }}
                   >
                     <CheckCircleOutlined />

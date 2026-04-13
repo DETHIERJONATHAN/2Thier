@@ -198,7 +198,7 @@ const FormulaireRemplissage: React.FC<FormulaireRemplissageProps> = ({ formDefin
             key={section.id}
             className={`bg-gray-50 border rounded p-4 mb-6 transition-colors duration-200 ${sectionValid ? 'border-green-500 bg-green-50' : ''}`}
           >
-            <div className="flex justify-between items-center mb-2 cursor-pointer select-none" onClick={() => toggleSection(section.id)}>
+            <div className="flex justify-between items-center mb-2 cursor-pointer select-none" role="button" tabIndex={0} onClick={() => toggleSection(section.id)}>
               <div className="flex items-center gap-2">
                 <span className="badge badge-outline mr-2">{section.sectionType}</span>
                 <span className="font-bold">{section.title}</span>
@@ -417,7 +417,7 @@ const FormulaireRemplissage: React.FC<FormulaireRemplissageProps> = ({ formDefin
                           firstFormula && firstFormula.formula && (
                             <div className="text-xs text-red-600 mt-1">
                               <b>Erreur dans la formule :</b> champ inconnu ou syntaxe invalide<br />
-                              <span className="underline cursor-pointer text-blue-700 hover:text-blue-900" onClick={() => window && window.scrollTo && window.scrollTo({top:0, behavior:'smooth'})}>
+                              <span className="underline cursor-pointer text-blue-700 hover:text-blue-900" role="button" tabIndex={0} onClick={() => window && window.scrollTo && window.scrollTo({top:0, behavior:'smooth'})}>
                                 Corriger la formule dans l’onglet « Formule »
                               </span>
                             </div>

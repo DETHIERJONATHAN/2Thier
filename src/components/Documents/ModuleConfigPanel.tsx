@@ -415,7 +415,7 @@ const ModuleConfigPanel = ({
                         {cat.icons.map((icon) => (
                           <div
                             key={icon}
-                            onClick={() => selectIcon(icon)}
+                            role="button" tabIndex={0} onClick={() => selectIcon(icon)}
                             style={{
                               width: '32px',
                               height: '32px',
@@ -608,7 +608,7 @@ const ModuleConfigPanel = ({
             {variables.map(v => (
               <div
                 key={v.key}
-                onClick={() => selectPredefinedVar(v.key)}
+                role="button" tabIndex={0} onClick={() => selectPredefinedVar(v.key)}
                 style={{
                   padding: '8px 12px',
                   cursor: 'pointer',
@@ -926,7 +926,7 @@ const ModuleConfigPanel = ({
             {moduleDef.themes.map((theme) => (
               <div
                 key={theme.id}
-                onClick={() => handleThemeChange(theme.id)}
+                role="button" tabIndex={0} onClick={() => handleThemeChange(theme.id)}
                 style={{
                   padding: '8px 12px',
                   borderRadius: '6px',

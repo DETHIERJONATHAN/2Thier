@@ -1,4 +1,5 @@
 import { Card, Empty } from 'antd';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 interface PDFPreviewProps {
   sections: unknown[];
@@ -87,7 +88,7 @@ const PDFPreview = ({ sections, theme }: PDFPreviewProps) => {
               color: themeStyles.primaryColor,
               fontFamily: themeStyles.fontFamily,
               margin: '20px 0',
-              textShadow: config.backgroundImage ? '2px 2px 4px rgba(0,0,0,0.3)' : 'none',
+              textShadow: config.backgroundImage ? '2px 2px 4px ${SF.overlayDark}' : 'none',
               wordBreak: 'break-word',
               maxWidth: '90%'
             }}>
@@ -100,7 +101,7 @@ const PDFPreview = ({ sections, theme }: PDFPreviewProps) => {
                 fontSize: '22px', 
                 color: config.backgroundImage ? '#ffffff' : themeStyles.textColor,
                 fontFamily: themeStyles.fontFamily,
-                textShadow: config.backgroundImage ? '1px 1px 3px rgba(0,0,0,0.5)' : 'none',
+                textShadow: config.backgroundImage ? '1px 1px 3px ${SF.overlayDarkMd}' : 'none',
                 margin: '10px 0',
                 maxWidth: '80%'
               }}>
@@ -354,7 +355,7 @@ const PDFPreview = ({ sections, theme }: PDFPreviewProps) => {
             minHeight: '297mm',
             margin: '0 auto 20px auto',
             backgroundColor: '#ffffff',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            boxShadow: '0 4px 12px ${SF.overlayDark}',
             overflow: 'hidden',
             pageBreakAfter: 'always'
           }}

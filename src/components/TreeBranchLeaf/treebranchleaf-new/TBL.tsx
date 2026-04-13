@@ -419,7 +419,7 @@ const TBL: React.FC = () => {
                         ? 'bg-blue-50 text-blue-600 border border-blue-200' 
                         : 'hover:bg-gray-50'
                     }`}
-                    onClick={() => setActiveTab(tab.key)}
+                    role="button" tabIndex={0} onClick={() => setActiveTab(tab.key)}
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{tab.label}</span>

@@ -115,7 +115,7 @@ const DebugAuth: React.FC = React.memo(() => {
     <Card 
       className="mt-8 shadow-xl border-0"
       style={{
-        background: 'rgba(255, 255, 255, 0.95)',
+        background: SF.overlayLightNearOpaque,
         backdropFilter: 'blur(20px)',
         borderRadius: '24px',
         overflow: 'hidden',

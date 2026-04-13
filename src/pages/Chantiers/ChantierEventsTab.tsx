@@ -708,7 +708,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                             return (
                               <div
                                 key={hour}
-                                onClick={() => {
+                                role="button" tabIndex={0} onClick={() => {
                                   const date = agendaDate.hour(hour).minute(0).second(0);
                                   form.setFieldsValue({
                                     dateRange: [date, date.add(1, 'hour')],
@@ -777,7 +777,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                               return (
                                 <div
                                   key={d.format('YYYY-MM-DD')}
-                                  onClick={() => { setAgendaDate(d); setAgendaView('day'); }}
+                                  role="button" tabIndex={0} onClick={() => { setAgendaDate(d); setAgendaView('day'); }}
                                   style={{
                                     flex: 1, textAlign: 'center', padding: '4px 2px', fontSize: 10, cursor: 'pointer',
                                     fontWeight: isToday ? 700 : 400,
@@ -811,7 +811,7 @@ const ChantierEventsTab: React.FC<Props> = ({ chantierId, chantierAddress, chant
                                   return (
                                     <div
                                       key={dayStr}
-                                      onClick={() => {
+                                      role="button" tabIndex={0} onClick={() => {
                                         const date = d.hour(hour).minute(0).second(0);
                                         form.setFieldsValue({ dateRange: [date, date.add(1, 'hour')] });
                                         setAgendaDate(d);

@@ -1,8 +1,8 @@
-import { FB } from '../../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { Spin, message } from 'antd';
+import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
 import {
   BankOutlined,
   SaveOutlined,
@@ -41,14 +41,14 @@ const FBToggle: React.FC<{
   const s = size === 'small';
   const w = s ? 36 : 44; const h = s ? 20 : 24; const d = s ? 16 : 20; const p = 2;
   return (
-    <div onClick={() => onChange(!checked)} style={{
+    <div role="button" tabIndex={0} onClick={() => onChange(!checked)} style={{
       width: w, height: h, borderRadius: h, background: checked ? FB.blue : '#bec3c9',
       cursor: 'pointer', position: 'relative', transition: 'background 0.25s', flexShrink: 0,
     }}>
       <div style={{
         position: 'absolute', top: p, left: checked ? w - d - p : p,
         width: d, height: d, borderRadius: '50%', background: FB.white,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transition: 'left 0.25s',
+        boxShadow: '0 1px 3px ${SF.overlayDark}', transition: 'left 0.25s',
       }} />
     </div>
   );
@@ -134,7 +134,7 @@ const GoogleWorkspaceSection: React.FC<{ organizationId: string }> = ({ organiza
       {config && (
         <>
           <FBCard>
-            <div onClick={() => setExpandConfig(!expandConfig)} style={{
+            <div role="button" tabIndex={0} onClick={() => setExpandConfig(!expandConfig)} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -378,7 +378,7 @@ const OrganizationSettings: React.FC = () => {
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               overflow: 'hidden', cursor: isAdmin ? 'pointer' : 'default',
             }}
-            onClick={() => isAdmin && logoInputRef.current?.click()}
+            role="button" tabIndex={0} onClick={() => isAdmin && logoInputRef.current?.click()}
             title={isAdmin ? 'Cliquer pour changer le logo' : undefined}
           >
             {orgLogo ? (
@@ -389,7 +389,7 @@ const OrganizationSettings: React.FC = () => {
             {isAdmin && (
               <div style={{
                 position: 'absolute', inset: 0, borderRadius: '50%',
-                background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: SF.overlayDarkMedium, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 opacity: 0, transition: 'opacity 0.2s',
               }}
               onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}

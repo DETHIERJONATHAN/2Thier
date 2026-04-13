@@ -469,11 +469,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
         padding: '8px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: SF.gradientOverlayTop,
       }}>
-        <span onClick={() => showSaved && setShowSaved(false)} style={{ fontSize: 18, fontWeight: 800, color: SF.textLight, letterSpacing: -0.5, cursor: showSaved ? 'pointer' : 'default' }}>
+        <span role="button" tabIndex={0} onClick={() => showSaved && setShowSaved(false)} style={{ fontSize: 18, fontWeight: 800, color: SF.textLight, letterSpacing: -0.5, cursor: showSaved ? 'pointer' : 'default' }}>
           {showSaved ? '← Reels' : '🎬 Reels'}
         </span>
         <div style={{ display: 'flex', gap: 8 }}>
-          <div onClick={() => setShowSaved(!showSaved)} style={{
+          <div role="button" tabIndex={0} onClick={() => setShowSaved(!showSaved)} style={{
             width: 32, height: 32, borderRadius: '50%',
             background: showSaved ? SF.primary : SF.overlayLight,
             display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -481,7 +481,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             {showSaved ? <BookFilled style={{ color: SF.gold, fontSize: 16 }} /> : <BookOutlined style={{ color: SF.textLight, fontSize: 16 }} />}
           </div>
           {!showSaved && (
-            <div onClick={openCreateModal} style={{
+            <div role="button" tabIndex={0} onClick={openCreateModal} style={{
               width: 32, height: 32, borderRadius: '50%', background: SF.overlayLight,
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
             }}>
@@ -510,7 +510,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
                 {savedReels.map(reel => (
                   <div key={reel.id}
-                    onClick={() => {
+                    role="button" tabIndex={0} onClick={() => {
                       const idx = reels.findIndex(r => r.id === reel.id);
                       if (idx >= 0) { setActiveIndex(idx); setShowSaved(false); }
                     }}
@@ -536,7 +536,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                     }}>
                       <span style={{ fontSize: 10, color: SF.textLight }}>❤️ {reel.likesCount}</span>
                     </div>
-                    <div onClick={(e) => { e.stopPropagation(); handleSaveReel(reel.id); }}
+                    <div role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); handleSaveReel(reel.id); }}
                       style={{ position: 'absolute', top: 4, right: 4, cursor: 'pointer' }}>
                       <BookFilled style={{ fontSize: 14, color: SF.gold }} />
                     </div>
@@ -561,7 +561,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             {t('reels.beFirstToPost')}
           </div>
           <div
-            onClick={openCreateModal}
+            role="button" tabIndex={0} onClick={openCreateModal}
             style={{
               padding: '10px 28px', borderRadius: 24,
               background: SF.gradientAccent,
@@ -589,7 +589,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
             background: SF.dark,
           }}>
             {/* Media — always video — with double-tap to like */}
-            <div onClick={() => handleDoubleTap(reel.id)} style={{ width: '100%', height: '100%', position: 'relative' }}>
+            <div role="button" tabIndex={0} onClick={() => handleDoubleTap(reel.id)} style={{ width: '100%', height: '100%', position: 'relative' }}>
               <HeartBurstOverlay visible={heartAnimId === reel.id} />
             {reel.mediaUrl ? (
               <video
@@ -601,7 +601,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               />
             ) : (
               /* Fallback if video URL is missing */
-              <div onClick={(e) => { e.stopPropagation(); togglePause(); }} style={{
+              <div role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); togglePause(); }} style={{
                 width: '100%', height: '100%', cursor: 'pointer',
                 background: SF.gradientFull,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -636,7 +636,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                   onClick={(e) => { e.stopPropagation(); if (reel.authorId) navigate(`/profile/${reel.authorId}`); }}
                   style={{ border: `2px solid ${SF.textLight}`, background: SF.primary, cursor: 'pointer' }} />
                 {reel.authorId && reel.authorId !== currentUser?.id && (
-                  <div onClick={(e) => { e.stopPropagation(); handleFollow(reel.authorId, reel.authorName); }}
+                  <div role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); handleFollow(reel.authorId, reel.authorName); }}
                     style={{
                       position: 'absolute', bottom: -6, left: '50%', transform: 'translateX(-50%)',
                       width: 20, height: 20, borderRadius: '50%',
@@ -651,7 +651,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               </div>
 
               {/* Like */}
-              <div onClick={() => toggleLike(index)} style={{ cursor: 'pointer', textAlign: 'center' }}>
+              <div role="button" tabIndex={0} onClick={() => toggleLike(index)} style={{ cursor: 'pointer', textAlign: 'center' }}>
                 {reel.isLiked ? (
                   <HeartFilled style={{ fontSize: 28, color: SF.like }} />
                 ) : (
@@ -663,7 +663,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               </div>
 
               {/* Comment */}
-              <div onClick={() => openComments(reel.id)} style={{ cursor: 'pointer', textAlign: 'center' }}>
+              <div role="button" tabIndex={0} onClick={() => openComments(reel.id)} style={{ cursor: 'pointer', textAlign: 'center' }}>
                 <MessageOutlined style={{ fontSize: 26, color: SF.textLight }} />
                 <div style={{ fontSize: 11, color: SF.textLight, fontWeight: 600, marginTop: 2 }}>
                   {reel.commentsCount}
@@ -671,7 +671,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               </div>
 
               {/* Share */}
-              <div onClick={() => handleShare(reel)} style={{ cursor: 'pointer', textAlign: 'center' }}>
+              <div role="button" tabIndex={0} onClick={() => handleShare(reel)} style={{ cursor: 'pointer', textAlign: 'center' }}>
                 <ShareAltOutlined style={{ fontSize: 26, color: SF.textLight }} />
                 <div style={{ fontSize: 11, color: SF.textLight, fontWeight: 600, marginTop: 2 }}>
                   {t('common.share')}
@@ -680,14 +680,14 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
 
               {/* DM / Whisper */}
               {reel.authorId && reel.authorId !== currentUser?.id && (
-                <div onClick={() => handleSendDM(reel.authorId)} style={{ cursor: 'pointer', textAlign: 'center' }}>
+                <div role="button" tabIndex={0} onClick={() => handleSendDM(reel.authorId)} style={{ cursor: 'pointer', textAlign: 'center' }}>
                   <SendOutlined style={{ fontSize: 24, color: SF.textLight }} />
                   <div style={{ fontSize: 11, color: SF.textLight, fontWeight: 600, marginTop: 2 }}>DM</div>
                 </div>
               )}
 
               {/* Save/Bookmark */}
-              <div onClick={() => handleSaveReel(reel.id)} style={{ cursor: 'pointer', textAlign: 'center' }}>
+              <div role="button" tabIndex={0} onClick={() => handleSaveReel(reel.id)} style={{ cursor: 'pointer', textAlign: 'center' }}>
                 {savedSet.has(reel.id) ? (
                   <BookFilled style={{ fontSize: 26, color: SF.gold }} />
                 ) : (
@@ -700,13 +700,13 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
 
               {/* Delete (own posts or admin) */}
               {!['d1','d2','d3'].includes(reel.id) && (currentUser?.id === reel.authorId || currentUser?.isSuperAdmin || currentUser?.role === 'admin') && (
-                <div onClick={() => setDeleteConfirmId(reel.id)} style={{ cursor: 'pointer', textAlign: 'center' }}>
+                <div role="button" tabIndex={0} onClick={() => setDeleteConfirmId(reel.id)} style={{ cursor: 'pointer', textAlign: 'center' }}>
                   <DeleteOutlined style={{ fontSize: 22, color: SF.textLightDimmed }} />
                 </div>
               )}
 
               {/* Mute toggle */}
-              <div onClick={() => setMuted(!muted)} style={{ cursor: 'pointer' }}>
+              <div role="button" tabIndex={0} onClick={() => setMuted(!muted)} style={{ cursor: 'pointer' }}>
                 {muted ? (
                   <div style={{
                     width: 32, height: 32, borderRadius: '50%', background: SF.overlayLighter,
@@ -737,7 +737,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                   @{reel.authorName.replace(/\s+/g, '').toLowerCase()}
                 </span>
                 <span
-                  onClick={(e) => { e.stopPropagation(); handleFollow(reel.authorId, reel.authorName); }}
+                  role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); handleFollow(reel.authorId, reel.authorName); }}
                   style={{
                   fontSize: 10, padding: '1px 6px', borderRadius: 4,
                   background: followedSet.has(reel.authorId) ? SF.textMuted : SF.primary,
@@ -847,7 +847,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
           {/* Zone de sélection de fichier */}
           {!reelPreview ? (
             <div
-              onClick={() => fileInputRef.current?.click()}
+              role="button" tabIndex={0} onClick={() => fileInputRef.current?.click()}
               style={{
                 border: `2px dashed ${SF.primary}`,
                 borderRadius: 16,
@@ -877,7 +877,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                 muted
               />
               <div
-                onClick={removeSelectedFile}
+                role="button" tabIndex={0} onClick={removeSelectedFile}
                 style={{
                   position: 'absolute', top: 8, right: 8,
                   width: 28, height: 28, borderRadius: '50%',
@@ -918,7 +918,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               const opt = labels[v];
               const active = reelVisibility === v;
               return (
-                <div key={v} onClick={() => setReelVisibility(v)} style={{
+                <div key={v} role="button" tabIndex={0} onClick={() => setReelVisibility(v)} style={{
                   display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px',
                   borderRadius: 16, cursor: 'pointer', fontSize: 12, fontWeight: 600,
                   background: active ? SF.overlayLight : SF.overlayLightFaint,
@@ -934,7 +934,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
 
           {/* Bouton publier */}
           <div
-            onClick={handlePublishReel}
+            role="button" tabIndex={0} onClick={handlePublishReel}
             style={{
               marginTop: 16,
               padding: '12px 24px',
@@ -1002,11 +1002,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                   {/* Actions */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingLeft: 4, marginTop: 4 }}>
                     <span style={{ fontSize: 11, color: SF.textPlaceholder }}>{timeAgo(c.createdAt)}</span>
-                    <span onClick={() => handleCommentLike(c.id)}
+                    <span role="button" tabIndex={0} onClick={() => handleCommentLike(c.id)}
                       style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer', color: likedComments.has(c.id) ? SF.dangerAlt : SF.textTertiary }}>
                       {likedComments.has(c.id) ? '❤️ ' + t('common.liked') : t('common.like')}
                     </span>
-                    <span onClick={() => { setReplyingTo(replyingTo === c.id ? null : c.id); setReplyText(''); }}
+                    <span role="button" tabIndex={0} onClick={() => { setReplyingTo(replyingTo === c.id ? null : c.id); setReplyText(''); }}
                       style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer', color: SF.textTertiary }}>
                       {t('common.reply')}
                     </span>
@@ -1033,7 +1033,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 4, marginTop: 2 }}>
                               <span style={{ fontSize: 10, color: SF.textPlaceholder }}>{timeAgo(reply.createdAt)}</span>
-                              <span onClick={() => handleCommentLike(reply.id)}
+                              <span role="button" tabIndex={0} onClick={() => handleCommentLike(reply.id)}
                                 style={{ fontSize: 11, fontWeight: 600, cursor: 'pointer', color: likedComments.has(reply.id) ? SF.dangerAlt : SF.textTertiary }}>
                                 {likedComments.has(reply.id) ? '❤️' : t('common.like')}
                               </span>
@@ -1061,7 +1061,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
                           style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 13 }}
                           autoFocus
                         />
-                        <div onClick={() => handlePostComment(c.id)}
+                        <div role="button" tabIndex={0} onClick={() => handlePostComment(c.id)}
                           style={{ cursor: replyText.trim() ? 'pointer' : 'default', color: replyText.trim() ? SF.primary : SF.textPlaceholder, padding: '0 4px' }}>
                           <SendOutlined style={{ fontSize: 14 }} />
                         </div>
@@ -1094,7 +1094,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               placeholder={t('reels.dropABuzz')}
               style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 14 }}
             />
-            <div onClick={() => handlePostComment()}
+            <div role="button" tabIndex={0} onClick={() => handlePostComment()}
               style={{ cursor: commentText.trim() ? 'pointer' : 'default', color: commentText.trim() ? SF.primary : SF.textPlaceholder, padding: '0 4px' }}>
               <SendOutlined style={{ fontSize: 16 }} />
             </div>
@@ -1117,11 +1117,11 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
           <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{t('reels.deleteReel')}</div>
           <div style={{ fontSize: 13, color: SF.textSecondary, marginBottom: 20 }}>{t('reels.irreversible')}</div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <div onClick={() => setDeleteConfirmId(null)}
+            <div role="button" tabIndex={0} onClick={() => setDeleteConfirmId(null)}
               style={{ flex: 1, padding: '10px 0', borderRadius: 8, background: SF.bgLight, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
               {t('common.cancel')}
             </div>
-            <div onClick={async () => { if (deleteConfirmId) { await handleDeleteReel(deleteConfirmId); setDeleteConfirmId(null); } }}
+            <div role="button" tabIndex={0} onClick={async () => { if (deleteConfirmId) { await handleDeleteReel(deleteConfirmId); setDeleteConfirmId(null); } }}
               style={{ flex: 1, padding: '10px 0', borderRadius: 8, background: SF.danger, color: SF.textLight, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
               {t('common.delete')}
             </div>
@@ -1132,7 +1132,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       {/* Share bottom sheet - 100% mobile */}
       {shareSheetOpen && (
         <>
-          <div onClick={() => setShareSheetOpen(false)}
+          <div role="button" tabIndex={0} onClick={() => setShareSheetOpen(false)}
             style={{ position: 'absolute', inset: 0, background: SF.overlayDarkMd, zIndex: 50 }} />
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 51,
@@ -1146,33 +1146,33 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
 
               {/* Share options grid */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: '0 16px', marginBottom: 16 }}>
-                <div onClick={handleRepost} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
+                <div role="button" tabIndex={0} onClick={handleRepost} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
                   <div style={{ width: 52, height: 52, borderRadius: '50%', background: SF.bgGreenTint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <RetweetOutlined style={{ fontSize: 22, color: SF.successMd }} />
                   </div>
                   <span style={{ fontSize: 11, color: SF.textDark, textAlign: 'center' }}>{t('reels.rebuzz')}</span>
                 </div>
-                <div onClick={handleSendReel} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
+                <div role="button" tabIndex={0} onClick={handleSendReel} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
                   <div style={{ width: 52, height: 52, borderRadius: '50%', background: SF.bgBlueTint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <SendOutlined style={{ fontSize: 22, color: SF.infoAlt }} />
                   </div>
                   <span style={{ fontSize: 11, color: SF.textDark, textAlign: 'center' }}>{t('common.send')}</span>
                 </div>
-                <div onClick={() => { if (shareReel) handleSaveReel(shareReel.id); setShareSheetOpen(false); }}
+                <div role="button" tabIndex={0} onClick={() => { if (shareReel) handleSaveReel(shareReel.id); setShareSheetOpen(false); }}
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
                   <div style={{ width: 52, height: 52, borderRadius: '50%', background: SF.bgDangerTint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <BookOutlined style={{ fontSize: 22, color: SF.orange }} />
                   </div>
                   <span style={{ fontSize: 11, color: SF.textDark, textAlign: 'center' }}>{t('reels.saveReel')}</span>
                 </div>
-                <div onClick={handleCopyLink} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
+                <div role="button" tabIndex={0} onClick={handleCopyLink} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', padding: 8 }}>
                   <div style={{ width: 52, height: 52, borderRadius: '50%', background: SF.bgPurpleTint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <CopyOutlined style={{ fontSize: 22, color: SF.purple }} />
                   </div>
                   <span style={{ fontSize: 11, color: SF.textDark, textAlign: 'center' }}>{t('reels.copyLink')}</span>
                 </div>
                 {isAppEnabled('hiveLive') && shareReel?.authorId === currentUser?.id && (
-                  <div onClick={() => {
+                  <div role="button" tabIndex={0} onClick={() => {
                     setHiveLiveTitle(shareReel?.caption?.substring(0, 100) || '');
                     setHiveLiveModalOpen(true);
                     setShareSheetOpen(false);
@@ -1186,7 +1186,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
               </div>
 
               {/* Cancel */}
-              <div onClick={() => setShareSheetOpen(false)}
+              <div role="button" tabIndex={0} onClick={() => setShareSheetOpen(false)}
                 style={{ textAlign: 'center', padding: '12px 16px', borderTop: `1px solid ${SF.borderLighter}`, fontSize: 15, fontWeight: 600, color: SF.textPlaceholder, cursor: 'pointer' }}>
                 {t('common.cancel')}
               </div>
@@ -1198,7 +1198,7 @@ const ReelsPanel: React.FC<ReelsPanelProps> = ({ api, currentUser }) => {
       {/* 🐝 Hive Live modal */}
       {hiveLiveModalOpen && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div onClick={() => { setHiveLiveModalOpen(false); setHiveLiveTitle(''); }}
+          <div role="button" tabIndex={0} onClick={() => { setHiveLiveModalOpen(false); setHiveLiveTitle(''); }}
             style={{ position: 'absolute', inset: 0, background: SF.overlayDarkStrong }} />
           <div style={{
             position: 'relative', zIndex: 61, background: SF.cardBg, borderRadius: 16,

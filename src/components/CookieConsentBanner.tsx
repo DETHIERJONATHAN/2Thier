@@ -57,7 +57,7 @@ const CookieConsentBanner: React.FC = () => {
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 12,
-        boxShadow: '0 -2px 12px rgba(0,0,0,0.3)',
+        boxShadow: '0 -2px 12px ${SF.overlayDark}',
       }}
     >
       <div style={{ flex: 1, minWidth: 250, color: SF.text, fontSize: 14 }}>

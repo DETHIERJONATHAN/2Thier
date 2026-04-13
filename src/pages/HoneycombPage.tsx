@@ -134,7 +134,7 @@ const FeedCard: React.FC<{
       <div style={{ padding: '8px 0', flex: 1 }}>
         {hasError && !hasItems && (
           <div
-            onClick={() => onOpenUrl(feed.url, ext)}
+            role="button" tabIndex={0} onClick={() => onOpenUrl(feed.url, ext)}
             style={{
               cursor: 'pointer',
               transition: 'background 0.15s',
@@ -189,7 +189,7 @@ const FeedCard: React.FC<{
               return (
                 <div
                   key={idx}
-                  onClick={() => onOpenUrl(resolveLink(item.link), ext)}
+                  role="button" tabIndex={0} onClick={() => onOpenUrl(resolveLink(item.link), ext)}
                   style={{
                     cursor: 'pointer',
                     transition: 'background 0.15s',
@@ -260,7 +260,7 @@ const FeedCard: React.FC<{
             return (
             <div
               key={idx}
-              onClick={() => onOpenUrl(resolveLink(item.link), ext)}
+              role="button" tabIndex={0} onClick={() => onOpenUrl(resolveLink(item.link), ext)}
               style={{
                 display: 'flex',
                 padding: '8px 16px',
@@ -346,7 +346,7 @@ const FeedCard: React.FC<{
 
       {/* Footer: open site */}
       <div
-        onClick={() => onOpenUrl(feed.url, ext)}
+        role="button" tabIndex={0} onClick={() => onOpenUrl(feed.url, ext)}
         style={{
           display: 'flex',
           alignItems: 'center',

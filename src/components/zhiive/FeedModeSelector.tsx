@@ -29,7 +29,7 @@ const FeedModeSelector: React.FC = () => {
         return (
           <div
             key={m.key}
-            onClick={() => setFeedMode(m.key)}
+            role="button" tabIndex={0} onClick={() => setFeedMode(m.key)}
             style={{
               display: 'flex', alignItems: 'center', gap: 4,
               padding: '4px 12px', borderRadius: 16,

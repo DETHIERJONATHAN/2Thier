@@ -1,4 +1,3 @@
-import { FB } from '../../components/zhiive/ZhiiveTheme';
 /**
  * Page d'administration des sites web
  * Permet de gérer tous les sites (Site Vitrine 2Thier, Devis1Minute, etc.)
@@ -42,6 +41,7 @@ import { NoCodeBuilder } from '../../site'; // 🔥 NOUVEAU SYSTÈME UNIVERSEL
 import ThemeManager from '../../components/websites/ThemeManager';
 import CloudRunDomainSelector from '../../components/websites/CloudRunDomainSelector';
 import { useTranslation } from 'react-i18next';
+import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -51,7 +51,7 @@ const FBToggle = React.forwardRef<HTMLDivElement, { checked?: boolean; onChange?
   ({ checked = false, onChange, disabled }, ref) => {
     const w = 44, h = 24, dot = 20;
     return (
-      <div ref={ref} onClick={() => !disabled && onChange?.(!checked)} style={{
+      <div ref={ref} role="button" tabIndex={0} onClick={() => !disabled && onChange?.(!checked)} style={{
         width: w, height: h, borderRadius: h,
         background: disabled ? '#ccc' : checked ? FB.blue : '#ccc',
         cursor: disabled ? 'not-allowed' : 'pointer',
@@ -62,7 +62,7 @@ const FBToggle = React.forwardRef<HTMLDivElement, { checked?: boolean; onChange?
           width: dot, height: dot, borderRadius: '50%', background: FB.white,
           position: 'absolute', top: (h - dot) / 2,
           left: checked ? w - dot - (h - dot) / 2 : (h - dot) / 2,
-          transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+          transition: 'left 0.2s', boxShadow: '0 1px 3px ${SF.overlayDark}',
         }} />
       </div>
     );

@@ -68,6 +68,7 @@ import { useAuth } from '../../auth/useAuth';
 import { useTeams } from '../../hooks/useTeams';
 import type { Chantier, ChantierStatus, Team, Technician } from '../../types/chantier';
 import { useTranslation } from 'react-i18next';
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 
 // ─── Configuration MultiBackend ───
 const HTML5toTouch = {
@@ -297,7 +298,7 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
         touchAction: 'auto',
         userSelect: 'none',
       }}
-      onClick={() => !isDragging && onView()}
+      role="button" tabIndex={0} onClick={() => !isDragging && onView()}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -361,7 +362,7 @@ const ChantierCard: React.FC<ChantierCardProps> = ({ chantier, onView, onViewCom
             <Tooltip title={`Factures: ${chantier._invoiceSummary.paid}/${chantier._invoiceSummary.total} payées${chantier._invoiceSummary.overdue > 0 ? ` — ${chantier._invoiceSummary.overdue} en retard !` : ''}${chantier._invoiceSummary.totalAmount > 0 ? `\n${chantier._invoiceSummary.paidAmount.toLocaleString('fr-BE')} / ${chantier._invoiceSummary.totalAmount.toLocaleString('fr-BE')} €` : ''}`}>
               <div
                 style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer' }}
-                onClick={(e) => { e.stopPropagation(); onViewCompta?.(); }}
+                role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); onViewCompta?.(); }}
               >
                 <FileTextOutlined style={{ fontSize: 10, color: chantier._invoiceSummary.overdue > 0 ? '#ff4d4f' : chantier._invoiceSummary.paid === chantier._invoiceSummary.total ? '#52c41a' : '#faad14' }} />
                 {/* Mini barre de progression */}
@@ -682,7 +683,7 @@ const TechnicianDragItem: React.FC<TechnicianDragItemProps> = ({ technician, isS
     <Tooltip title={<span style={{ whiteSpace: 'pre-line', fontSize: 11 }}>{tooltipLines}</span>} placement="right">
       <div
         ref={drag}
-        onClick={onClick}
+        role="button" tabIndex={0} onClick={onClick}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -786,9 +787,9 @@ const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, 
       >
         <div
           style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: team.color, flexShrink: 0 }}
-          onClick={(e) => { e.stopPropagation(); onClick(); }}
+          role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); onClick(); }}
         />
-        <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); onClick(); }}>
+        <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); onClick(); }}>
           <div style={{ fontWeight: 600, color: '#262626', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {team.name}
           </div>
@@ -818,7 +819,7 @@ const TeamDragItem: React.FC<TeamDragItemProps> = ({ team, isSelected, onClick, 
         <div style={{ padding: '4px 8px 4px 24px', fontSize: 10 }}>
           {team.Members.map(m => (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2, color: '#595959' }}>
-              <span style={{ cursor: onToggleLeader ? 'pointer' : 'default' }} onClick={() => onToggleLeader?.(m.id, m.role)} title={onToggleLeader ? (m.role === 'LEADER' ? 'Retirer chef' : 'Nommer chef') : undefined}>
+              <span style={{ cursor: onToggleLeader ? 'pointer' : 'default' }} role="button" tabIndex={0} onClick={() => onToggleLeader?.(m.id, m.role)} title={onToggleLeader ? (m.role === 'LEADER' ? 'Retirer chef' : 'Nommer chef') : undefined}>
                 {m.role === 'LEADER' ? '👑' : '🔧'}
               </span>
               <span style={{ flex: 1 }}>{m.Technician.firstName} {m.Technician.lastName}{m.Technician.type === 'SUBCONTRACTOR' ? ' 🏢' : ''}</span>
@@ -1284,7 +1285,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
         {isMobile && canSeeTeamPanel && (
           <Badge count={technicians.length} size="small" offset={[-2, 2]} style={{ backgroundColor: techPanelOpen ? '#1677ff' : '#8c8c8c' }}>
             <div
-              onClick={() => setTechPanelOpen(!techPanelOpen)}
+              role="button" tabIndex={0} onClick={() => setTechPanelOpen(!techPanelOpen)}
               style={{
                 width: 28, height: 28, borderRadius: '50%',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1302,7 +1303,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           {isMobile ? (
             /* Mobile: just the calendar icon, colored when active */
             <div
-              onClick={() => setDateDropdownOpen(!dateDropdownOpen)}
+              role="button" tabIndex={0} onClick={() => setDateDropdownOpen(!dateDropdownOpen)}
               style={{
                 width: 28, height: 28, borderRadius: '50%',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1414,7 +1415,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             `}</style>
             {/* Backdrop */}
             <div
-              onClick={() => setDateDropdownOpen(false)}
+              role="button" tabIndex={0} onClick={() => setDateDropdownOpen(false)}
               style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.25)' }}
             />
             {/* Panel */}
@@ -1540,7 +1541,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                   <Tooltip key={product.value} title={`${product.label} (${product.count})`}>
                     <Badge count={product.count} size="small" offset={[-2, 2]} style={{ backgroundColor: isActive ? bgColor : '#bfbfbf' }}>
                       <div
-                        onClick={() => toggleProduct(product.value)}
+                        role="button" tabIndex={0} onClick={() => toggleProduct(product.value)}
                         style={{
                           width: 28, height: 28, borderRadius: '50%',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1558,7 +1559,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               })}
               {selectedProducts.size > 0 && (
                 <div
-                  onClick={() => setSelectedProducts(new Set())}
+                  role="button" tabIndex={0} onClick={() => setSelectedProducts(new Set())}
                   style={{
                     width: 22, height: 22, borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1672,7 +1673,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           {onSettings && canSeeSettings && (
             isMobile ? (
               <div
-                onClick={onSettings}
+                role="button" tabIndex={0} onClick={onSettings}
                 style={{
                   width: 28, height: 28, borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1699,11 +1700,11 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           {/* ═══ Backdrop overlay (mobile) ═══ */}
           {canSeeTeamPanel && techPanelOpen && (
             <div
-              onClick={() => setTechPanelOpen(false)}
+              role="button" tabIndex={0} onClick={() => setTechPanelOpen(false)}
               style={{
                 position: 'absolute',
                 inset: 0,
-                backgroundColor: 'rgba(0,0,0,0.3)',
+                backgroundColor: SF.overlayDark,
                 zIndex: 19,
                 transition: 'opacity 0.3s',
               }}
@@ -1725,7 +1726,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
             flexDirection: 'column',
             overflow: 'hidden',
             transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            boxShadow: techPanelOpen ? '4px 0 12px rgba(0,0,0,0.15)' : 'none',
+            boxShadow: techPanelOpen ? '4px 0 12px ${SF.overlayDarkLight}' : 'none',
           }}>
             {/* Close button inside panel */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
@@ -1917,7 +1918,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
           {/* ═══ Toggle tab on left edge (visible when panel closed) ═══ */}
           {canSeeTeamPanel && !techPanelOpen && (
             <div
-              onClick={() => setTechPanelOpen(true)}
+              role="button" tabIndex={0} onClick={() => setTechPanelOpen(true)}
               style={{
                 position: 'absolute',
                 left: 0,
@@ -1932,7 +1933,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                boxShadow: '2px 0 8px rgba(0,0,0,0.15)',
+                boxShadow: '2px 0 8px ${SF.overlayDarkLight}',
                 flexDirection: 'column',
                 gap: 2,
               }}
@@ -2046,7 +2047,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               {['#1677ff', '#52c41a', '#fa8c16', '#722ed1', '#f5222d', '#13c2c2', '#eb2f96', '#faad14'].map(c => (
                 <div
                   key={c}
-                  onClick={() => setNewTeamColor(c)}
+                  role="button" tabIndex={0} onClick={() => setNewTeamColor(c)}
                   style={{
                     width: 28,
                     height: 28,
@@ -2219,7 +2220,7 @@ const ChantierKanban: React.FC<ChantierKanbanProps> = ({ onViewChantier, onSetti
               {['#1677ff', '#52c41a', '#fa8c16', '#722ed1', '#f5222d', '#13c2c2', '#eb2f96', '#8c8c8c'].map(c => (
                 <div
                   key={c}
-                  onClick={() => setTechFormData(d => ({ ...d, color: c }))}
+                  role="button" tabIndex={0} onClick={() => setTechFormData(d => ({ ...d, color: c }))}
                   style={{
                     width: 24, height: 24, borderRadius: '50%', backgroundColor: c, cursor: 'pointer',
                     border: techFormData.color === c ? '3px solid #262626' : '2px solid transparent',

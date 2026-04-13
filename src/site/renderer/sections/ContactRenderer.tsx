@@ -12,6 +12,7 @@ import React from 'react';
 import { Row, Col, Typography, Card, Form, Input, Button, Space } from 'antd';
 import { MailOutlined, PhoneOutlined, EnvironmentOutlined, SendOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { SF } from '../../../components/zhiive/ZhiiveTheme';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -94,7 +95,7 @@ export const ContactRenderer: React.FC<ContactRendererProps> = ({ content }) => 
                 bordered={false} 
                 style={{ 
                   borderRadius: '16px',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
+                  boxShadow: '0 4px 20px ${SF.overlayDarkFaint}'
                 }}
               >
                 <Form layout="vertical" size="large">

@@ -220,7 +220,7 @@ export default function RegisterPage() {
                 {typeCards.map((card) => (
                   <div
                     key={card.value}
-                    onClick={() => setRegistrationType(card.value)}
+                    role="button" tabIndex={0} onClick={() => setRegistrationType(card.value)}
                     style={{
                       cursor: 'pointer',
                       textAlign: 'center',

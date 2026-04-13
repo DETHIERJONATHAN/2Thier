@@ -40,7 +40,7 @@ const InteractionBar: React.FC<InteractionBarProps> = ({
   onLike, onComment, onShare, onSave, onDM,
   variant = 'dark', showComment = true, showDM = true,
 }) => {
-  const textColor = variant === 'dark' ? 'rgba(255,255,255,0.7)' : SF.textSecondary;
+  const textColor = variant === 'dark' ? SF.textLightMuted : SF.textSecondary;
   const iconSize = 20;
 
   return (
@@ -101,7 +101,7 @@ const ActionItem: React.FC<{
   color: string;
   onClick: () => void;
 }> = ({ icon, label, color, onClick }) => (
-  <span onClick={onClick} style={{
+  <span role="button" tabIndex={0} onClick={onClick} style={{
     display: 'flex', alignItems: 'center', gap: 4,
     cursor: 'pointer', fontSize: 13, color, transition: 'color 0.15s',
   }}>

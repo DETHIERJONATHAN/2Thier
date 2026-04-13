@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import { Progress, Tag } from 'antd';
 import { useAuth } from '@/auth/useAuth';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 interface DashboardStat {
   id: string;
@@ -137,7 +138,7 @@ const OracleNewDashboard: React.FC = () => {
               bg-gradient-to-br ${stat.gradient}
               p-3
               text-white
-              shadow-[0_12px_30px_rgba(255,255,255,0.2)]
+              shadow-[0_12px_30px_${SF.overlayLight}]
             `}>
               {stat.icon}
             </div>
@@ -231,7 +232,7 @@ const OracleNewDashboard: React.FC = () => {
                 type="circle"
                 percent={activationRate}
                 strokeColor={{ from: '#38ef7d', to: '#11998e' }}
-                trailColor="rgba(255,255,255,0.1)"
+                trailColor="${SF.overlayLightSubtle}"
               />
               <p className="mt-3 text-sm text-white/60">
                 {activationRate >= 80

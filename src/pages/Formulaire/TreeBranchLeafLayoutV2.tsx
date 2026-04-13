@@ -204,7 +204,7 @@ const TreeStructure: React.FC<TreeStructureProps> = ({
             cursor: 'pointer',
             transition: 'all 0.2s ease',
           }}
-          onClick={() => setSelectedNode(node)}
+          role="button" tabIndex={0} onClick={() => setSelectedNode(node)}
           onMouseEnter={(e) => {
             if (!isSelected) {
               e.currentTarget.style.backgroundColor = '#f5f5f5';

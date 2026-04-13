@@ -656,7 +656,7 @@ const EffyFormRenderer: React.FC = () => {
               <div
                 key={option.value}
                 style={styles.optionCard(currentAnswer === option.value)}
-                onClick={() => handleOptionSelect(option.value)}
+                role="button" tabIndex={0} onClick={() => handleOptionSelect(option.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleOptionSelect(option.value)}
                 role="button"
                 tabIndex={0}

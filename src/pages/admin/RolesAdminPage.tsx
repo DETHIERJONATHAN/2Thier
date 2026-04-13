@@ -1,4 +1,3 @@
-import { FB } from '../../components/zhiive/ZhiiveTheme';
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Table, Modal, Form, Input, Select, Tag, Alert, Badge, Spin } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined, AppstoreOutlined, CheckCircleOutlined, CrownOutlined, TagsOutlined } from '@ant-design/icons';
@@ -6,6 +5,7 @@ import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { NotificationManager } from '../../components/Notifications';
 import { useTranslation } from 'react-i18next';
+import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
 
 // ── Facebook Design Tokens ──
 // ── FBToggle (identique à UsersAdminPageNew) ──
@@ -17,7 +17,7 @@ const FBToggle = ({ checked, onChange, disabled, size = 'default' }: {
   const dot = size === 'small' ? 16 : 20;
   return (
     <div
-      onClick={(e) => { e.stopPropagation(); !disabled && onChange(!checked); }}
+      role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); !disabled && onChange(!checked); }}
       style={{
         width: w, height: h, borderRadius: h,
         background: disabled ? '#ccc' : checked ? FB.blue : '#ccc',
@@ -30,7 +30,7 @@ const FBToggle = ({ checked, onChange, disabled, size = 'default' }: {
         width: dot, height: dot, borderRadius: '50%', background: FB.white,
         position: 'absolute', top: (h - dot) / 2,
         left: checked ? w - dot - (h - dot) / 2 : (h - dot) / 2,
-        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        transition: 'left 0.2s', boxShadow: '0 1px 3px ${SF.overlayDark}',
       }} />
     </div>
   );
@@ -430,7 +430,7 @@ function ModulesModal({ role, open, onClose }: { role: Role; open: boolean; onCl
                   justifyContent: 'space-between',
                   padding: isMobile ? '8px 10px' : '10px 16px',
                   cursor: hasActions && hasAccess ? 'pointer' : 'default',
-                }} onClick={() => hasActions && hasAccess && toggleExpand(mod.id)}>
+                }} role="button" tabIndex={0} onClick={() => hasActions && hasAccess && toggleExpand(mod.id)}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
                     {hasActions && hasAccess && (
                       <span style={{ fontSize: 10, color: '#8c8c8c', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>

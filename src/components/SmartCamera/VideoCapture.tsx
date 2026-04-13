@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons';
 import { CapturedPhoto } from './SmartCameraMobile';
 import type { CaptureMetadata } from './PhotoAnalyzer';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 const { Text } = Typography;
 
@@ -356,7 +357,7 @@ const VideoCapture: React.FC<VideoCaptureProps> = ({
         left: 0,
         right: 0,
         padding: 16,
-        background: 'linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)'
+        background: 'linear-gradient(to bottom, ${SF.overlayDarkHeavy}, transparent)'
       }}>
         <Space direction="vertical" style={{ width: '100%' }}>
           <Alert
@@ -406,7 +407,7 @@ const VideoCapture: React.FC<VideoCaptureProps> = ({
         }}>
           <svg viewBox="0 0 100 100">
             {/* Cercle de fond */}
-            <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="5"/>
+            <circle cx="50" cy="50" r="45" fill="none" stroke="${SF.overlayLight}" strokeWidth="5"/>
             
             {/* Segments couverts */}
             {anglesCovered.map((angle, idx) => {
@@ -445,7 +446,7 @@ const VideoCapture: React.FC<VideoCaptureProps> = ({
         left: 0,
         right: 0,
         padding: 20,
-        background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)',
+        background: 'linear-gradient(to top, ${SF.overlayDarkExtraHeavy}, transparent)',
         display: 'flex',
         justifyContent: 'space-around',
         alignItems: 'center'

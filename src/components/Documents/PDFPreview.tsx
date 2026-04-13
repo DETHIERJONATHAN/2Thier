@@ -1,5 +1,6 @@
 import { Empty } from 'antd';
 import { DocumentGlobalTheme } from '../Documents/DocumentGlobalThemeEditor';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 interface PDFPreviewProps {
   sections: unknown[];
@@ -78,9 +79,9 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
     switch (themeStyles.shadowIntensity) {
       case 'none': return 'none';
       case 'light': return '0 2px 6px rgba(0,0,0,0.05)';
-      case 'medium': return '0 4px 12px rgba(0,0,0,0.08)';
-      case 'strong': return '0 8px 24px rgba(0,0,0,0.15)';
-      default: return '0 4px 12px rgba(0,0,0,0.08)';
+      case 'medium': return '0 4px 12px ${SF.overlayDarkFaint}';
+      case 'strong': return '0 8px 24px ${SF.overlayDarkLight}';
+      default: return '0 4px 12px ${SF.overlayDarkFaint}';
     }
   };
 
@@ -192,7 +193,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
             titleLetterSpacing: '6px',
             subtitleSize: '28px',
             backgroundColor: '#000000',
-            textShadow: '4px 4px 8px rgba(0,0,0,0.3)',
+            textShadow: '4px 4px 8px ${SF.overlayDark}',
             dateStyle: { 
               backgroundColor: '#ffeb3b', 
               color: '#000', 
@@ -231,17 +232,17 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
             titleLetterSpacing: '3px',
             subtitleSize: '26px',
             backgroundColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            textShadow: '3px 3px 6px rgba(0,0,0,0.4)',
+            textShadow: '3px 3px 6px ${SF.overlayDarkMedium}',
             dateStyle: { 
-              backgroundColor: 'rgba(255,255,255,0.2)', 
+              backgroundColor: SF.overlayLight, 
               color: 'white', 
               borderRadius: '20px', 
               backdropFilter: 'blur(10px)',
               padding: '14px 28px',
               fontSize: '16px',
               fontWeight: '600',
-              border: '1px solid rgba(255,255,255,0.3)',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+              border: '1px solid ${SF.overlayLightActive}',
+              boxShadow: '0 4px 12px ${SF.overlayDarkSubtle}'
             }
           };
         default:
@@ -362,7 +363,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                       fontWeight: 600,
                       whiteSpace: 'nowrap',
                       pointerEvents: 'auto',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                      boxShadow: '0 2px 8px ${SF.overlayDarkLight}',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px'
@@ -411,7 +412,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                         border: '2px solid white',
                         borderRadius: '50%',
                         cursor: 'nwse-resize',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                        boxShadow: '0 2px 8px ${SF.overlayDarkSubtle}',
                         zIndex: 1001
                       }}
                     />
@@ -453,7 +454,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                 color: themeStyles.primaryColor,
                 fontFamily: themeStyles.fontFamily,
                 margin: section._interactive ? '0' : '30px 0',
-                textShadow: config.backgroundImage ? '3px 3px 6px rgba(0,0,0,0.4)' : (variantStyles.textShadow || 'none'),
+                textShadow: config.backgroundImage ? '3px 3px 6px ${SF.overlayDarkMedium}' : (variantStyles.textShadow || 'none'),
                 wordBreak: 'break-word',
                 maxWidth: '90%',
                 
@@ -493,7 +494,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                       fontWeight: 600,
                       whiteSpace: 'nowrap',
                       pointerEvents: 'none',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                      boxShadow: '0 2px 8px ${SF.overlayDarkLight}'
                     }}>
                       📝 Titre
                     </span>
@@ -517,7 +518,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                         display: 'flex',
                         alignItems: 'center',
                         gap: '4px',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                        boxShadow: '0 2px 8px ${SF.overlayDarkLight}'
                       }}
                       title="Masquer cet élément"
                     >
@@ -542,7 +543,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                       border: '2px solid white',
                       borderRadius: '50%',
                       cursor: 'ns-resize',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                      boxShadow: '0 2px 8px ${SF.overlayDarkSubtle}',
                       zIndex: 1001
                     }}
                   />
@@ -563,7 +564,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                   fontSize: variantStyles.subtitleSize || '24px', 
                   color: config.backgroundImage ? '#ffffff' : themeStyles.textColor,
                   fontFamily: themeStyles.fontFamily,
-                  textShadow: config.backgroundImage ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none',
+                  textShadow: config.backgroundImage ? '2px 2px 4px ${SF.overlayDarkMd}' : 'none',
                   margin: section._interactive ? '0' : '15px 0',
                   maxWidth: '80%',
                   fontWeight: '300',
@@ -603,7 +604,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                       fontWeight: 600,
                       whiteSpace: 'nowrap',
                       pointerEvents: 'none',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                      boxShadow: '0 2px 8px ${SF.overlayDarkLight}'
                     }}>
                       💬 Sous-titre
                     </span>
@@ -627,7 +628,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                         display: 'flex',
                         alignItems: 'center',
                         gap: '4px',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                        boxShadow: '0 2px 8px ${SF.overlayDarkLight}'
                       }}
                       title="Masquer cet élément"
                     >
@@ -694,7 +695,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                         fontWeight: 600,
                         whiteSpace: 'nowrap',
                         pointerEvents: 'none',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                        boxShadow: '0 2px 8px ${SF.overlayDarkLight}'
                       }}>
                         📅 Date
                       </span>
@@ -718,7 +719,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                           display: 'flex',
                           alignItems: 'center',
                           gap: '4px',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                          boxShadow: '0 2px 8px ${SF.overlayDarkLight}'
                         }}
                         title="Masquer cet élément"
                       >
@@ -743,7 +744,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                         border: '2px solid white',
                         borderRadius: '50%',
                         cursor: 'ns-resize',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                        boxShadow: '0 2px 8px ${SF.overlayDarkSubtle}',
                         zIndex: 1001
                       }}
                     />
@@ -851,7 +852,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
               borderCollapse: 'separate',
               borderSpacing: '0',
               marginBottom: '40px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              boxShadow: '0 4px 12px ${SF.overlayDarkFaint}',
               borderRadius: '8px',
               overflow: 'hidden'
             }}>
@@ -959,7 +960,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                        boxShadow: '0 4px 12px ${SF.overlayDarkLight}'
                       }}>
                         <span style={{ fontSize: '18px', fontWeight: 'bold', textTransform: 'uppercase' }}>TOTAL TTC</span>
                         <span style={{ fontSize: '26px', fontWeight: 'bold' }}>{totalTTC.toFixed(2)} €</span>
@@ -1406,7 +1407,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
             minHeight: '297mm',
             margin: '0 auto 20px auto',
             backgroundColor: '#ffffff',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            boxShadow: '0 8px 24px ${SF.overlayDarkMedium}',
             overflow: 'hidden',
             pageBreakAfter: 'always'
           }}

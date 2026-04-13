@@ -98,7 +98,7 @@ const NoCodeBuilderWithUniversalEditor: React.FC = () => {
         {sections.map(section => (
           <div
             key={section.id}
-            onClick={() => handleEditSection(section)}
+            role="button" tabIndex={0} onClick={() => handleEditSection(section)}
             style={{ cursor: 'pointer', border: '2px dashed #ccc', padding: 16, margin: 8 }}
           >
             <strong>{section.name}</strong> ({section.type})

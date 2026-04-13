@@ -65,7 +65,7 @@ const FBCard: React.FC<{
       <span style={{ fontSize: 17, fontWeight: 700, color: FB.text }}>{title}</span>
       {onEdit && (
         <span
-          onClick={onEdit}
+          role="button" tabIndex={0} onClick={onEdit}
           style={{
             width: 36, height: 36, borderRadius: '50%', display: 'inline-flex',
             alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -158,10 +158,10 @@ const PhotoCell: React.FC<{
           padding: 6,
         }}>
           <span
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); onDelete(); }}
             style={{
               width: 28, height: 28, borderRadius: '50%',
-              background: 'rgba(0,0,0,0.6)', color: '#fff',
+              background: SF.overlayDarkStrong, color: '#fff',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer',
             }}
@@ -797,12 +797,12 @@ const ProfilePage = () => {
             {coverRepositioning && (
               <div style={{
                 position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                background: 'rgba(0,0,0,0.3)',
+                background: SF.overlayDark,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 pointerEvents: 'none',
               }}>
                 <div style={{
-                  background: 'rgba(0,0,0,0.7)', color: '#fff', padding: '8px 20px',
+                  background: SF.overlayDarkHeavy, color: '#fff', padding: '8px 20px',
                   borderRadius: 8, fontSize: 14, fontWeight: 600,
                   display: 'flex', alignItems: 'center', gap: 8,
                 }}>
@@ -818,13 +818,13 @@ const ProfilePage = () => {
             }}>
               {coverRepositioning ? (
                 <>
-                  <div onClick={() => { setCoverPosY(isColonyView ? (colonyData?.coverPositionY ?? 50) : (profile.coverPositionY ?? 50)); setCoverRepositioning(false); }} style={{
-                    background: 'rgba(0,0,0,0.6)', color: '#fff',
+                  <div role="button" tabIndex={0} onClick={() => { setCoverPosY(isColonyView ? (colonyData?.coverPositionY ?? 50) : (profile.coverPositionY ?? 50)); setCoverRepositioning(false); }} style={{
+                    background: SF.overlayDarkStrong, color: '#fff',
                     padding: isMobile ? '4px 10px' : '6px 16px',
                     borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', gap: 6,
                   }}><CloseOutlined /> Annuler</div>
-                  <div onClick={isColonyView ? saveColonyCoverPosition : saveCoverPosition} style={{
+                  <div role="button" tabIndex={0} onClick={isColonyView ? saveColonyCoverPosition : saveCoverPosition} style={{
                     background: FB.blue, color: '#fff',
                     padding: isMobile ? '4px 10px' : '6px 16px',
                     borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
@@ -834,15 +834,15 @@ const ProfilePage = () => {
               ) : (
                 <>
                   {cvCoverUrl && (
-                    <div onClick={() => setCoverRepositioning(true)} style={{
-                      background: 'rgba(0,0,0,0.5)', color: '#fff',
+                    <div role="button" tabIndex={0} onClick={() => setCoverRepositioning(true)} style={{
+                      background: SF.overlayDarkMd, color: '#fff',
                       padding: isMobile ? '4px 10px' : '6px 16px',
                       borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
                       display: 'flex', alignItems: 'center', gap: 6,
                     }}><DragOutlined />{!isMobile && ' Repositionner'}</div>
                   )}
-                  <div onClick={() => isColonyView ? orgCoverInputRef.current?.click() : coverInputRef.current?.click()} style={{
-                    background: 'rgba(0,0,0,0.5)', color: '#fff',
+                  <div role="button" tabIndex={0} onClick={() => isColonyView ? orgCoverInputRef.current?.click() : coverInputRef.current?.click()} style={{
+                    background: SF.overlayDarkMd, color: '#fff',
                     padding: isMobile ? '4px 10px' : '6px 16px',
                     borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', gap: 6,
@@ -863,20 +863,20 @@ const ProfilePage = () => {
                 icon={!cvAvatar && !cvAvatarFallback ? <UserOutlined style={{ fontSize: isMobile ? 48 : 64 }} /> : undefined}
                 style={{
                   border: '4px solid white', background: !cvAvatar ? cvAvatarBg : undefined,
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)', fontSize: isMobile ? 48 : 64,
+                  boxShadow: '0 2px 8px ${SF.overlayDarkLight}', fontSize: isMobile ? 48 : 64,
                 }}
               >
                 {!cvAvatar && cvAvatarFallback}
               </Avatar>
               {!isViewingOther && <span
-                onClick={() => isColonyView ? fileInputRef.current?.click() : fileInputRef.current?.click()}
+                role="button" tabIndex={0} onClick={() => isColonyView ? fileInputRef.current?.click() : fileInputRef.current?.click()}
                 style={{
                   position: 'absolute', bottom: isMobile ? 4 : 12, right: isMobile ? 4 : 12,
                   width: cameraBtnSize, height: cameraBtnSize, borderRadius: '50%',
                   background: FB.btnGray,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer', border: 'none',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  boxShadow: '0 1px 3px ${SF.overlayDarkSubtle}',
                 }}
               >
                 {avatarUploading ? <Spin size="small" /> : <CameraOutlined style={{ fontSize: isMobile ? 14 : 16, color: FB.text }} />}
@@ -898,7 +898,7 @@ const ProfilePage = () => {
                   {displayOrg && (
                     <>
                       <span>·</span>
-                      <span onClick={() => navigate(`/colony/${displayOrg.id}`)} style={{ cursor: 'pointer' }}
+                      <span role="button" tabIndex={0} onClick={() => navigate(`/colony/${displayOrg.id}`)} style={{ cursor: 'pointer' }}
                         onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
                         onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
                       ><TeamOutlined style={{ marginRight: 4 }} />{displayOrg.name}</span>
@@ -1049,7 +1049,7 @@ const ProfilePage = () => {
               <FBCard title={`Membres (${colonyData.memberCount})`}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                   {colonyData.members.slice(0, 6).map(m => (
-                    <div key={m.id} onClick={() => navigate(`/profile/${m.id}`)}
+                    <div key={m.id} role="button" tabIndex={0} onClick={() => navigate(`/profile/${m.id}`)}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
                         borderRadius: 8, background: FB.bg, cursor: 'pointer',
@@ -1072,7 +1072,7 @@ const ProfilePage = () => {
                   ))}
                 </div>
                 {colonyData.memberCount > 6 && (
-                  <div onClick={() => setActiveTab('members')}
+                  <div role="button" tabIndex={0} onClick={() => setActiveTab('members')}
                     style={{ textAlign: 'center', paddingTop: 12, fontSize: 14, fontWeight: 600, color: FB.blue, cursor: 'pointer' }}>
                     Voir tous les membres
                   </div>
@@ -1088,7 +1088,7 @@ const ProfilePage = () => {
                 }}>
                   <span style={{ fontSize: 17, fontWeight: 700, color: FB.text }}>Publications</span>
                   <span
-                    onClick={() => setActiveTab('publications')}
+                    role="button" tabIndex={0} onClick={() => setActiveTab('publications')}
                     style={{ fontSize: 14, color: FB.blue, cursor: 'pointer', fontWeight: 600 }}
                   >
                     Voir tout
@@ -1120,7 +1120,7 @@ const ProfilePage = () => {
                 ))}
                 {colonyPosts.length > 3 && (
                   <div
-                    onClick={() => setActiveTab('publications')}
+                    role="button" tabIndex={0} onClick={() => setActiveTab('publications')}
                     style={{
                       textAlign: 'center', padding: 12, fontSize: 14, fontWeight: 600,
                       color: FB.blue, cursor: 'pointer', background: FB.white,
@@ -1161,7 +1161,7 @@ const ProfilePage = () => {
                   <div style={{ padding: '12px 0', color: FB.textSecondary, fontSize: 14 }}>
                     Aucune information renseignée.
                     <span
-                      onClick={() => moduleNavigate('/settings')}
+                      role="button" tabIndex={0} onClick={() => moduleNavigate('/settings')}
                       style={{ color: FB.blue, cursor: 'pointer', marginLeft: 4, fontWeight: 500 }}
                     >
                       Ajouter
@@ -1189,7 +1189,7 @@ const ProfilePage = () => {
                 </InfoLine>
                 {displayOrg && (
                   <InfoLine icon={<TeamOutlined />}>
-                    <span onClick={() => navigate(`/colony/${displayOrg.id}`)} style={{ cursor: 'pointer', color: FB.blue }}
+                    <span role="button" tabIndex={0} onClick={() => navigate(`/colony/${displayOrg.id}`)} style={{ cursor: 'pointer', color: FB.blue }}
                       onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
                       onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
                     >{displayOrg.name}</span>
@@ -1211,7 +1211,7 @@ const ProfilePage = () => {
                     return (
                       <div
                         key={org.id}
-                        onClick={() => !isActive && !changingOrg && handleOrgChange(org.id)}
+                        role="button" tabIndex={0} onClick={() => !isActive && !changingOrg && handleOrgChange(org.id)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 12,
                           padding: '10px 12px', borderRadius: 8, cursor: isActive ? 'default' : 'pointer',
@@ -1230,7 +1230,7 @@ const ProfilePage = () => {
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: 13, fontWeight: 700, overflow: 'hidden', flexShrink: 0,
                           }}
-                          onClick={e => {
+                          role="button" tabIndex={0} onClick={e => {
                             e.stopPropagation();
                             orgLogoTargetId.current = org.id;
                             orgLogoInputRef.current?.click();
@@ -1244,7 +1244,7 @@ const ProfilePage = () => {
                           )}
                           <div style={{
                             position: 'absolute', inset: 0, borderRadius: '50%',
-                            background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: SF.overlayDarkMedium, display: 'flex', alignItems: 'center', justifyContent: 'center',
                             opacity: 0, transition: 'opacity 0.2s', cursor: 'pointer',
                           }}
                           onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
@@ -1324,7 +1324,7 @@ const ProfilePage = () => {
                 }}>
                   <span style={{ fontSize: 17, fontWeight: 700, color: FB.text }}>Publications</span>
                   <span
-                    onClick={() => setActiveTab('publications')}
+                    role="button" tabIndex={0} onClick={() => setActiveTab('publications')}
                     style={{ fontSize: 14, color: FB.blue, cursor: 'pointer', fontWeight: 600 }}
                   >
                     Voir tout
@@ -1350,7 +1350,7 @@ const ProfilePage = () => {
                 ))}
                 {wallPosts.length > 3 && (
                   <div
-                    onClick={() => setActiveTab('publications')}
+                    role="button" tabIndex={0} onClick={() => setActiveTab('publications')}
                     style={{
                       textAlign: 'center', padding: 12, fontSize: 14, fontWeight: 600,
                       color: FB.blue, cursor: 'pointer', background: FB.white,
@@ -1431,7 +1431,7 @@ const ProfilePage = () => {
             {wallLoading && <div style={{ textAlign: 'center', padding: 24 }}><Spin size="large" /></div>}
             {!wallLoading && wallHasMore && wallPosts.length > 0 && (
               <div
-                onClick={() => fetchWallPosts(false)}
+                role="button" tabIndex={0} onClick={() => fetchWallPosts(false)}
                 style={{
                   textAlign: 'center', padding: 14, fontSize: 15, fontWeight: 600,
                   color: FB.blue, cursor: 'pointer', background: FB.white,
@@ -1568,7 +1568,7 @@ const ProfilePage = () => {
                         borderRadius: 4, cursor: 'pointer',
                         background: '#f0f0f0',
                       }}
-                      onClick={() => { setLightboxUrl(item.url); setLightboxIsVideo(item.mediaType === 'video'); }}
+                      role="button" tabIndex={0} onClick={() => { setLightboxUrl(item.url); setLightboxIsVideo(item.mediaType === 'video'); }}
                     >
                       {item.mediaType === 'video' ? (
                         <>
@@ -1585,7 +1585,7 @@ const ProfilePage = () => {
                             position: 'absolute', top: '50%', left: '50%',
                             transform: 'translate(-50%, -50%)',
                             width: 40, height: 40, borderRadius: '50%',
-                            background: 'rgba(0,0,0,0.5)',
+                            background: SF.overlayDarkMd,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                           }}>
                             <PlayCircleOutlined style={{ color: '#fff', fontSize: 22 }} />
@@ -1605,7 +1605,7 @@ const ProfilePage = () => {
                       {/* Overlay with stats */}
                       <div style={{
                         position: 'absolute', bottom: 0, left: 0, right: 0,
-                        background: 'linear-gradient(transparent, rgba(0,0,0,0.6))',
+                        background: 'linear-gradient(transparent, ${SF.overlayDarkStrong})',
                         padding: '12px 6px 4px',
                         display: 'flex', gap: 8, color: '#fff', fontSize: 11,
                       }}>
@@ -1740,7 +1740,7 @@ const ProfilePage = () => {
                       {CATEGORY_LABELS[cat] || cat}
                     </span>
                     <span
-                      onClick={() => setPhotosTab(cat)}
+                      role="button" tabIndex={0} onClick={() => setPhotosTab(cat)}
                       style={{ fontSize: 14, color: FB.blue, cursor: 'pointer', fontWeight: 600 }}
                     >
                       Voir tout
@@ -1767,10 +1767,10 @@ const ProfilePage = () => {
             {/* Lightbox overlay */}
             {lightboxUrl && (
               <div
-                onClick={() => { setLightboxUrl(null); setLightboxIsVideo(false); }}
+                role="button" tabIndex={0} onClick={() => { setLightboxUrl(null); setLightboxIsVideo(false); }}
                 style={{
                   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                  background: 'rgba(0,0,0,0.9)', zIndex: 10000,
+                  background: SF.overlayDarkNearOpaque, zIndex: 10000,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'zoom-out',
                 }}
@@ -1805,7 +1805,7 @@ const ProfilePage = () => {
                   style={{
                     position: 'absolute', top: 20, right: 20,
                     width: 40, height: 40, borderRadius: '50%',
-                    background: 'rgba(255,255,255,0.1)', border: 'none',
+                    background: SF.overlayLightSubtle, border: 'none',
                     color: '#fff', fontSize: 20, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}
@@ -1822,7 +1822,7 @@ const ProfilePage = () => {
             <FBCard title={`Tous les membres (${colonyData.memberCount})`}>
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 12 }}>
                 {colonyData.members.map(m => (
-                  <div key={m.id} onClick={() => navigate(`/profile/${m.id}`)}
+                  <div key={m.id} role="button" tabIndex={0} onClick={() => navigate(`/profile/${m.id}`)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 12, padding: 12,
                       borderRadius: 8, background: FB.bg, cursor: 'pointer', transition: 'background 0.15s',

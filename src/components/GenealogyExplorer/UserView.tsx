@@ -60,7 +60,7 @@ const UserTreeNode: React.FC<{
       <div 
         className="flex items-center py-2 px-3 hover:bg-gray-50 rounded cursor-pointer transition-colors"
         style={{ paddingLeft: indentWidth + 12 }}
-        onClick={() => setExpanded(!expanded)}
+        role="button" tabIndex={0} onClick={() => setExpanded(!expanded)}
       >
         {/* Chevron d'expansion */}
         <div className="w-4 flex justify-center mr-2">

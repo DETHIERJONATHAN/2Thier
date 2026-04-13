@@ -31,7 +31,7 @@ const FBToggle = ({ checked, onChange, disabled, size = 'small' }: {
   const dot = size === 'small' ? 16 : 20;
   return (
     <div
-      onClick={() => !disabled && onChange(!checked)}
+      role="button" tabIndex={0} onClick={() => !disabled && onChange(!checked)}
       style={{
         width: w, height: h, borderRadius: h,
         background: disabled ? '#ccc' : checked ? FB.blue : '#ccc',
@@ -44,7 +44,7 @@ const FBToggle = ({ checked, onChange, disabled, size = 'small' }: {
         width: dot, height: dot, borderRadius: '50%', background: FB.white,
         position: 'absolute', top: (h - dot) / 2,
         left: checked ? w - dot - (h - dot) / 2 : (h - dot) / 2,
-        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        transition: 'left 0.2s', boxShadow: '0 1px 3px ${SF.overlayDark}',
       }} />
     </div>
   );
@@ -104,7 +104,7 @@ const DraggableModuleCard: React.FC<DraggableModuleCardProps> = ({
     key: item.key,
     danger: item.danger,
     label: (
-      <span style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left' }} onClick={item.onClick}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left' }} role="button" tabIndex={0} onClick={item.onClick}>
         {item.label}
       </span>
     ),
@@ -115,7 +115,7 @@ const DraggableModuleCard: React.FC<DraggableModuleCardProps> = ({
       <div
         style={{
           background: FB.white, borderRadius: FB.radius, border: `1px solid ${FB.border}`,
-          boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,0.15)' : FB.shadow,
+          boxShadow: isDragging ? '0 8px 24px ${SF.overlayDarkLight}' : FB.shadow,
           transform: isDragging ? 'scale(1.03)' : undefined,
           transition: 'box-shadow 0.2s, transform 0.2s',
           overflow: 'hidden', cursor: 'default',
@@ -291,7 +291,7 @@ export const SortableSection: React.FC<SortableSectionProps> = ({
     transform: CSS.Transform.toString(transform),
     transition,
     zIndex: isDragging ? 10 : 'auto',
-    boxShadow: isDragging ? '0 10px 25px rgba(0,0,0,0.15)' : undefined,
+    boxShadow: isDragging ? '0 10px 25px ${SF.overlayDarkLight}' : undefined,
   };
 
   const headerTitle = useMemo(() => {
@@ -368,7 +368,7 @@ export const SortableSection: React.FC<SortableSectionProps> = ({
       <div
         style={{
           background: FB.white, borderRadius: FB.radius, overflow: 'hidden',
-          boxShadow: isDragging ? '0 10px 25px rgba(0,0,0,0.15)' : FB.shadow,
+          boxShadow: isDragging ? '0 10px 25px ${SF.overlayDarkLight}' : FB.shadow,
           border: `1px solid ${FB.border}`,
           transform: isDragging ? 'scale(1.01)' : undefined,
           transition: 'box-shadow 0.2s, transform 0.2s',
@@ -440,7 +440,7 @@ export const SortableSection: React.FC<SortableSectionProps> = ({
           padding: '10px 20px', borderTop: `1px solid ${FB.border}`, background: FB.white,
           display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10,
         }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }} onClick={(event) => event.stopPropagation()}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }} role="button" tabIndex={0} onClick={(event) => event.stopPropagation()}>
             {!isRealCategory && onCreateCategoryFromSection && (
               <ActionBtn label="Créer catégorie" icon="📁" onClick={() => onCreateCategoryFromSection(String(section.id))} primary />
             )}

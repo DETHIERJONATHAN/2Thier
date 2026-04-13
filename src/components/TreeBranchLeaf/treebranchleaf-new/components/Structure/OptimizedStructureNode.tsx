@@ -442,7 +442,7 @@ const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = (
             alignItems: 'center',
             minHeight: '18px'
           }}
-          onClick={handleClick}
+          role="button" tabIndex={0} onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           data-testid={`structure-node-${node.id}`}
         >
@@ -478,7 +478,7 @@ const OptimizedStructureNodeComponent: React.FC<OptimizedStructureNodeProps> = (
             
             {/* Indicateur d'expansion/réduction */}
             <span
-              onClick={hasChildren ? handleToggleExpanded : undefined}
+              role="button" tabIndex={0} onClick={hasChildren ? handleToggleExpanded : undefined}
               style={{
                 width: 12,
                 height: 12,

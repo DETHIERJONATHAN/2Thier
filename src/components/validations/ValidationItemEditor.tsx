@@ -111,7 +111,7 @@ export const ValidationItemEditor: React.FC<ValidationItemEditorProps> = ({
       <div className="flex items-center justify-between p-2 bg-gray-50 border-b">
         <div 
           className="flex-grow flex items-center cursor-pointer" 
-          onClick={onToggleExpand}
+          role="button" tabIndex={0} onClick={onToggleExpand}
         >
           <div className="mr-2">
             {isExpanded ? (

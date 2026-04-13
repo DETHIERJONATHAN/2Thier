@@ -7,6 +7,7 @@ import { RenderText } from '../components/RenderText';
 import WebsiteFormModal from '../../components/WebsiteFormModal';
 import { renderIconNode } from '../utils/icon';
 import usePublicFormModal from '../../hooks/usePublicFormModal';
+import { SF } from '../../../components/zhiive/ZhiiveTheme';
 
 /**
  * 🎨 CTA RENDERER V2 - AVEC PULSE EFFECTS & FORM MODAL
@@ -430,7 +431,7 @@ export const CtaRenderer: React.FC<CtaRendererProps> = ({ content, mode = 'previ
           <motion.div
             animate={{
               boxShadow: [
-                '0 0 0 0 rgba(255, 255, 255, 0.7)',
+                '0 0 0 0 ${SF.textLightMuted}',
                 '0 0 0 20px rgba(255, 255, 255, 0)',
                 '0 0 0 0 rgba(255, 255, 255, 0)'
               ]
@@ -451,7 +452,7 @@ export const CtaRenderer: React.FC<CtaRendererProps> = ({ content, mode = 'previ
                 borderColor: button.style?.borderColor,
                 color: button.style?.color || sectionBackground,
                 border: button.style?.border || 'none',
-                boxShadow: button.style?.boxShadow || '0 8px 24px rgba(0,0,0,0.15)'
+                boxShadow: button.style?.boxShadow || '0 8px 24px ${SF.overlayDarkLight}'
               }}
             >
               {iconNode && (
@@ -485,7 +486,7 @@ export const CtaRenderer: React.FC<CtaRendererProps> = ({ content, mode = 'previ
             ...sharedStyle,
             backgroundColor: button.style?.backgroundColor || 'transparent',
             color: button.style?.color || '#ffffff',
-            border: button.style?.border || '2px solid rgba(255,255,255,0.5)',
+            border: button.style?.border || '2px solid ${SF.textLightDimmed}',
             backdropFilter: button.style?.backdropFilter || 'blur(10px)'
           }}
         >
@@ -547,11 +548,11 @@ export const CtaRenderer: React.FC<CtaRendererProps> = ({ content, mode = 'previ
         <motion.div
           animate={{
             background: [
-              'radial-gradient(circle at 0% 0%, rgba(255,255,255,0.1) 0%, transparent 50%)',
-              'radial-gradient(circle at 100% 100%, rgba(255,255,255,0.1) 0%, transparent 50%)',
-              'radial-gradient(circle at 0% 100%, rgba(255,255,255,0.1) 0%, transparent 50%)',
-              'radial-gradient(circle at 100% 0%, rgba(255,255,255,0.1) 0%, transparent 50%)',
-              'radial-gradient(circle at 0% 0%, rgba(255,255,255,0.1) 0%, transparent 50%)'
+              'radial-gradient(circle at 0% 0%, ${SF.overlayLightSubtle} 0%, transparent 50%)',
+              'radial-gradient(circle at 100% 100%, ${SF.overlayLightSubtle} 0%, transparent 50%)',
+              'radial-gradient(circle at 0% 100%, ${SF.overlayLightSubtle} 0%, transparent 50%)',
+              'radial-gradient(circle at 100% 0%, ${SF.overlayLightSubtle} 0%, transparent 50%)',
+              'radial-gradient(circle at 0% 0%, ${SF.overlayLightSubtle} 0%, transparent 50%)'
             ]
           }}
           transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
@@ -606,7 +607,7 @@ export const CtaRenderer: React.FC<CtaRendererProps> = ({ content, mode = 'previ
               style={{
                 fontSize: 'clamp(16px, 2vw, 22px)',
                 marginBottom: '48px',
-                color: style.subtitleColor || 'rgba(255,255,255,0.9)',
+                color: style.subtitleColor || SF.overlayLightStrong,
                 lineHeight: '1.6',
                 maxWidth: '700px',
                 margin: '0 auto 48px'
@@ -650,7 +651,7 @@ export const CtaRenderer: React.FC<CtaRendererProps> = ({ content, mode = 'previ
                   </div>
                   <div style={{
                     fontSize: '14px',
-                    color: 'rgba(255,255,255,0.8)',
+                    color: SF.overlayPlayBtn,
                     textTransform: 'uppercase',
                     letterSpacing: '1px'
                   }}>

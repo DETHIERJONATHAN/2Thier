@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Select, Input, Card, Space, Typography, Alert, Spin, InputNumber, Steps, Divider } from 'antd';
 import { CheckCircleOutlined, LoadingOutlined, CalculatorOutlined, AlertOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
+import { SF } from '../components/zhiive/ZhiiveTheme';
 
 const { Option } = Select;
 const { Text, Title } = Typography;
@@ -403,7 +404,7 @@ const AdvancedSelectProfessional: React.FC<Props> = ({
                     left: 0, 
                     right: 0, 
                     bottom: 0,
-                    background: 'rgba(255, 255, 255, 0.8)',
+                    background: SF.overlayPlayBtn,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

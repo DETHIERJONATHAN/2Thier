@@ -313,7 +313,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
       {/* Sections */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
         {sections.map(sec => (
-          <div key={sec.key} onClick={() => setActiveSection(sec.key)} style={{
+          <div key={sec.key} role="button" tabIndex={0} onClick={() => setActiveSection(sec.key)} style={{
             flex: 1, padding: '8px 0', textAlign: 'center', cursor: 'pointer',
             borderRadius: SF.radiusSm, fontSize: 11, fontWeight: 700,
             transition: 'all 0.25s',
@@ -395,7 +395,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
               {t('universe.meetupsWorkshops')}
             </div>
             <div
-              onClick={() => setEventModalOpen(true)}
+              role="button" tabIndex={0} onClick={() => setEventModalOpen(true)}
               style={{
               padding: '6px 18px', borderRadius: 20, display: 'inline-block',
               background: SF.overlayLight, fontWeight: 700, fontSize: 12, cursor: 'pointer',
@@ -438,7 +438,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
                   const opt = labels[v];
                   const active = eventVisibility === v;
                   return (
-                    <div key={v} onClick={() => setEventVisibility(v)} style={{
+                    <div key={v} role="button" tabIndex={0} onClick={() => setEventVisibility(v)} style={{
                       display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
                       borderRadius: 14, cursor: 'pointer', fontSize: 12, fontWeight: 600,
                       background: active ? opt.color + '18' : SF.bgLighter,
@@ -480,7 +480,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
                 </div>
 
                 <div
-                  onClick={() => handleRSVP(event.id)}
+                  role="button" tabIndex={0} onClick={() => handleRSVP(event.id)}
                   style={{
                   padding: '6px 0', textAlign: 'center', borderRadius: 20,
                   background: rsvpSet.has(event.id) ? SF.success + '20' : SF.gradientSecondary,
@@ -512,10 +512,10 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
               {t('universe.sendToFuture')}
             </div>
             <div
-              onClick={() => setCapsuleModalOpen(true)}
+              role="button" tabIndex={0} onClick={() => setCapsuleModalOpen(true)}
               style={{
               padding: '6px 18px', borderRadius: 20, display: 'inline-block',
-              background: 'rgba(255,255,255,0.5)', fontWeight: 700, fontSize: 12,
+              background: SF.textLightDimmed, fontWeight: 700, fontSize: 12,
               cursor: 'pointer', color: SF.text,
             }}>
               {t('universe.createCapsule')}
@@ -586,7 +586,7 @@ const UniversePanel: React.FC<UniversePanelProps> = ({ api, currentUser }) => {
 
                 {cap.isUnlocked && (
                   <div
-                    onClick={() => handleOpenCapsule(cap)}
+                    role="button" tabIndex={0} onClick={() => handleOpenCapsule(cap)}
                     style={{
                     marginTop: 8, padding: '6px 0', textAlign: 'center', borderRadius: 20,
                     background: SF.gradientGold, color: SF.text, fontWeight: 700,

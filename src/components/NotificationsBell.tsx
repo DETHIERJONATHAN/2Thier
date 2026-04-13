@@ -13,6 +13,7 @@ import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { setNotificationBadgeCount } from '../lib/pwaBadge';
 import { useBookmarks, Bookmark } from '../hooks/useBookmarks';
 import { useTranslation } from 'react-i18next';
+import { SF } from '../components/zhiive/ZhiiveTheme';
 
 interface NotificationItem {
   id: string;
@@ -266,7 +267,7 @@ const NotificationsBell = () => {
           {notif.type === 'FRIEND_REQUEST_RECEIVED' && !notif.data?.handled && (
             <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
               <div
-                onClick={e => { e.stopPropagation(); handleFriendRequestAction(notif, 'accept'); }}
+                role="button" tabIndex={0} onClick={e => { e.stopPropagation(); handleFriendRequestAction(notif, 'accept'); }}
                 style={{
                   padding: '4px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                   background: '#0866FF', color: 'white', cursor: 'pointer',
@@ -276,7 +277,7 @@ const NotificationsBell = () => {
                 Accepter
               </div>
               <div
-                onClick={e => { e.stopPropagation(); handleFriendRequestAction(notif, 'reject'); }}
+                role="button" tabIndex={0} onClick={e => { e.stopPropagation(); handleFriendRequestAction(notif, 'reject'); }}
                 style={{
                   padding: '4px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                   background: '#E4E6EB', color: '#050505', cursor: 'pointer',
@@ -286,7 +287,7 @@ const NotificationsBell = () => {
                 Refuser
               </div>
               <div
-                onClick={e => { e.stopPropagation(); handleFriendRequestAction(notif, 'block'); }}
+                role="button" tabIndex={0} onClick={e => { e.stopPropagation(); handleFriendRequestAction(notif, 'block'); }}
                 style={{
                   padding: '4px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                   background: '#ffccc7', color: '#cf1322', cursor: 'pointer',
@@ -318,11 +319,11 @@ const NotificationsBell = () => {
               {isUnread && (
                 <Tooltip title="Marquer comme lu">
                   <div
-                    onClick={e => { e.stopPropagation(); markAsRead(notif.id); }}
+                    role="button" tabIndex={0} onClick={e => { e.stopPropagation(); markAsRead(notif.id); }}
                     style={{
                       width: 32, height: 32, borderRadius: '50%', display: 'flex',
                       alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                      backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                      backgroundColor: '#fff', boxShadow: '0 1px 3px ${SF.overlayDarkLight}',
                     }}
                   >
                     <CheckOutlined style={{ fontSize: 14, color: '#65676B' }} />
@@ -331,11 +332,11 @@ const NotificationsBell = () => {
               )}
               <Tooltip title={t('common.delete')}>
                 <div
-                  onClick={e => { e.stopPropagation(); deleteNotification(notif.id); }}
+                  role="button" tabIndex={0} onClick={e => { e.stopPropagation(); deleteNotification(notif.id); }}
                   style={{
                     width: 32, height: 32, borderRadius: '50%', display: 'flex',
                     alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                    backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                    backgroundColor: '#fff', boxShadow: '0 1px 3px ${SF.overlayDarkLight}',
                   }}
                 >
                   <DeleteOutlined style={{ fontSize: 14, color: '#65676B' }} />
@@ -417,7 +418,7 @@ const NotificationsBell = () => {
               {/* Remove */}
               <Tooltip title="Retirer des favoris">
                 <div
-                  onClick={e => { e.stopPropagation(); removeBookmark(bm.id); }}
+                  role="button" tabIndex={0} onClick={e => { e.stopPropagation(); removeBookmark(bm.id); }}
                   style={{
                     width: 28, height: 28, borderRadius: '50%', display: 'flex',
                     alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -457,7 +458,7 @@ const NotificationsBell = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {isMobile && (
             <div
-              onClick={() => setIsOpen(false)}
+              role="button" tabIndex={0} onClick={() => setIsOpen(false)}
               style={{
                 width: 36, height: 36, borderRadius: '50%', display: 'flex',
                 alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -470,7 +471,7 @@ const NotificationsBell = () => {
           <h2 style={{ fontSize: 20, fontWeight: 700, color: '#050505', margin: 0, flex: 1 }}>Notifications</h2>
           <Tooltip title="Tout marquer comme lu">
             <div
-              onClick={e => { e.stopPropagation(); if (unreadCount > 0) markAllAsRead(); }}
+              role="button" tabIndex={0} onClick={e => { e.stopPropagation(); if (unreadCount > 0) markAllAsRead(); }}
               style={{
                 width: 32, height: 32, borderRadius: '50%', display: 'flex',
                 alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -493,7 +494,7 @@ const NotificationsBell = () => {
         ]).map(t => (
           <div
             key={t.key}
-            onClick={() => setTab(t.key)}
+            role="button" tabIndex={0} onClick={() => setTab(t.key)}
             style={{
               padding: '6px 14px', borderRadius: 20, fontSize: 14, fontWeight: 600,
               cursor: 'pointer', transition: 'all 0.15s', userSelect: 'none',
@@ -519,7 +520,7 @@ const NotificationsBell = () => {
           </span>
           {unreadCount > 0 && (
             <span
-              onClick={markAllAsRead}
+              role="button" tabIndex={0} onClick={markAllAsRead}
               style={{ fontSize: 14, color: '#0866FF', cursor: 'pointer', fontWeight: 400 }}
               onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
               onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
@@ -575,7 +576,7 @@ const NotificationsBell = () => {
         ]).map(p => (
           <div
             key={p.key}
-            onClick={() => setMobilePanel(p.key)}
+            role="button" tabIndex={0} onClick={() => setMobilePanel(p.key)}
             style={{
               flex: 1, padding: '12px 0', textAlign: 'center',
               fontSize: 14, fontWeight: 600, cursor: 'pointer',
@@ -600,7 +601,7 @@ const NotificationsBell = () => {
       maxHeight: '85vh',
       display: 'flex', flexDirection: 'row',
       backgroundColor: '#fff', borderRadius: 8,
-      boxShadow: '0 2px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)',
+      boxShadow: '0 2px 12px ${SF.overlayDarkLight}, 0 0 0 1px rgba(0,0,0,0.05)',
       overflow: 'hidden',
     }}>
       {/* Left: Notifications */}
@@ -628,7 +629,7 @@ const NotificationsBell = () => {
       <>
         <div
           className="header-2thier-item"
-          onClick={() => setIsOpen(!isOpen)}
+          role="button" tabIndex={0} onClick={() => setIsOpen(!isOpen)}
           style={{
             position: 'relative', cursor: 'pointer', display: 'inline-flex',
             alignItems: 'center', justifyContent: 'center',

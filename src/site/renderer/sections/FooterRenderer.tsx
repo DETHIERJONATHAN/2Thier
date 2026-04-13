@@ -8,6 +8,7 @@ import { renderIconNode } from '../utils/icon';
  * 🎨 FOOTER RENDERER V2 - AVEC ANIMATIONS React from 'react';
 import { Row, Col, Space } from 'antd';
 import { motion } from 'framer-motion';
+import { SF } from '../../../components/zhiive/ZhiiveTheme';
 
 /**
  * 🎨 FOOTER RENDERER V2 - AVEC WAVE ANIMATIONS
@@ -153,7 +154,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
                 <p style={{
                   fontSize: '14px',
                   lineHeight: '1.7',
-                  color: style.descColor || 'rgba(255,255,255,0.7)',
+                  color: style.descColor || SF.textLightMuted,
                   marginBottom: '24px'
                 }}>
                   <RenderText value={brand.tagline} />
@@ -177,14 +178,14 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
                       whileTap={{ scale: 0.9 }}
                       style={{
                         fontSize: '24px',
-                        color: 'rgba(255,255,255,0.7)',
+                        color: SF.textLightMuted,
                         transition: 'color 0.3s ease',
                         display: 'inline-block'
                       }}
                     >
                       {renderIconNode(item.icon, {
                         size: style.socialIconSize || '24px',
-                        color: style.socialIconColor || 'rgba(255,255,255,0.9)'
+                        color: style.socialIconColor || SF.overlayLightStrong
                       }) || item.icon}
                     </motion.a>
                   ))}
@@ -238,7 +239,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
                           href={link.url || '#'}
                           style={{
                             fontSize: '14px',
-                            color: 'rgba(255,255,255,0.7)',
+                            color: SF.textLightMuted,
                             textDecoration: 'none',
                             transition: 'color 0.3s ease',
                             display: 'inline-block'
@@ -247,7 +248,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
                             e.currentTarget.style.color = style.linkHoverColor || '#667eea';
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.color = 'rgba(255,255,255,0.7)';
+                            e.currentTarget.style.color = SF.textLightMuted;
                           }}
                         >
                           <RenderText value={link.label} />
@@ -298,7 +299,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
                       href={`tel:${contact.phone.replace(/[^0-9+]/g, '')}`}
                       style={{
                         fontSize: '14px',
-                        color: 'rgba(255,255,255,0.7)',
+                        color: SF.textLightMuted,
                         textDecoration: 'none',
                         transition: 'color 0.3s ease'
                       }}
@@ -306,7 +307,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
                         e.currentTarget.style.color = style.linkHoverColor || '#667eea';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.color = 'rgba(255,255,255,0.7)';
+                        e.currentTarget.style.color = SF.textLightMuted;
                       }}
                     >
                       <RenderText value={contact.phone} />
@@ -318,7 +319,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
                       href={`mailto:${contact.email}`}
                       style={{
                         fontSize: '14px',
-                        color: 'rgba(255,255,255,0.7)',
+                        color: SF.textLightMuted,
                         textDecoration: 'none',
                         transition: 'color 0.3s ease'
                       }}
@@ -326,7 +327,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
                         e.currentTarget.style.color = style.linkHoverColor || '#667eea';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.color = 'rgba(255,255,255,0.7)';
+                        e.currentTarget.style.color = SF.textLightMuted;
                       }}
                     >
                       <RenderText value={contact.email} />
@@ -336,7 +337,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
                   {contact.hours && (
                     <div style={{
                       fontSize: '14px',
-                      color: 'rgba(255,255,255,0.7)'
+                      color: SF.textLightMuted
                     }}>
                       <RenderText value={contact.hours} />
                     </div>
@@ -345,7 +346,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
                   {contact.address && (
                     <div style={{
                       fontSize: '14px',
-                      color: 'rgba(255,255,255,0.7)',
+                      color: SF.textLightMuted,
                       whiteSpace: 'pre-line'
                     }}>
                       <RenderText value={contact.address} />
@@ -366,10 +367,10 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
           style={{
             marginTop: '64px',
             paddingTop: '32px',
-            borderTop: `1px solid ${style.dividerColor || 'rgba(255,255,255,0.1)'}`,
+            borderTop: `1px solid ${style.dividerColor || SF.overlayLightSubtle}`,
             textAlign: 'center',
             fontSize: style.copyrightFontSize || '14px',
-            color: style.copyrightColor || 'rgba(255,255,255,0.5)'
+            color: style.copyrightColor || SF.textLightDimmed
           }}
         >
           <RenderText 
@@ -382,11 +383,11 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
             <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
               {copyright.legalLinks.map((link: unknown, index: number) => (
                 <React.Fragment key={index}>
-                  {index > 0 && <span style={{ color: 'rgba(255,255,255,0.3)' }}>•</span>}
+                  {index > 0 && <span style={{ color: SF.overlayLightActive }}>•</span>}
                   <a
                     href={link.url || '#'}
                     style={{
-                      color: 'rgba(255,255,255,0.5)',
+                      color: SF.textLightDimmed,
                       textDecoration: 'none',
                       fontSize: '12px',
                       transition: 'color 0.3s ease'
@@ -395,7 +396,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
                       e.currentTarget.style.color = style.linkHoverColor || '#667eea';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+                      e.currentTarget.style.color = SF.textLightDimmed;
                     }}
                   >
                     <RenderText value={link.label} />

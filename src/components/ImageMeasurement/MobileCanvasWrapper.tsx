@@ -36,6 +36,7 @@ import type {
   ReferenceType
 } from '../../types/measurement';
 import { REFERENCE_PRESETS } from '../../types/measurement';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 const { Option } = Select;
 
@@ -303,7 +304,7 @@ export const MobileCanvasWrapper: React.FC<MobileCanvasWrapperProps> = ({
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: '12px 16px',
-          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          backgroundColor: SF.overlayDarkNearOpaque,
           borderBottom: '1px solid #333',
           zIndex: 10
         }}

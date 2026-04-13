@@ -741,7 +741,7 @@ export default function LeadsHomePage({
                 <div 
                   key={alert.id} 
                   className={`bg-${alert.color}-50 border-l-4 border-l-${alert.color}-500 p-3 rounded hover:shadow-md transition-shadow cursor-pointer`}
-                  onClick={() => alert.leadId && handleViewDetails(leads.find(l => l.id === alert.leadId)!)}
+                  role="button" tabIndex={0} onClick={() => alert.leadId && handleViewDetails(leads.find(l => l.id === alert.leadId)!)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">

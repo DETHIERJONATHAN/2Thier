@@ -16,6 +16,7 @@ import {
   SoundOutlined,
 } from '@ant-design/icons';
 import { Modal } from 'antd';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 interface FilePreviewProps {
   urls: string[];
@@ -145,18 +146,18 @@ const VoicePlayer: React.FC<{
           style={{
             width: 28, height: 28, borderRadius: '50%', display: 'flex',
             alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-            background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff',
+            background: SF.overlayLight, border: 'none', color: '#fff',
             fontSize: 16, transition: 'background 0.2s', flexShrink: 0,
           }}
           onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.35)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+          onMouseLeave={e => e.currentTarget.style.background = SF.overlayLight}
         >
           {playing ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
         </button>
 
         {/* Waveform bars — clickable to seek */}
         <div
-          onClick={seekTo}
+          role="button" tabIndex={0} onClick={seekTo}
           style={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, height: 24, cursor: 'pointer', minWidth: 0, overflow: 'hidden' }}
         >
           {WAVE_BARS.map((h, i) => {
@@ -181,7 +182,7 @@ const VoicePlayer: React.FC<{
         <span style={{
           color: '#fff', fontSize: 12, fontWeight: 600, fontFamily: 'monospace',
           whiteSpace: 'nowrap', flexShrink: 0,
-          textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+          textShadow: '0 1px 2px ${SF.overlayDarkSubtle}',
         }}>
           {formatDur(displayTime)}
         </span>
@@ -228,7 +229,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ urls, mediaType, voice
           // Image preview
           if (isImage || isSignature) {
             return (
-              <div key={idx} className="relative group cursor-pointer" onClick={() => openPreview(url, 'image')}>
+              <div key={idx} className="relative group cursor-pointer" role="button" tabIndex={0} onClick={() => openPreview(url, 'image')}>
                 <img
                   src={url}
                   alt={name}
@@ -250,7 +251,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ urls, mediaType, voice
           // Video preview
           if (isVideo) {
             return (
-              <div key={idx} className="relative group cursor-pointer" onClick={() => openPreview(url, 'video')}>
+              <div key={idx} className="relative group cursor-pointer" role="button" tabIndex={0} onClick={() => openPreview(url, 'video')}>
                 <video src={url} className="rounded-lg max-w-full max-h-48" preload="metadata" />
                 <div className="absolute inset-0 bg-black/30 rounded-lg flex items-center justify-center">
                   <PlayCircleOutlined className="text-white" style={{ fontSize: 40 }} />
@@ -265,7 +266,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ urls, mediaType, voice
               <div
                 key={idx}
                 className="flex items-center gap-2 bg-gray-700/50 rounded-lg p-2 cursor-pointer hover:bg-gray-600/50 transition-colors"
-                onClick={() => openPreview(url, 'pdf')}
+                role="button" tabIndex={0} onClick={() => openPreview(url, 'pdf')}
               >
                 <FilePdfOutlined style={{ color: '#ff4444', fontSize: 28 }} />
                 <div className="flex-1 min-w-0">

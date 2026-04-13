@@ -125,7 +125,7 @@ const PageTabs = ({
                       ref={provided.innerRef}
                       {...provided.draggableProps}
                       {...provided.dragHandleProps}
-                      onClick={() => onPageSelect(page.id)}
+                      role="button" tabIndex={0} onClick={() => onPageSelect(page.id)}
                       style={{
                         ...provided.draggableProps.style,
                         display: 'flex',

@@ -11,6 +11,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from 'antd';
 import { CloseOutlined, DownloadOutlined, AppleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { SF } from '../components/zhiive/ZhiiveTheme';
 
 const STORAGE_KEY = 'zhiive_pwa_prompt_dismissed';
 const DISMISS_DAYS = 7;
@@ -105,7 +106,7 @@ const PWAInstallPrompt: React.FC = () => {
       background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%)',
       borderRadius: 16,
       padding: '16px 20px',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+      boxShadow: '0 8px 32px ${SF.overlayDark}',
       display: 'flex',
       alignItems: 'center',
       gap: 12,

@@ -10,6 +10,7 @@ import { DocumentPage, ModuleInstance } from './types';
 import { getModuleById } from './ModuleRegistry';
 import ModuleRenderer from './ModuleRenderer';
 import { useTranslation } from 'react-i18next';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 interface PagePreviewProps {
   page: DocumentPage;
@@ -72,7 +73,7 @@ const PagePreview = ({
       padding: page.padding 
         ? `${page.padding.top}px ${page.padding.right}px ${page.padding.bottom}px ${page.padding.left}px`
         : '40px',
-      boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+      boxShadow: '0 4px 24px ${SF.overlayDark}',
       margin: '0 auto',
       position: 'relative' as const,
       fontFamily: globalTheme.fontFamily,
@@ -115,7 +116,7 @@ const PagePreview = ({
         ref={provided?.innerRef}
         {...(provided?.draggableProps || {})}
         {...(provided?.dragHandleProps || {})}
-        onClick={(e) => {
+        role="button" tabIndex={0} onClick={(e) => {
           e.stopPropagation();
           onModuleSelect?.(module.id);
         }}
@@ -136,7 +137,7 @@ const PagePreview = ({
           cursor: previewMode ? 'default' : 'grab',
           ...(provided?.draggableProps?.style || {}),
           ...(snapshot?.isDragging ? { 
-            boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+            boxShadow: '0 8px 24px ${SF.overlayDarkSubtle}',
             zIndex: 1000,
           } : {}),
         }}
@@ -153,7 +154,7 @@ const PagePreview = ({
             backgroundColor: '#1890ff',
             padding: '4px 8px',
             borderRadius: '6px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            boxShadow: '0 2px 8px ${SF.overlayDarkSubtle}',
             opacity: showToolbar ? 1 : 0,
             visibility: showToolbar ? 'visible' : 'hidden',
             transition: 'opacity 0.2s, visibility 0.2s',
@@ -176,7 +177,7 @@ const PagePreview = ({
             </span>
           </div>
 
-          <div style={{ width: '1px', backgroundColor: 'rgba(255,255,255,0.3)' }} />
+          <div style={{ width: '1px', backgroundColor: SF.overlayLightActive }} />
 
           <Tooltip title={t('common.configure')}>
             <Button

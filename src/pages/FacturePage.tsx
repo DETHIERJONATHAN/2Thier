@@ -1,4 +1,3 @@
-import { FB } from '../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Spin, App, Modal, InputNumber, DatePicker, Tooltip, Switch, Image,
@@ -19,6 +18,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/fr';
 import DOMPurify from 'dompurify';
 import { useTranslation } from 'react-i18next';
+import { FB, SF } from '../components/zhiive/ZhiiveTheme';
 
 dayjs.extend(relativeTime);
 dayjs.locale('fr');
@@ -152,14 +152,14 @@ const useScreenSize = () => {
 // ── FBCard component ──
 const FBCard: React.FC<{ children: React.ReactNode; style?: React.CSSProperties; onClick?: () => void }> = ({ children, style, onClick }) => (
   <div
-    onClick={onClick}
+    role="button" tabIndex={0} onClick={onClick}
     style={{
       background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow,
       padding: 16, marginBottom: 12, cursor: onClick ? 'pointer' : undefined,
       transition: 'box-shadow 0.2s',
       ...style,
     }}
-    onMouseEnter={e => { if (onClick) e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)'; }}
+    onMouseEnter={e => { if (onClick) e.currentTarget.style.boxShadow = '0 2px 8px ${SF.overlayDarkLight}'; }}
     onMouseLeave={e => { e.currentTarget.style.boxShadow = FB.shadow; }}
   >
     {children}
@@ -1670,7 +1670,7 @@ const FacturePage: React.FC = () => {
 
                 {/* Action buttons (Facebook style) */}
                 <div
-                  onClick={e => e.stopPropagation()}
+                  role="button" tabIndex={0} onClick={e => e.stopPropagation()}
                   style={{
                   display: 'flex', gap: isMobile ? 6 : 8, borderTop: `1px solid ${FB.border}`,
                   paddingTop: 8, margin: '0 -16px', padding: '8px 16px 0',
@@ -1937,7 +1937,7 @@ const FacturePage: React.FC = () => {
                   <div style={{
                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000,
                     background: FB.white, border: `1px solid ${FB.border}`, borderRadius: 8,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)', marginTop: 4, maxHeight: 200, overflowY: 'auto',
+                    boxShadow: '0 4px 12px ${SF.overlayDarkLight}', marginTop: 4, maxHeight: 200, overflowY: 'auto',
                   }}>
                     {clientSuggestions.map(c => (
                       <div
@@ -2004,7 +2004,7 @@ const FacturePage: React.FC = () => {
                   <div style={{
                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000,
                     background: FB.white, border: `1px solid ${FB.border}`, borderRadius: 8,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)', marginTop: 4, maxHeight: 200, overflowY: 'auto',
+                    boxShadow: '0 4px 12px ${SF.overlayDarkLight}', marginTop: 4, maxHeight: 200, overflowY: 'auto',
                   }}>
                     {clientSuggestions.map(c => (
                       <div
@@ -3164,7 +3164,7 @@ const FacturePage: React.FC = () => {
                       image-orientation: from-image;
                     }
                     .receipt-zoom-preview .ant-image-preview-operations {
-                      background: rgba(0,0,0,0.6);
+                      background: ${SF.overlayDarkStrong};
                       border-radius: 8px;
                       padding: 4px 8px;
                     }

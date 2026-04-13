@@ -504,7 +504,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({
                     {category.name}
                   </Text>
                   <Tag 
-                    color="rgba(255,255,255,0.3)" 
+                    color="${SF.overlayLightActive}" 
                     style={{ 
                       marginLeft: '8px', 
                       color: 'white',
@@ -524,7 +524,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({
                     return (
                       <Col span={4} key={icon.name}>
                         <div
-                          onClick={() => handleSelect(icon.name)}
+                          role="button" tabIndex={0} onClick={() => handleSelect(icon.name)}
                           style={{
                             padding: '16px 8px',
                             textAlign: 'center',

@@ -12,6 +12,7 @@
 import React, { useRef } from 'react';
 import { Button, Card, Typography, Space, Alert, Divider, Select, InputNumber, Form } from 'antd';
 import { PrinterOutlined, DownloadOutlined, QrcodeOutlined } from '@ant-design/icons';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -344,7 +345,7 @@ const CalibrationMarker: React.FC<CalibrationMarkerProps> = ({
               width: width * scale,
               height: height * scale,
               backgroundColor: '#fff',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              boxShadow: '0 2px 8px ${SF.overlayDarkLight}',
               position: 'relative',
               transform: 'scale(0.5)',
               transformOrigin: 'top center'

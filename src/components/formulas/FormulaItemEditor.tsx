@@ -168,7 +168,7 @@ const FormulaItemEditor: React.FC<FormulaItemEditorProps> = ({
     <Card
       size="small"
       title={
-        <div className="flex items-center gap-2 cursor-pointer select-none" onClick={toggleFormula}>
+        <div className="flex items-center gap-2 cursor-pointer select-none" role="button" tabIndex={0} onClick={toggleFormula}>
           <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: '#1677ff' }} />
           <span className="font-medium">{formula.name || 'Formule sans nom'}</span>
         </div>

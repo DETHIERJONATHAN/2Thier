@@ -293,7 +293,7 @@ export const TBLEditorWithAutoSave: React.FC<TBLEditorWithAutoSaveProps> = ({
                 cursor: 'pointer',
                 transition: 'all 0.3s'
               }}
-              onClick={() => handleRestoreDraft(draft.stageId)}
+              role="button" tabIndex={0} onClick={() => handleRestoreDraft(draft.stageId)}
             >
               <Space direction="vertical" style={{ width: '100%' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>

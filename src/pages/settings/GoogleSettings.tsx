@@ -1,8 +1,8 @@
-import { FB } from '../../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { Spin, message } from 'antd';
+import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
 import {
   GoogleOutlined,
   CheckCircleOutlined,
@@ -43,7 +43,7 @@ const FBToggle: React.FC<{
   const pad = 2;
   return (
     <div
-      onClick={() => onChange(!checked)}
+      role="button" tabIndex={0} onClick={() => onChange(!checked)}
       style={{
         width: w, height: h, borderRadius: h,
         background: checked ? FB.blue : '#bec3c9',
@@ -56,7 +56,7 @@ const FBToggle: React.FC<{
         position: 'absolute', top: pad, left: checked ? w - dot - pad : pad,
         width: dot, height: dot, borderRadius: '50%',
         background: FB.white,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        boxShadow: '0 1px 3px ${SF.overlayDark}',
         transition: 'left 0.25s',
       }} />
     </div>
@@ -149,7 +149,7 @@ const GoogleSettings: React.FC = () => {
           {/* Service Account Config */}
           <FBCard>
             <div
-              onClick={() => setExpandConfig(!expandConfig)}
+              role="button" tabIndex={0} onClick={() => setExpandConfig(!expandConfig)}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 cursor: 'pointer', padding: '4px 0',

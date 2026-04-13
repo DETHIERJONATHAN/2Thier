@@ -329,7 +329,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, onView, onCall, onEmail, onSc
         WebkitUserSelect: 'none', // 🔴 Pour Safari/iOS
         WebkitTouchCallout: 'none', // 🔴 Empêche le menu contextuel iOS
       }}
-      onClick={handleClick}
+      role="button" tabIndex={0} onClick={handleClick}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}

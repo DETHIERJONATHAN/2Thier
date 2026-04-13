@@ -367,7 +367,7 @@ const HiveLiveTimeline: React.FC<HiveLiveTimelineProps> = ({ userId, isOwner = f
               zIndex: 3,
               cursor: 'pointer',
             }}
-            onClick={() => setSelectedMoment(item)}
+            role="button" tabIndex={0} onClick={() => setSelectedMoment(item)}
           />
         ))}
       </div>
@@ -486,7 +486,7 @@ const MomentCard: React.FC<MomentCardProps> = React.memo(({
             left: 0,
             right: 0,
             height: 40,
-            background: `linear-gradient(transparent, rgba(0,0,0,0.4))`,
+            background: `linear-gradient(transparent, ${SF.overlayDarkMedium})`,
           }} />
           {moment.media.length > 1 && (
             <div style={{
@@ -578,17 +578,17 @@ const MomentCard: React.FC<MomentCardProps> = React.memo(({
             display: 'flex',
             gap: 4,
           }}
-          onClick={e => e.stopPropagation()}
+          role="button" tabIndex={0} onClick={e => e.stopPropagation()}
         >
           <Button
             size="small"
             icon={<EditOutlined />}
             onClick={onEdit}
             style={{
-              background: 'rgba(255,255,255,0.9)',
+              background: SF.overlayLightStrong,
               border: 'none',
               borderRadius: 6,
-              boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+              boxShadow: '0 1px 4px ${SF.overlayDarkLight}',
             }}
           />
           <Button
@@ -597,10 +597,10 @@ const MomentCard: React.FC<MomentCardProps> = React.memo(({
             icon={<DeleteOutlined />}
             onClick={onDelete}
             style={{
-              background: 'rgba(255,255,255,0.9)',
+              background: SF.overlayLightStrong,
               border: 'none',
               borderRadius: 6,
-              boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+              boxShadow: '0 1px 4px ${SF.overlayDarkLight}',
             }}
           />
         </div>
@@ -1078,7 +1078,7 @@ const MomentFormModal: React.FC<MomentFormModalProps> = ({
                     />
                   )}
                   <div
-                    onClick={() => handleRemoveMedia(item.uid)}
+                    role="button" tabIndex={0} onClick={() => handleRemoveMedia(item.uid)}
                     style={{
                       position: 'absolute', top: 4, right: 4,
                       cursor: 'pointer', background: SF.overlayDarkMd,

@@ -27,6 +27,7 @@ import * as MdIcons from 'react-icons/md';
 import * as IoIcons from 'react-icons/io5';
 import * as RiIcons from 'react-icons/ri';
 import type { IconType } from 'react-icons';
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 
 const { Header, Content } = Layout;
 
@@ -135,7 +136,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           padding: '0 16px',
           display: 'flex',
           alignItems: 'center',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          boxShadow: '0 2px 8px ${SF.overlayDarkLight}',
           width: '100%'
         }}
       >

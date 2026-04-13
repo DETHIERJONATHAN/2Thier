@@ -3070,7 +3070,7 @@ const Parameters: React.FC<ParametersProps> = (props) => {
                     repeaterCountSourceNodeId ? (
                       <span 
                         style={{ cursor: 'pointer', color: '#999' }}
-                        onClick={(e) => {
+                        role="button" tabIndex={0} onClick={(e) => {
                           e.stopPropagation();
                           setRepeaterCountSourceNodeId(null);
                           patchNode({ repeater_countSourceNodeId: null });

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Result, Button, Spin } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { SF } from '../components/zhiive/ZhiiveTheme';
 
 type VerifyState = 'loading' | 'success' | 'already' | 'expired' | 'error';
 
@@ -72,7 +73,7 @@ export default function VerifyEmailPage() {
         </div>
         <p style={{ color: '#93c5fd', fontSize: 15, margin: 0 }}>Votre ruche vivante.</p>
       </div>
-      <div style={{ background: '#fff', borderRadius: 20, padding: 48, maxWidth: 480, width: '100%', boxShadow: '0 4px 24px rgba(0,0,0,0.15)', border: '1px solid #f1f5f9' }}>
+      <div style={{ background: '#fff', borderRadius: 20, padding: 48, maxWidth: 480, width: '100%', boxShadow: '0 4px 24px ${SF.overlayDarkLight}', border: '1px solid #f1f5f9' }}>
         <Result
           status={cfg.status}
           icon={cfg.icon}

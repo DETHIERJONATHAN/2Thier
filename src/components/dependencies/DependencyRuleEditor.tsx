@@ -165,7 +165,7 @@ function DependencyRuleEditor({ dependency, allFields, onUpdate, onDelete, onTes
       <div className="flex items-center justify-between p-3 bg-gray-50 border-b border-gray-200">
         <div 
           className="flex-grow flex items-center cursor-pointer" 
-          onClick={() => setIsExpanded(!isExpanded)}
+          role="button" tabIndex={0} onClick={() => setIsExpanded(!isExpanded)}
         >
           <div className="mr-2">
             {isExpanded ? (

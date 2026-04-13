@@ -1,3 +1,4 @@
+import { SF } from '../zhiive/ZhiiveTheme';
 export default function AdminSwitch({ checked, onChange, disabled }: { checked: boolean, onChange: (checked: boolean) => void, disabled?: boolean }) {
   return (
     <button
@@ -9,7 +10,7 @@ export default function AdminSwitch({ checked, onChange, disabled }: { checked: 
     >
       <span
         className={`absolute left-0 top-0 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${checked ? 'translate-x-4' : ''}`}
-        style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
+        style={{ boxShadow: '0 1px 4px ${SF.overlayDarkFaint}' }}
       />
     </button>
   );

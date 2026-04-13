@@ -89,7 +89,7 @@ const Devis1minuteVitrinePage: React.FC = () => {
       <Card 
         bordered={false}
         style={{ 
-          background: 'rgba(0, 0, 0, 0.3)',
+          background: SF.overlayDark,
           borderRadius: 0,
           marginBottom: '20px'
         }}
@@ -111,7 +111,7 @@ const Devis1minuteVitrinePage: React.FC = () => {
           <Title 
             level={3}
             style={{ 
-              color: 'rgba(255, 255, 255, 0.95)',
+              color: SF.overlayLightNearOpaque,
               fontWeight: 'normal',
               margin: 0,
               fontSize: 'clamp(16px, 5vw, 22px)',
@@ -152,7 +152,7 @@ const Devis1minuteVitrinePage: React.FC = () => {
           </Button>
           
           <Text style={{ 
-            color: 'rgba(255, 255, 255, 0.8)',
+            color: SF.overlayPlayBtn,
             fontSize: 'clamp(12px, 3vw, 14px)'
           }}>
             <CheckCircleOutlined /> Plus de 15 000 demandes traitées • 4.8/5 de satisfaction

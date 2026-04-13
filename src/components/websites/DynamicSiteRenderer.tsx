@@ -213,7 +213,7 @@ const HeroSection: React.FC<SectionProps> = ({ content, style }) => {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.3)'
+          backgroundColor: SF.overlayDark
         }} />
       )}
 
@@ -349,7 +349,7 @@ const CTASection: React.FC<SectionProps> = ({ content, style }) => {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.4)'
+          backgroundColor: SF.overlayDarkMedium
         }} />
       )}
 

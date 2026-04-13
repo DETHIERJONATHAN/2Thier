@@ -1,4 +1,4 @@
-import { SF, WEBSITE_DEFAULTS } from '../zhiive/ZhiiveTheme';
+import { SF, WEBSITE_DEFAULTS } from '../../zhiive/ZhiiveTheme';
 /**
  * 📌 Éditeur de Header/Bandeau COMPLET
  * Logo, menu, boutons, styles avancés, responsive, sticky, animations

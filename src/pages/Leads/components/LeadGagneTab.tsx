@@ -461,7 +461,7 @@ const LeadGagneTab: React.FC<LeadGagneTabProps> = ({ leadId, organizationId: _or
                     <Tooltip title={`Ouvrir ${c.documentName}`}>
                       <span 
                         style={{ fontSize: 11, color: c.documentUrl ? '#1677ff' : '#8c8c8c', cursor: c.documentUrl ? 'pointer' : 'default' }}
-                        onClick={() => {
+                        role="button" tabIndex={0} onClick={() => {
                           if (c.documentUrl) {
                             window.open(c.documentUrl, '_blank');
                           }

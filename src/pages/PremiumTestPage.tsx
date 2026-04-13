@@ -31,6 +31,7 @@ import {
 } from '@ant-design/icons';
 import '../styles/global-premium.css';
 import { useTranslation } from 'react-i18next';
+import { SF } from '../components/zhiive/ZhiiveTheme';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
@@ -141,7 +142,7 @@ const PremiumTestPage: React.FC = () => {
         <Title level={1} style={{ color: 'white', margin: 0 }}>
           🎨 CRM Premium Design System
         </Title>
-        <Paragraph style={{ color: 'rgba(255,255,255,0.9)', fontSize: '18px', margin: '16px 0 0' }}>
+        <Paragraph style={{ color: SF.overlayLightStrong, fontSize: '18px', margin: '16px 0 0' }}>
           Nouveau design uniforme inspiré du module d'appel
         </Paragraph>
       </div>
@@ -385,7 +386,7 @@ const PremiumTestPage: React.FC = () => {
           <Title level={3} style={{ color: 'white', margin: 0 }}>
             🎉 Design Premium Appliqué!
           </Title>
-          <Text style={{ color: 'rgba(255,255,255,0.9)' }}>
+          <Text style={{ color: SF.overlayLightStrong }}>
             Tous les composants utilisent maintenant le style du module d'appel
           </Text>
         </div>
@@ -425,7 +426,7 @@ const PremiumTestPage: React.FC = () => {
         <Title level={4} style={{ color: 'white', margin: 0 }}>
           🎯 Mission Accomplie : Design Premium Unifié!
         </Title>
-        <Text style={{ color: 'rgba(255,255,255,0.9)' }}>
+        <Text style={{ color: SF.overlayLightStrong }}>
           Tous les composants du CRM utilisent maintenant le même style premium
         </Text>
       </div>

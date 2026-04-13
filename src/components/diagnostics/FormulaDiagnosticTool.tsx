@@ -45,7 +45,7 @@ export const FormulaDiagnosticTool: React.FC = () => {
                             <div 
                                 key={testCase.id}
                                 className={`p-2 border rounded cursor-pointer ${selectedTestCase?.id === testCase.id ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50'}`}
-                                onClick={() => setSelectedTestCase(testCase)}
+                                role="button" tabIndex={0} onClick={() => setSelectedTestCase(testCase)}
                             >
                                 <div className="font-medium">{testCase.name}</div>
                                 <div className="text-xs text-gray-500">{testCase.sequence.length} éléments</div>

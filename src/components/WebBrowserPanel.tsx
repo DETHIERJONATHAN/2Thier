@@ -75,20 +75,20 @@ const WebBrowserPanel: React.FC<WebBrowserPanelProps> = ({ url, onClose }) => {
         gap: 6,
         padding: '6px 10px',
         background: 'linear-gradient(135deg, #0B0E2A 0%, #1a1e4e 100%)',
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        borderBottom: '1px solid ${SF.overlayLightest}',
         flexShrink: 0,
       }}>
         {/* Back / Close */}
         <Tooltip title={t('common.close')}>
           <div
-            onClick={onClose}
+            role="button" tabIndex={0} onClick={onClose}
             style={{
               width: 28, height: 28, borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', color: 'rgba(255,255,255,0.8)',
+              cursor: 'pointer', color: SF.overlayPlayBtn,
               transition: 'background 0.2s',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+            onMouseEnter={(e) => (e.currentTarget.style.background = SF.overlayLightSubtle)}
             onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           >
             <ArrowLeftOutlined style={{ fontSize: 14 }} />
@@ -98,14 +98,14 @@ const WebBrowserPanel: React.FC<WebBrowserPanelProps> = ({ url, onClose }) => {
         {/* Refresh */}
         <Tooltip title={t('common.refresh')}>
           <div
-            onClick={handleRefresh}
+            role="button" tabIndex={0} onClick={handleRefresh}
             style={{
               width: 28, height: 28, borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', color: 'rgba(255,255,255,0.8)',
+              cursor: 'pointer', color: SF.overlayPlayBtn,
               transition: 'background 0.2s',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+            onMouseEnter={(e) => (e.currentTarget.style.background = SF.overlayLightSubtle)}
             onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           >
             {isLoading ? <LoadingOutlined style={{ fontSize: 13 }} /> : <ReloadOutlined style={{ fontSize: 13 }} />}
@@ -118,12 +118,12 @@ const WebBrowserPanel: React.FC<WebBrowserPanelProps> = ({ url, onClose }) => {
           display: 'flex',
           alignItems: 'center',
           gap: 6,
-          background: 'rgba(255,255,255,0.08)',
+          background: SF.overlayLightest,
           borderRadius: 16,
           padding: '4px 12px',
           minWidth: 0,
         }}>
-          <GlobalOutlined style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
+          <GlobalOutlined style={{ fontSize: 12, color: SF.textLightDimmed, flexShrink: 0 }} />
           <span style={{
             fontSize: 12,
             color: 'rgba(255,255,255,0.75)',
@@ -134,7 +134,7 @@ const WebBrowserPanel: React.FC<WebBrowserPanelProps> = ({ url, onClose }) => {
             {displayDomain}
           </span>
           <LinkOutlined
-            style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', flexShrink: 0, cursor: 'pointer' }}
+            style={{ fontSize: 10, color: SF.overlayLightActive, flexShrink: 0, cursor: 'pointer' }}
             onClick={() => navigator.clipboard?.writeText(url)}
           />
         </div>
@@ -142,14 +142,14 @@ const WebBrowserPanel: React.FC<WebBrowserPanelProps> = ({ url, onClose }) => {
         {/* Open in new tab */}
         <Tooltip title="Ouvrir dans un nouvel onglet">
           <div
-            onClick={handleOpenExternal}
+            role="button" tabIndex={0} onClick={handleOpenExternal}
             style={{
               width: 28, height: 28, borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', color: 'rgba(255,255,255,0.8)',
+              cursor: 'pointer', color: SF.overlayPlayBtn,
               transition: 'background 0.2s',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+            onMouseEnter={(e) => (e.currentTarget.style.background = SF.overlayLightSubtle)}
             onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           >
             <ExportOutlined style={{ fontSize: 13 }} />
@@ -159,11 +159,11 @@ const WebBrowserPanel: React.FC<WebBrowserPanelProps> = ({ url, onClose }) => {
         {/* Close */}
         <Tooltip title={t('common.close')}>
           <div
-            onClick={onClose}
+            role="button" tabIndex={0} onClick={onClose}
             style={{
               width: 28, height: 28, borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', color: 'rgba(255,255,255,0.6)',
+              cursor: 'pointer', color: SF.overlayLightMedium,
               transition: 'background 0.2s',
             }}
             onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,0,0,0.2)')}
@@ -201,7 +201,7 @@ const WebBrowserPanel: React.FC<WebBrowserPanelProps> = ({ url, onClose }) => {
             {displayDomain}
           </div>
           <div
-            onClick={handleOpenExternal}
+            role="button" tabIndex={0} onClick={handleOpenExternal}
             style={{
               marginTop: 8,
               padding: '8px 20px',

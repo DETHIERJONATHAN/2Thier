@@ -43,7 +43,7 @@ const FBToggle = ({ checked, onChange, disabled, size = 'default' }: {
   const dot = size === 'small' ? 16 : 20;
   return (
     <div
-      onClick={() => !disabled && onChange(!checked)}
+      role="button" tabIndex={0} onClick={() => !disabled && onChange(!checked)}
       style={{
         width: w, height: h, borderRadius: h,
         background: disabled ? '#ccc' : checked ? FB.blue : '#ccc',
@@ -56,7 +56,7 @@ const FBToggle = ({ checked, onChange, disabled, size = 'default' }: {
         width: dot, height: dot, borderRadius: '50%', background: FB.white,
         position: 'absolute', top: (h - dot) / 2,
         left: checked ? w - dot - (h - dot) / 2 : (h - dot) / 2,
-        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        transition: 'left 0.2s', boxShadow: '0 1px 3px ${SF.overlayDark}',
       }} />
     </div>
   );
@@ -79,16 +79,16 @@ const FBConfirm = ({ title, description, onConfirm, children }: {
   const [open, setOpen] = useState(false);
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
-      <div onClick={() => setOpen(true)}>{children}</div>
+      <div role="button" tabIndex={0} onClick={() => setOpen(true)}>{children}</div>
       {open && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center',
+          background: SF.overlayDarkMd, display: 'flex', alignItems: 'center',
           justifyContent: 'center', zIndex: 1000,
-        }} onClick={() => setOpen(false)}>
-          <div onClick={e => e.stopPropagation()} style={{
+        }} role="button" tabIndex={0} onClick={() => setOpen(false)}>
+          <div role="button" tabIndex={0} onClick={e => e.stopPropagation()} style={{
             background: FB.white, borderRadius: FB.radius, padding: 24,
-            maxWidth: 400, width: '90%', boxShadow: '0 8px 30px rgba(0,0,0,0.2)',
+            maxWidth: 400, width: '90%', boxShadow: '0 8px 30px ${SF.overlayDarkSubtle}',
           }}>
             <div style={{ fontWeight: 700, fontSize: 17, color: FB.text, marginBottom: 8 }}>{title}</div>
             <div style={{ color: FB.textSecondary, fontSize: 14, marginBottom: 20 }}>{description}</div>

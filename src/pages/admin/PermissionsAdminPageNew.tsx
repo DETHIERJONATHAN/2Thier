@@ -1,9 +1,9 @@
-import { FB } from '../../components/zhiive/ZhiiveTheme';
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { message as antdMessage } from 'antd';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { useDebouncedCallback } from 'use-debounce';
+import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
 import {
   getActionTranslation,
   getModuleTranslation
@@ -52,7 +52,7 @@ const FBToggle = ({ checked, onChange, disabled, size = 'default' }: {
   const h = size === 'small' ? 20 : 24;
   const dot = size === 'small' ? 16 : 20;
   return (
-    <div onClick={() => !disabled && onChange(!checked)} style={{
+    <div role="button" tabIndex={0} onClick={() => !disabled && onChange(!checked)} style={{
       width: w, height: h, borderRadius: h, cursor: disabled ? 'not-allowed' : 'pointer',
       background: checked ? FB.blue : '#ccc', transition: 'background .2s', position: 'relative',
       opacity: disabled ? 0.5 : 1,
@@ -60,7 +60,7 @@ const FBToggle = ({ checked, onChange, disabled, size = 'default' }: {
       <div style={{
         width: dot, height: dot, borderRadius: '50%', background: '#fff',
         position: 'absolute', top: (h - dot) / 2, left: checked ? w - dot - (h - dot) / 2 : (h - dot) / 2,
-        transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        transition: 'left .2s', boxShadow: '0 1px 3px ${SF.overlayDark}',
       }} />
     </div>
   );
@@ -344,7 +344,7 @@ const PermissionsAdminPage: React.FC = () => {
         <div style={{ flex: isMobile ? '1 1 100%' : '1 1 220px', minWidth: isMobile ? 0 : 180 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>Rôle à modifier :</div>
           <div style={{ position: 'relative' }}>
-            <div onClick={() => setRoleDropdownOpen(!roleDropdownOpen)} style={{
+            <div role="button" tabIndex={0} onClick={() => setRoleDropdownOpen(!roleDropdownOpen)} style={{
               border: `1px solid ${FB.border}`, borderRadius: FB.radius, padding: '8px 12px',
               cursor: 'pointer', background: FB.white, display: 'flex',
               justifyContent: 'space-between', alignItems: 'center',
@@ -357,10 +357,10 @@ const PermissionsAdminPage: React.FC = () => {
               <div style={{
                 position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
                 background: FB.white, border: `1px solid ${FB.border}`, borderRadius: FB.radius,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)', maxHeight: 250, overflowY: 'auto',
+                boxShadow: '0 4px 12px ${SF.overlayDarkLight}', maxHeight: 250, overflowY: 'auto',
               }}>
                 {roles.map(role => (
-                  <div key={role.id} onClick={() => handleRoleSelect(role.id)} style={{
+                  <div key={role.id} role="button" tabIndex={0} onClick={() => handleRoleSelect(role.id)} style={{
                     padding: '10px 12px', cursor: 'pointer', display: 'flex',
                     justifyContent: 'space-between', alignItems: 'center',
                     background: selectedRole?.id === role.id ? '#e7f3ff' : 'transparent',
@@ -402,7 +402,7 @@ const PermissionsAdminPage: React.FC = () => {
         <div style={{ flex: isMobile ? '1 1 100%' : '1 1 200px', minWidth: isMobile ? 0 : 160 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 6 }}>Catégorie :</div>
           <div style={{ position: 'relative' }}>
-            <div onClick={() => setCatDropdownOpen(!catDropdownOpen)} style={{
+            <div role="button" tabIndex={0} onClick={() => setCatDropdownOpen(!catDropdownOpen)} style={{
               border: `1px solid ${FB.border}`, borderRadius: FB.radius, padding: '8px 12px',
               cursor: 'pointer', background: FB.white, display: 'flex',
               justifyContent: 'space-between', alignItems: 'center', fontSize: 14, color: FB.text,
@@ -414,15 +414,15 @@ const PermissionsAdminPage: React.FC = () => {
               <div style={{
                 position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
                 background: FB.white, border: `1px solid ${FB.border}`, borderRadius: FB.radius,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)', maxHeight: 200, overflowY: 'auto',
+                boxShadow: '0 4px 12px ${SF.overlayDarkLight}', maxHeight: 200, overflowY: 'auto',
               }}>
-                <div onClick={() => { setCategoryFilter('all'); setCatDropdownOpen(false); }}
+                <div role="button" tabIndex={0} onClick={() => { setCategoryFilter('all'); setCatDropdownOpen(false); }}
                   style={{ padding: '10px 12px', cursor: 'pointer', background: categoryFilter === 'all' ? '#e7f3ff' : 'transparent' }}
                   onMouseEnter={e => { e.currentTarget.style.background = '#f0f2f5'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = categoryFilter === 'all' ? '#e7f3ff' : 'transparent'; }}
                 >Toutes les catégories</div>
                 {categories.map(cat => (
-                  <div key={cat} onClick={() => { setCategoryFilter(cat); setCatDropdownOpen(false); }}
+                  <div key={cat} role="button" tabIndex={0} onClick={() => { setCategoryFilter(cat); setCatDropdownOpen(false); }}
                     style={{ padding: '10px 12px', cursor: 'pointer', background: categoryFilter === cat ? '#e7f3ff' : 'transparent' }}
                     onMouseEnter={e => { e.currentTarget.style.background = '#f0f2f5'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = categoryFilter === cat ? '#e7f3ff' : 'transparent'; }}

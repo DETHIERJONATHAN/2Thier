@@ -161,7 +161,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
               </Title>
               
               <Paragraph style={{ 
-                color: textColor || 'rgba(255,255,255,0.95)', 
+                color: textColor || SF.overlayLightNearOpaque, 
                 fontSize: 'clamp(16px, 4vw, 20px)', 
                 maxWidth: '800px', 
                 margin: '0 auto',
@@ -182,7 +182,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
                         height: 'auto', 
                         padding: '16px 32px',
                         fontSize: '18px',
-                        backgroundColor: btn.backgroundColor || (idx === 0 ? 'white' : 'rgba(255,255,255,0.1)'),
+                        backgroundColor: btn.backgroundColor || (idx === 0 ? 'white' : SF.overlayLightSubtle),
                         borderColor: btn.borderColor || 'white',
                         color: btn.textColor || (idx === 0 ? WEBSITE_DEFAULTS.primaryColor : 'white'),
                         fontWeight: btn.fontWeight || (idx === 0 ? 'bold' : 'normal')
@@ -196,7 +196,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
 
               {section.content?.badge && (
                 <div style={{ marginTop: '40px' }}>
-                  <Text style={{ color: textColor || 'rgba(255,255,255,0.9)', fontSize: '16px' }}>
+                  <Text style={{ color: textColor || SF.overlayLightStrong, fontSize: '16px' }}>
                     <CheckCircleOutlined /> {getText(section.content.badge)}
                   </Text>
                 </div>
@@ -226,7 +226,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
                     textAlign: 'center',
                     background: 'white',
                     borderRadius: '12px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+                    boxShadow: '0 4px 12px ${SF.overlayDarkFaint}'
                   }}
                 >
                   <div style={{ fontSize: '48px', marginBottom: '8px', color: stat.color || WEBSITE_DEFAULTS.primaryColor }}>
@@ -539,7 +539,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
                       height: '100%',
                       background: 'white',
                       borderRadius: '16px',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                      boxShadow: '0 4px 12px ${SF.overlayDarkFaint}',
                       padding: '16px'
                     }}
                   >
@@ -626,7 +626,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
             <Title level={2} style={{ color: textColor || 'white', margin: 0 }}>
               {getText(section.content?.title, 'Call to Action')}
             </Title>
-            <Paragraph style={{ color: textColor || 'rgba(255,255,255,0.95)', fontSize: '18px' }}>
+            <Paragraph style={{ color: textColor || SF.overlayLightNearOpaque, fontSize: '18px' }}>
               {getText(section.content?.subtitle, 'Description')}
             </Paragraph>
             {ctaButtons.length > 0 && (
@@ -637,7 +637,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
                     type={idx === 0 ? 'primary' : 'default'}
                     size="large"
                     style={{ 
-                      background: btn.backgroundColor || (idx === 0 ? 'white' : 'rgba(255,255,255,0.1)'),
+                      background: btn.backgroundColor || (idx === 0 ? 'white' : SF.overlayLightSubtle),
                       borderColor: btn.borderColor || 'white',
                       color: btn.textColor || (idx === 0 ? WEBSITE_DEFAULTS.primaryColor : 'white'),
                       height: 'auto',
@@ -653,7 +653,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
               </Space>
             )}
             {section.content?.address && (
-              <Text style={{ color: textColor || 'rgba(255,255,255,0.9)', fontSize: '16px' }}>
+              <Text style={{ color: textColor || SF.overlayLightStrong, fontSize: '16px' }}>
                 <EnvironmentOutlined /> {getText(section.content.address)}
               </Text>
             )}

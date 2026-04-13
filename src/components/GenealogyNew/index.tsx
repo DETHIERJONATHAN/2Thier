@@ -161,7 +161,7 @@ const TableCell: React.FC<{
       ) : (
         <span 
           className="text-white font-bold text-xs text-center px-1"
-          onClick={() => setIsEditing(true)}
+          role="button" tabIndex={0} onClick={() => setIsEditing(true)}
         >
           {node.label}
         </span>

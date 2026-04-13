@@ -203,7 +203,7 @@ const ProfileSettings: React.FC = () => {
               )}
             </div>
             <div
-              onClick={() => !avatarUploading && fileInputRef.current?.click()}
+              role="button" tabIndex={0} onClick={() => !avatarUploading && fileInputRef.current?.click()}
               style={{
                 position: 'absolute', bottom: 0, right: 0,
                 width: 28, height: 28, borderRadius: '50%',

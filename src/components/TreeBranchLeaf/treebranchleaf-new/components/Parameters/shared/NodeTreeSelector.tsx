@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { TreeSelect, Modal, Space, Tabs, Typography, Alert, Spin, Segmented, Tooltip, List, Input, Collapse, Badge, Tag, ConfigProvider } from 'antd';
 import { useAuthenticatedApi } from '../../../../../../hooks/useAuthenticatedApi';
+import { SF } from '../../../../../zhiive/ZhiiveTheme';
 
 type NodeLite = { id: string; parentId?: string | null; label: string; type: string; subType?: string | null };
 
@@ -679,7 +680,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
             colorInfoBorder: '#1890ff44',
           },
           Segmented: {
-            trackBg: 'rgba(255,255,255,0.06)',
+            trackBg: SF.overlayLightFaint,
             itemColor: '#aaa',
             itemSelectedColor: '#fff',
             itemSelectedBg: '#1890ff',
@@ -941,7 +942,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             style={{ 
                               fontSize: 11, 
                               fontFamily: 'monospace',
-                              color: isSelected ? 'rgba(255,255,255,0.7)' : '#999'
+                              color: isSelected ? SF.textLightMuted : '#999'
                             }}
                           >
                             {`{${item.key}}`}
@@ -986,7 +987,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             style={{ 
                               fontSize: 11, 
                               fontFamily: 'monospace',
-                              color: isSelected ? 'rgba(255,255,255,0.7)' : '#999'
+                              color: isSelected ? SF.textLightMuted : '#999'
                             }}
                           >
                             {`{${item.key}}`}
@@ -1031,7 +1032,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                             style={{ 
                               fontSize: 11, 
                               fontFamily: 'monospace',
-                              color: isSelected ? 'rgba(255,255,255,0.7)' : '#999'
+                              color: isSelected ? SF.textLightMuted : '#999'
                             }}
                           >
                             {`{${item.key}}`}
@@ -1141,7 +1142,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                   return (
                     <Collapse
                       defaultActiveKey={[]}
-                      style={{ background: 'rgba(255,255,255,0.04)' }}
+                      style={{ background: SF.overlayLightFaint }}
                       items={filtered.map((group, groupIdx) => ({
                         key: String(groupIdx),
                         label: (
@@ -1172,13 +1173,13 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                     return (
                                       <List.Item
                                         onClick={() => toggleValue(`node-formula:${item.id}`, item.name)}
-                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? 'rgba(24,144,255,0.12)' : 'rgba(255,255,255,0.06)', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
+                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? 'rgba(24,144,255,0.12)' : SF.overlayLightFaint, color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
                                       >
                                         <Space>
                                           <span>🧮</span>
                                           <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>{item.name}</Typography.Text>
-                                          <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
-                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#999' }}>(ce nœud)</Typography.Text>}
+                                          <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? SF.overlayLightMedium : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
+                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? SF.textLightMuted : '#999' }}>(ce nœud)</Typography.Text>}
                                           {isSelected && <span>✓</span>}
                                         </Space>
                                       </List.Item>
@@ -1218,7 +1219,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                   return (
                     <Collapse
                       defaultActiveKey={[]}
-                      style={{ background: 'rgba(255,255,255,0.04)' }}
+                      style={{ background: SF.overlayLightFaint }}
                       items={filtered.map((group, groupIdx) => ({
                         key: String(groupIdx),
                         label: (
@@ -1250,13 +1251,13 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                     return (
                                       <List.Item
                                         onClick={() => toggleValue(valKey, item.name)}
-                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? 'rgba(82,196,26,0.12)' : 'rgba(255,255,255,0.06)', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
+                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? 'rgba(82,196,26,0.12)' : SF.overlayLightFaint, color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
                                       >
                                         <Space>
                                           <span>⚡</span>
                                           <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>{item.name}</Typography.Text>
-                                          <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
-                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#999' }}>(ce nœud)</Typography.Text>}
+                                          <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? SF.overlayLightMedium : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
+                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? SF.textLightMuted : '#999' }}>(ce nœud)</Typography.Text>}
                                           {isSelected && <span>✓</span>}
                                         </Space>
                                       </List.Item>
@@ -1296,7 +1297,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                   return (
                     <Collapse
                       defaultActiveKey={[]}
-                      style={{ background: 'rgba(255,255,255,0.04)' }}
+                      style={{ background: SF.overlayLightFaint }}
                       items={filtered.map((group, groupIdx) => ({
                         key: String(groupIdx),
                         label: (
@@ -1328,13 +1329,13 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                     return (
                                       <List.Item
                                         onClick={() => toggleValue(valKey, item.name)}
-                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? 'rgba(24,144,255,0.12)' : 'rgba(255,255,255,0.06)', color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
+                                        style={{ cursor: 'pointer', backgroundColor: isSelected ? '#1890ff' : item._isCurrentNode ? 'rgba(24,144,255,0.12)' : SF.overlayLightFaint, color: isSelected ? 'white' : 'inherit', transition: 'all 0.2s', padding: '6px 12px' }}
                                       >
                                         <Space>
                                           <span>🗂️</span>
                                           <Typography.Text style={{ color: isSelected ? 'white' : 'inherit' }}>{item.name}</Typography.Text>
-                                          <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
-                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#999' }}>(ce nœud)</Typography.Text>}
+                                          <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? SF.overlayLightMedium : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
+                                          {item._isCurrentNode && <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? SF.textLightMuted : '#999' }}>(ce nœud)</Typography.Text>}
                                           {isSelected && <span>✓</span>}
                                         </Space>
                                       </List.Item>
@@ -1449,11 +1450,11 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                             onClick={() => toggleValue(refKey, `${item.repeaterLabel} / ${item.label}`)}
                                             style={{ 
                                               cursor: 'pointer', 
-                                              backgroundColor: isSelected ? '#722ed1' : 'rgba(255,255,255,0.04)',
+                                              backgroundColor: isSelected ? '#722ed1' : SF.overlayLightFaint,
                                               color: isSelected ? 'white' : 'inherit',
                                               padding: '8px 12px 8px 20px',
                                               transition: 'all 0.2s',
-                                              borderBottom: '1px solid rgba(255,255,255,0.08)'
+                                              borderBottom: '1px solid ${SF.overlayLightest}'
                                             }}
                                           >
                                             <Space style={{ width: '100%', justifyContent: 'space-between' }}>
@@ -1519,7 +1520,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                       />
                       <Collapse
                         defaultActiveKey={[]}
-                        style={{ background: 'rgba(255,255,255,0.04)' }}
+                        style={{ background: SF.overlayLightFaint }}
                         items={filtered.map((group, groupIdx) => ({
                           key: String(groupIdx),
                           label: (
@@ -1559,18 +1560,18 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                             <Space>
                                               <span>{sourceIcon}</span>
                                               <Typography.Text strong style={{ color: isSelected ? 'white' : 'inherit' }}>{item.label}</Typography.Text>
-                                              <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
+                                              <Typography.Text style={{ fontSize: '10px', fontFamily: 'monospace', color: isSelected ? SF.overlayLightMedium : '#bbb' }}>[{item.id.slice(0, 8)}]</Typography.Text>
                                               {item.calculatedValue !== null && (
-                                                <Typography.Text style={{ color: isSelected ? 'rgba(255,255,255,0.9)' : '#52c41a', fontWeight: 'bold' }}>= {item.calculatedValue}</Typography.Text>
+                                                <Typography.Text style={{ color: isSelected ? SF.overlayLightStrong : '#52c41a', fontWeight: 'bold' }}>= {item.calculatedValue}</Typography.Text>
                                               )}
                                               {isSelected && <span>✓</span>}
                                             </Space>
                                             <Space size={16} style={{ paddingLeft: '24px' }}>
                                               {item.parentLabel && (
-                                                <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? 'rgba(255,255,255,0.8)' : '#666' }}>📁 {item.parentLabel}</Typography.Text>
+                                                <Typography.Text type="secondary" style={{ fontSize: '11px', color: isSelected ? SF.overlayPlayBtn : '#666' }}>📁 {item.parentLabel}</Typography.Text>
                                               )}
                                               {item.calculatedBy && (
-                                                <Typography.Text type="secondary" style={{ fontSize: '10px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#999', fontStyle: 'italic' }}>Source: {item.calculatedBy}</Typography.Text>
+                                                <Typography.Text type="secondary" style={{ fontSize: '10px', color: isSelected ? SF.textLightMuted : '#999', fontStyle: 'italic' }}>Source: {item.calculatedBy}</Typography.Text>
                                               )}
                                             </Space>
                                           </Space>
@@ -1647,7 +1648,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                   style={{ 
                                     fontSize: '10px',
                                     fontFamily: 'monospace',
-                                    color: isSelected ? 'rgba(255,255,255,0.6)' : '#bbb'
+                                    color: isSelected ? SF.overlayLightMedium : '#bbb'
                                   }}
                                 >
                                   [{item.id.slice(0, 8)}]
@@ -1658,7 +1659,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                 <Typography.Text 
                                   style={{ 
                                     fontSize: '10px',
-                                    color: isSelected ? 'rgba(255,255,255,0.9)' : getCategoryColor(item.category),
+                                    color: isSelected ? SF.overlayLightStrong : getCategoryColor(item.category),
                                     fontWeight: 'bold',
                                     paddingLeft: '24px',
                                     textTransform: 'uppercase'
@@ -1672,7 +1673,7 @@ const NodeTreeSelector: React.FC<Props> = ({ nodeId, open, onClose, onSelect, se
                                   type="secondary" 
                                   style={{ 
                                     fontSize: '11px',
-                                    color: isSelected ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.45)',
+                                    color: isSelected ? SF.overlayPlayBtn : 'rgba(255,255,255,0.45)',
                                     paddingLeft: '24px',
                                     fontStyle: 'italic'
                                   }}

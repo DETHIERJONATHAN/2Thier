@@ -65,6 +65,7 @@ import {
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { CoordinateGrid } from './CoordinateGrid';
 import { useTranslation } from 'react-i18next';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -3396,7 +3397,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                 left: 0,
                 right: 0,
                 zIndex: 10001,
-                background: 'rgba(0, 0, 0, 0.85)',
+                background: SF.overlayDarkVeryHeavy,
                 color: '#fff',
                 padding: '10px 16px',
                 display: 'flex',
@@ -3421,7 +3422,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
                         {(backendMeasurements.hauteur_cm / 100).toFixed(2)} m
                       </div>
                     </div>
-                    <div style={{ marginLeft: 8, textAlign: 'center', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: 12 }}>
+                    <div style={{ marginLeft: 8, textAlign: 'center', borderLeft: '1px solid ${SF.overlayLight}', paddingLeft: 12 }}>
                       <div style={{ fontSize: 10, opacity: 0.7 }}>Surface</div>
                       <div style={{ fontSize: 14, fontWeight: 'bold', color: '#faad14' }}>
                         {(backendMeasurements.largeur_cm * backendMeasurements.hauteur_cm / 10000).toFixed(2)} m²
@@ -3450,7 +3451,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             
             {/* Bouton Menu hamburger */}
             <div
-              onClick={() => {
+              role="button" tabIndex={0} onClick={() => {
                 console.log('📱 Menu cliqué! mobileMenuOpen:', mobileMenuOpen);
                 setMobileMenuOpen(true);
               }}
@@ -3476,7 +3477,7 @@ export const ImageMeasurementCanvas: React.FC<ImageMeasurementCanvasProps> = ({
             {/* Bouton Valider */}
             {onValidate && points.length >= minPoints && (
               <div
-                onClick={handleValidate}
+                role="button" tabIndex={0} onClick={handleValidate}
                 style={{
                   position: 'absolute',
                   bottom: 85,

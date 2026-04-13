@@ -232,7 +232,7 @@ const PublicSignaturePage: React.FC = () => {
         {/* Header */}
         <div style={styles.header}>
           <h1 style={{ margin: 0, fontSize: 20, color: '#fff' }}>✍️ Signature électronique</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: SF.overlayPlayBtn }}>
             {info?.signatureType === 'DEVIS' ? 'Signature de devis' : info?.signatureType}
           </p>
         </div>
@@ -343,7 +343,7 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: 560,
     backgroundColor: '#fff',
     borderRadius: 12,
-    boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+    boxShadow: '0 4px 24px ${SF.overlayDarkFaint}',
     overflow: 'hidden',
   },
   header: {

@@ -85,6 +85,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { useTranslation } from 'react-i18next';
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -657,7 +658,7 @@ const AdminModulesV2: React.FC = () => {
               style={{
                 backgroundColor: '#ffffff',
                 borderRadius: '8px',
-                boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
+                boxShadow: '0 2px 12px ${SF.overlayDarkFaint}',
                 border: '1px solid #f0f0f0'
               }}
             >
@@ -793,7 +794,7 @@ const AdminModulesV2: React.FC = () => {
               style={{
                 backgroundColor: '#ffffff',
                 borderRadius: '8px',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+                boxShadow: '0 2px 8px ${SF.overlayDarkFaint}',
                 border: '1px solid #f0f0f0'
               }}
               styles={{ body: { padding: '16px' } }}
@@ -912,7 +913,7 @@ const AdminModulesV2: React.FC = () => {
                         style={{
                           backgroundColor: '#ffffff',
                           borderRadius: '8px',
-                          boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)'
+                          boxShadow: '0 2px 12px ${SF.overlayDarkFaint}'
                         }}
                         styles={{ header: { borderBottom: '1px solid #f0f0f0' } }}
                       >
@@ -986,7 +987,7 @@ const AdminModulesV2: React.FC = () => {
                                       marginBottom: 12,
                                       borderColor: '#f0f0f0',
                                       backgroundColor: '#ffffff',
-                                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+                                      boxShadow: '0 2px 8px ${SF.overlayDarkFaint}',
                                       border: '1px solid #e8e8e8',
                                       borderLeft: `4px solid ${module.isActiveInOrg ? '#52c41a' : '#d9d9d9'}`
                                     }}
@@ -1064,7 +1065,7 @@ const AdminModulesV2: React.FC = () => {
                 style={{
                   backgroundColor: '#ffffff',
                   borderRadius: '8px',
-                  boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
+                  boxShadow: '0 2px 12px ${SF.overlayDarkFaint}',
                   border: '1px solid #f0f0f0'
                 }}
               >
@@ -1193,7 +1194,7 @@ const AdminModulesV2: React.FC = () => {
                   style={{
                     backgroundColor: '#ffffff',
                     borderRadius: '8px',
-                    boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
+                    boxShadow: '0 2px 12px ${SF.overlayDarkFaint}',
                     border: '1px solid #f0f0f0'
                   }}
                 >

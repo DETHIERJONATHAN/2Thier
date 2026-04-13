@@ -355,7 +355,7 @@ const InteractivePDFPreview = ({
   return (
     <div 
       ref={containerRef}
-      onClick={handleContainerClick}
+      role="button" tabIndex={0} onClick={handleContainerClick}
       onMouseMove={(e) => {
         handleDragMove(e);
         handleResizeMove(e);

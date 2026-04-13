@@ -1,4 +1,3 @@
-import { FB } from '../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect } from 'react';
 import { Spin, message } from 'antd';
 import {
@@ -13,6 +12,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
+import { FB, SF } from '../components/zhiive/ZhiiveTheme';
 
 const useScreenSize = () => {
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -110,7 +110,7 @@ export default function MyCommercialLinks() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{
-            width: 56, height: 56, borderRadius: '50%', background: 'rgba(255,255,255,0.2)',
+            width: 56, height: 56, borderRadius: '50%', background: SF.overlayLight,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>
             <UserOutlined style={{ fontSize: 26, color: FB.white }} />

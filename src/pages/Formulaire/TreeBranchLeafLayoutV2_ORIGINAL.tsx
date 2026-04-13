@@ -37,6 +37,7 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { useTranslation } from 'react-i18next';
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 
 const { Text, Title } = Typography;
 
@@ -221,7 +222,7 @@ const TreeStructure: React.FC<TreeStructureProps> = ({
             // DEBUG: Force une couleur visible pour tester
             boxShadow: hasChildren && node.type === 'branch' ? '0 0 10px rgba(82, 196, 26, 0.3)' : 'none',
           }}
-          onClick={() => setSelectedNode(node)}
+          role="button" tabIndex={0} onClick={() => setSelectedNode(node)}
           onMouseEnter={(e) => {
             if (!isSelected) {
               e.currentTarget.style.backgroundColor = hasChildren && node.type === 'branch' ? '#f0f9f0' : '#f5f5f5';
@@ -1802,7 +1803,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
               backgroundColor: '#e6f7ff',
               border: '1px solid #40a9ff',
               borderRadius: '6px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              boxShadow: '0 4px 12px ${SF.overlayDarkLight}',
               opacity: 0.8
             }}>
               <Text>{draggedItem.item?.label || 'Ã‰lÃ©ment'}</Text>

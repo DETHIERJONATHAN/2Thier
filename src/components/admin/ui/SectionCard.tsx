@@ -38,12 +38,12 @@ export default function SectionCard({
       {/* Header enrichi */}
       <div
         className="flex items-center justify-between cursor-pointer select-none flex-nowrap"
-        onClick={() => setOpen(!open)}
+        role="button" tabIndex={0} onClick={() => setOpen(!open)}
         {...(dragHandle?.attributes || {})}
         {...(dragHandle?.listeners || {})}
       >
         <div className="flex items-center gap-3">
-          <span className="flex items-center justify-center" onClick={(e)=>e.stopPropagation()}>
+          <span className="flex items-center justify-center" role="button" tabIndex={0} onClick={(e)=>e.stopPropagation()}>
             {icon}
           </span>
           <div className="leading-tight">
@@ -56,7 +56,7 @@ export default function SectionCard({
             <Badge count={badgeCount} style={{ backgroundColor: '#52c41a' }} />
           )}
         </div>
-        <div className="flex items-center gap-2" onClick={(e)=>e.stopPropagation()}>
+        <div className="flex items-center gap-2" role="button" tabIndex={0} onClick={(e)=>e.stopPropagation()}>
           {actions}
           {open ? <CaretDownOutlined /> : <CaretRightOutlined />}
         </div>

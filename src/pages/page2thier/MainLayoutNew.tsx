@@ -341,7 +341,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
               padding: isMobile ? '4px 6px' : '5px 12px', borderRadius: 8,
               cursor: 'pointer', flexShrink: 0,
               fontSize: isMobile ? 9 : 13, fontWeight: isActive ? 700 : 500, whiteSpace: 'nowrap',
-              background: (isActive || hoveredTab === tab.id) ? 'rgba(255,255,255,0.08)' : 'transparent',
+              background: (isActive || hoveredTab === tab.id) ? SF.overlayLightest : 'transparent',
               transition: 'all 0.2s',
               opacity: dragId === tab.id ? 0.4 : 1,
               userSelect: 'none',
@@ -349,7 +349,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
             }}
           >
             <tab.icon style={{ fontSize: isMobile ? 20 : 17, color: (isActive || hoveredTab === tab.id) ? tab.color : '#ffffff', transition: 'color 0.2s' }} />
-            {!isMobile && <span style={{ fontSize: 13, color: isActive ? '#fff' : hoveredTab === tab.id ? '#fff' : 'rgba(255,255,255,0.7)', transition: 'color 0.2s' }}>{tab.label}</span>}
+            {!isMobile && <span style={{ fontSize: 13, color: isActive ? '#fff' : hoveredTab === tab.id ? '#fff' : SF.textLightMuted, transition: 'color 0.2s' }}>{tab.label}</span>}
           </div>
         );
       })}
@@ -407,7 +407,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const headerAvatarBg = showOrgAvatar
     ? (orgLogo ? 'transparent' : SF.primary)
     : (user?.avatarUrl ? 'transparent' : '#1890ff');
-  const headerAvatarBorder = showOrgAvatar ? '2px solid rgba(108,92,231,0.5)' : '2px solid rgba(255,255,255,0.3)';
+  const headerAvatarBorder = showOrgAvatar ? '2px solid rgba(108,92,231,0.5)' : '2px solid ${SF.overlayLightActive}';
 
   const handleLogout = useCallback(() => { 
     logout(); 
@@ -451,14 +451,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         {
           key: 'feed-mode',
           label: (
-            <div style={{ display: 'flex', gap: 4, padding: '2px 0' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', gap: 4, padding: '2px 0' }} role="button" tabIndex={0} onClick={e => e.stopPropagation()}>
               {([
                 { key: 'personal' as const, label: '👤 Mon Hive', color: '#00CEC9' },
                 { key: 'org' as const, label: '🏢 Colony', color: SF.primary },
               ]).map(m => (
                 <div
                   key={m.key}
-                  onClick={(e) => { e.stopPropagation(); setFeedMode(m.key); }}
+                  role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); setFeedMode(m.key); }}
                   style={{
                     padding: '4px 12px', borderRadius: 16, fontSize: 12, fontWeight: feedMode === m.key ? 600 : 400,
                     cursor: 'pointer', transition: 'all 0.2s',
@@ -503,7 +503,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           justifyContent: 'flex-start',
           flexWrap: 'nowrap',
           gap: isMobile ? '8px' : '12px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          boxShadow: '0 2px 8px ${SF.overlayDarkLight}',
           width: '100%',
           position: 'fixed',
           top: 0,
@@ -526,7 +526,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             color: 'white',
             letterSpacing: '0.5px'
           }}
-          onClick={() => { navigate('/dashboard'); setCenterApp(null); setWallViewUrl(null); setWallSearchQuery(null); setSearchParams({}, { replace: true }); }}
+          role="button" tabIndex={0} onClick={() => { navigate('/dashboard'); setCenterApp(null); setWallViewUrl(null); setWallSearchQuery(null); setSearchParams({}, { replace: true }); }}
         >
           <img src="/zhiive-logo.png" alt="Zhiive" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} />
           {!isMobile && <img src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 20, objectFit: 'contain' }} />}

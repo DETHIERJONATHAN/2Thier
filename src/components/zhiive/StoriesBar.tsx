@@ -305,7 +305,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
         <Tooltip title={t('stories.addStory')}>
           <div
-            onClick={() => setCreateModalOpen(true)}
+            role="button" tabIndex={0} onClick={() => setCreateModalOpen(true)}
             style={{
             width: 56, height: 56, borderRadius: '50%',
             background: SF.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -342,7 +342,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
         ))
       ) : (
         storyUsers.map(su => (
-          <div key={su.userId} onClick={() => handleViewStory(su.userId)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+          <div key={su.userId} role="button" tabIndex={0} onClick={() => handleViewStory(su.userId)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
             <div style={ringStyle(su.allViewed)}>
               <Avatar size={50} src={su.avatarUrl}
                 icon={!su.avatarUrl ? <UserOutlined /> : undefined}
@@ -398,7 +398,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
                 <img src={storyPreview} alt="Preview" loading="lazy" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 12 }} />
               )}
               <div
-                onClick={removeStoryFile}
+                role="button" tabIndex={0} onClick={removeStoryFile}
                 style={{
                   position: 'absolute', top: 6, right: 6, width: 24, height: 24,
                   borderRadius: '50%', background: SF.overlayDarkStrong, cursor: 'pointer',
@@ -409,7 +409,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
             </div>
           ) : (
             <div
-              onClick={() => fileInputRef.current?.click()}
+              role="button" tabIndex={0} onClick={() => fileInputRef.current?.click()}
               style={{
                 border: `2px dashed ${SF.borderLight}`, borderRadius: 12, padding: '20px 16px',
                 textAlign: 'center', cursor: 'pointer', background: SF.bgLightest,
@@ -442,7 +442,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
               const opt = labels[v];
               const active = storyVisibility === v;
               return (
-                <div key={v} onClick={() => setStoryVisibility(v)} style={{
+                <div key={v} role="button" tabIndex={0} onClick={() => setStoryVisibility(v)} style={{
                   display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
                   borderRadius: 14, cursor: 'pointer', fontSize: 12, fontWeight: 600,
                   background: active ? opt.color + '18' : SF.bgLighter,
@@ -494,19 +494,19 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
                 <>
                   {isAppEnabled('hiveLive') && <Tooltip title={t('hive.addToHiveLive')}>
                     <span
-                      onClick={() => { setHiveLiveTitle(viewingStory.userName + ' — Story'); setHiveLiveModalOpen(true); }}
+                      role="button" tabIndex={0} onClick={() => { setHiveLiveTitle(viewingStory.userName + ' — Story'); setHiveLiveModalOpen(true); }}
                       style={{ fontSize: 14, cursor: 'pointer' }}
                     >🐝</span>
                   </Tooltip>}
                   <span
-                    onClick={() => handleDeleteStory(viewingStory.id)}
+                    role="button" tabIndex={0} onClick={() => handleDeleteStory(viewingStory.id)}
                     style={{ fontSize: 12, color: SF.danger, cursor: 'pointer', fontWeight: 600 }}
                   >🗑️</span>
                 </>
               )}
             </div>
             {/* Media with double-tap to like */}
-            <div onClick={() => handleDoubleTapStory(viewingStory.id)} style={{ position: 'relative', cursor: 'pointer' }}>
+            <div role="button" tabIndex={0} onClick={() => handleDoubleTapStory(viewingStory.id)} style={{ position: 'relative', cursor: 'pointer' }}>
               <style>{heartBurstKeyframes}</style>
               <HeartBurstOverlay visible={heartAnimId === viewingStory.id} />
               {viewingStory.mediaUrl ? (
@@ -524,14 +524,14 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
 
             {/* 🐝 Interaction bar — Like / Share / DM */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, padding: '10px 0 4px' }}>
-              <span onClick={() => handleLikeStory(viewingStory.id)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: storyLikedSet.has(viewingStory.id) ? SF.like : SF.textSecondary, transition: 'color 0.15s' }}>
+              <span role="button" tabIndex={0} onClick={() => handleLikeStory(viewingStory.id)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: storyLikedSet.has(viewingStory.id) ? SF.like : SF.textSecondary, transition: 'color 0.15s' }}>
                 {storyLikedSet.has(viewingStory.id) ? <HeartFilled style={{ fontSize: 20 }} /> : <HeartOutlined style={{ fontSize: 20 }} />}
               </span>
-              <span onClick={() => handleShareStory(viewingStory.id)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: SF.textSecondary }}>
+              <span role="button" tabIndex={0} onClick={() => handleShareStory(viewingStory.id)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: SF.textSecondary }}>
                 <ShareAltOutlined style={{ fontSize: 20 }} />
               </span>
               {viewingStory.userId !== currentUser?.id && (
-                <span onClick={() => handleStoryDM(viewingStory.userId)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: SF.textSecondary }}>
+                <span role="button" tabIndex={0} onClick={() => handleStoryDM(viewingStory.userId)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: SF.textSecondary }}>
                   <SendOutlined style={{ fontSize: 18 }} />
                 </span>
               )}
@@ -541,7 +541,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
             {viewingStoryList.length > 1 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
                 <div
-                  onClick={handlePrevStory}
+                  role="button" tabIndex={0} onClick={handlePrevStory}
                   style={{
                     padding: '6px 16px', borderRadius: 20, cursor: viewingStoryIndex > 0 ? 'pointer' : 'default',
                     background: viewingStoryIndex > 0 ? SF.primary : SF.border,
@@ -552,7 +552,7 @@ const StoriesBar: React.FC<StoriesBarProps> = ({ api, currentUser }) => {
                   {viewingStoryIndex + 1} / {viewingStoryList.length}
                 </span>
                 <div
-                  onClick={handleNextStory}
+                  role="button" tabIndex={0} onClick={handleNextStory}
                   style={{
                     padding: '6px 16px', borderRadius: 20, cursor: 'pointer',
                     background: SF.primary, color: 'white', fontSize: 12, fontWeight: 600,

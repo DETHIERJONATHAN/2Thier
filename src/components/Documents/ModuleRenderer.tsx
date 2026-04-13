@@ -7,6 +7,7 @@ import DOMPurify from 'dompurify';
 import { ModuleInstance } from './types';
 import { ModuleDefinition } from './ModuleRegistry';
 import { ConditionalConfig, ConditionRule } from './ConditionEditorModal';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 interface ModuleRendererProps {
   module: ModuleInstance;
@@ -477,7 +478,7 @@ const ModuleRenderer = ({
     return (
       <div style={backgroundStyle}>
         <div style={{
-          backgroundColor: 'rgba(0,0,0,0.6)',
+          backgroundColor: SF.overlayDarkStrong,
           color: '#fff',
           padding: '8px 16px',
           borderRadius: '4px',
@@ -2105,7 +2106,7 @@ const ModuleRenderer = ({
         background: `linear-gradient(135deg, ${gradientFrom}ee 0%, ${gradientTo}cc 100%)`,
         backdropFilter: 'blur(10px)',
       };
-      cardBgStyle = { background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' };
+      cardBgStyle = { background: SF.overlayLightSubtle, border: '1px solid ${SF.overlayLight}' };
     } else if (bannerStyle === 'solid') {
       bgStyle = { background: gradientFrom };
     } else if (bannerStyle === 'outline') {
@@ -2193,7 +2194,7 @@ const ModuleRenderer = ({
                 fontWeight: 700,
                 color: effectiveTextColor,
                 letterSpacing: '-0.3px',
-                textShadow: isOutline ? 'none' : '0 1px 3px rgba(0,0,0,0.2)',
+                textShadow: isOutline ? 'none' : '0 1px 3px ${SF.overlayDarkSubtle}',
                 whiteSpace: 'nowrap' as const,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -2235,7 +2236,7 @@ const ModuleRenderer = ({
                 borderRadius: s(compactMode ? 5 : 10),
                 background: isOutline 
                   ? `${kpi.color}10` 
-                  : 'rgba(255,255,255,0.1)',
+                  : SF.overlayLightSubtle,
                 border: isOutline 
                   ? `1px solid ${kpi.color}30`
                   : '1px solid rgba(255,255,255,0.12)',
@@ -2298,7 +2299,7 @@ const ModuleRenderer = ({
                         : (allKpis.length > 4 ? 9 : 12)),
                       fontWeight: 500,
                       color: isOutline ? kpi.color : '#fff',
-                      textShadow: isOutline ? 'none' : '0 1px 2px rgba(0,0,0,0.2)',
+                      textShadow: isOutline ? 'none' : '0 1px 2px ${SF.overlayDarkSubtle}',
                     }}>
                       {kpi.suffix}
                     </span>
@@ -2337,7 +2338,7 @@ const ModuleRenderer = ({
                       width: '100%',
                       height: s(compactMode ? 2 : 3),
                       borderRadius: '4px',
-                      background: isOutline ? '#e5e7eb' : 'rgba(255,255,255,0.15)',
+                      background: isOutline ? '#e5e7eb' : SF.overlayLighter,
                       overflow: 'hidden',
                     }}>
                       <div style={{
@@ -2381,7 +2382,7 @@ const ModuleRenderer = ({
                 flex: 1,
                 height: s(compactMode ? 3 : 5),
                 borderRadius: '8px',
-                background: isOutline ? '#e5e7eb' : 'rgba(255,255,255,0.15)',
+                background: isOutline ? '#e5e7eb' : SF.overlayLighter,
                 overflow: 'hidden',
                 position: 'relative',
               }}>
@@ -2398,7 +2399,7 @@ const ModuleRenderer = ({
                     left: 0,
                     right: 0,
                     height: '50%',
-                    background: 'linear-gradient(to bottom, rgba(255,255,255,0.4), transparent)',
+                    background: 'linear-gradient(to bottom, ${SF.overlayLightBorder}, transparent)',
                     borderRadius: '8px 8px 0 0',
                   }} />
                 </div>

@@ -631,7 +631,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
                       cursor: 'pointer',
                       transition: 'all 0.2s',
                     }}
-                    onClick={() => handleOpenTable(t)}
+                    role="button" tabIndex={0} onClick={() => handleOpenTable(t)}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                       <div>
@@ -733,7 +733,7 @@ const GestionnairePanel: React.FC<GestionnairePanelProps> = ({ open, onClose, tr
                         ) : (
                           <span
                             style={{ cursor: 'pointer' }}
-                            onClick={() => { setEditingLabel(c.constId); setEditLabelValue(c.customLabel || ''); }}
+                            role="button" tabIndex={0} onClick={() => { setEditingLabel(c.constId); setEditLabelValue(c.customLabel || ''); }}
                             title="Cliquer pour modifier le libellé"
                           >
                             <Text strong>{c.label}</Text>

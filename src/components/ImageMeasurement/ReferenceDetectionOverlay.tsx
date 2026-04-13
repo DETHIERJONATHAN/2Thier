@@ -8,6 +8,7 @@
 import React from 'react';
 import { Tag } from 'antd';
 import { CheckCircleOutlined } from '@ant-design/icons';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 interface ReferenceDetectionOverlayProps {
   imageUrl: string;
@@ -111,7 +112,7 @@ export const ReferenceDetectionOverlay: React.FC<ReferenceDetectionOverlayProps>
               borderRadius: '4px',
               fontSize: '12px',
               fontWeight: 'bold',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              boxShadow: '0 2px 8px ${SF.overlayDark}',
               whiteSpace: 'nowrap'
             }}
           >

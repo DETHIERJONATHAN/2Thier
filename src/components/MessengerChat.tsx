@@ -1,4 +1,3 @@
-import { FB } from '../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Avatar, Input, Modal, Form, DatePicker, TimePicker, message as antMessage, Tooltip, Dropdown, Drawer } from 'antd';
 import {
@@ -50,6 +49,7 @@ const WizzIcon = ({ size = 20 }: { size?: number }) => (
 import { useAuth } from '../auth/useAuth';
 import { useTelnyxCall, type TelnyxEligibility } from '../hooks/useTelnyxCall';
 import { useNotificationSound, playNotificationSound } from '../hooks/useNotificationSound';
+import { FB, SF } from '../components/zhiive/ZhiiveTheme';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -968,7 +968,7 @@ const MessengerChat: React.FC = () => {
         `}</style>
         <div className={isShaking ? 'messenger-wizz-shake' : ''} style={{
           position: 'fixed', bottom: 56, right: 16, width: CHAT_WIDTH, height: LIST_HEIGHT,
-          background: FB.white, borderRadius: '8px 8px 0 0', boxShadow: '0 -2px 12px rgba(0,0,0,0.15)',
+          background: FB.white, borderRadius: '8px 8px 0 0', boxShadow: '0 -2px 12px ${SF.overlayDarkLight}',
           display: 'flex', flexDirection: 'column', zIndex: 1100,
           border: `1px solid ${FB.border}`,
         }}>
@@ -977,7 +977,7 @@ const MessengerChat: React.FC = () => {
             padding: '8px 12px', borderBottom: `1px solid ${FB.border}`,
             display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
           }}>
-            <div onClick={goBackToList}
+            <div role="button" tabIndex={0} onClick={goBackToList}
               style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
               onMouseEnter={e => e.currentTarget.style.background = FB.hover}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -991,28 +991,28 @@ const MessengerChat: React.FC = () => {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 4 }}>
-              <div onClick={() => setShowSharedFiles(true)}
+              <div role="button" tabIndex={0} onClick={() => setShowSharedFiles(true)}
                 title="Fichiers partagés"
                 style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 onMouseEnter={e => e.currentTarget.style.background = FB.hover}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 <FolderOpenOutlined style={{ fontSize: 14, color: FB.blue }} />
               </div>
-              <div onClick={() => startCall(activeConversationId, 'audio', convName)}
+              <div role="button" tabIndex={0} onClick={() => startCall(activeConversationId, 'audio', convName)}
                 title={t('messenger.audioCall')}
                 style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 onMouseEnter={e => e.currentTarget.style.background = FB.hover}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 <PhoneOutlined style={{ fontSize: 14, color: FB.blue }} />
               </div>
-              <div onClick={() => startCall(activeConversationId, 'video', convName)}
+              <div role="button" tabIndex={0} onClick={() => startCall(activeConversationId, 'video', convName)}
                 title={t('messenger.videoCall')}
                 style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 onMouseEnter={e => e.currentTarget.style.background = FB.hover}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 <VideoCameraOutlined style={{ fontSize: 14, color: FB.blue }} />
               </div>
-              <div onClick={() => { setIsListOpen(false); setActiveConversationId(null); }}
+              <div role="button" tabIndex={0} onClick={() => { setIsListOpen(false); setActiveConversationId(null); }}
                 style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 onMouseEnter={e => e.currentTarget.style.background = FB.hover}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -1120,13 +1120,13 @@ const MessengerChat: React.FC = () => {
                         >
                           <Tooltip title="Réagir" zIndex={2100}>
                             <div
-                              style={{ width: 24, height: 24, borderRadius: '50%', background: FB.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }}>
+                              style={{ width: 24, height: 24, borderRadius: '50%', background: FB.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12, boxShadow: '0 1px 3px ${SF.overlayDarkLight}' }}>
                               <SmileOutlined />
                             </div>
                           </Tooltip>
                         </EmojiReactionPicker>
                         <Dropdown menu={{ items: getMessageMenuItems(msg) }} trigger={['click']} placement="bottomRight" overlayStyle={{ zIndex: 2000 }}>
-                          <div style={{ width: 24, height: 24, borderRadius: '50%', background: FB.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }}>
+                          <div style={{ width: 24, height: 24, borderRadius: '50%', background: FB.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12, boxShadow: '0 1px 3px ${SF.overlayDarkLight}' }}>
                             <MoreOutlined />
                           </div>
                         </Dropdown>
@@ -1306,13 +1306,13 @@ const MessengerChat: React.FC = () => {
               <div style={{
                 position: 'absolute', bottom: '100%', left: 12, right: 12,
                 background: '#fff', border: `1px solid ${FB.border}`,
-                borderRadius: 8, boxShadow: '0 -4px 12px rgba(0,0,0,0.15)',
+                borderRadius: 8, boxShadow: '0 -4px 12px ${SF.overlayDarkLight}',
                 maxHeight: 180, overflowY: 'auto', zIndex: 1100,
               }}>
                 {mentionResults.map((p, idx) => (
                   <div
                     key={p.id}
-                    onClick={() => insertMention(p)}
+                    role="button" tabIndex={0} onClick={() => insertMention(p)}
                     style={{
                       padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8,
                       cursor: 'pointer',
@@ -1334,7 +1334,7 @@ const MessengerChat: React.FC = () => {
 
             {/* Attach file button */}
             <div
-              onClick={() => fileInputRef.current?.click()}
+              role="button" tabIndex={0} onClick={() => fileInputRef.current?.click()}
               title={t('messenger.attachFile', 'Joindre un fichier')}
               style={{
                 width: 32, height: 32, borderRadius: '50%', display: 'flex',
@@ -1383,7 +1383,7 @@ const MessengerChat: React.FC = () => {
 
             {/* Voice button */}
             <div
-              onClick={() => setShowVoiceRecorder(true)}
+              role="button" tabIndex={0} onClick={() => setShowVoiceRecorder(true)}
               title={t('messenger.voiceMessage', 'Message vocal')}
               style={{
                 width: 32, height: 32, borderRadius: '50%', display: 'flex',
@@ -1397,7 +1397,7 @@ const MessengerChat: React.FC = () => {
 
             {/* Ephemeral toggle */}
             <div
-              onClick={() => setEphemeralMode(!ephemeralMode)}
+              role="button" tabIndex={0} onClick={() => setEphemeralMode(!ephemeralMode)}
               title={ephemeralMode ? t('messenger.ephemeralOn', 'Mode éphémère activé') : t('messenger.ephemeralOff', 'Mode éphémère désactivé')}
               style={{
                 width: 32, height: 32, borderRadius: '50%', display: 'flex',
@@ -1414,7 +1414,7 @@ const MessengerChat: React.FC = () => {
 
             {/* Wizz button - larger */}
             <div
-              onClick={sendWizz}
+              role="button" tabIndex={0} onClick={sendWizz}
               title={t('messenger.wizz')}
               style={{
                 width: 40, height: 40, borderRadius: '50%', display: 'flex',
@@ -1431,7 +1431,7 @@ const MessengerChat: React.FC = () => {
 
             {/* Send button */}
             <div
-              onClick={uploadingFiles ? undefined : sendInlineMessage}
+              role="button" tabIndex={0} onClick={uploadingFiles ? undefined : sendInlineMessage}
               style={{
                 width: 32, height: 32, borderRadius: '50%', display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
@@ -1497,7 +1497,7 @@ const MessengerChat: React.FC = () => {
     return (
       <div style={{
         position: 'fixed', bottom: 56, right: 16, width: CHAT_WIDTH, height: LIST_HEIGHT,
-        background: FB.white, borderRadius: '8px 8px 0 0', boxShadow: '0 -2px 12px rgba(0,0,0,0.15)',
+        background: FB.white, borderRadius: '8px 8px 0 0', boxShadow: '0 -2px 12px ${SF.overlayDarkLight}',
         display: 'flex', flexDirection: 'column', zIndex: 1100,
         border: `1px solid ${FB.border}`,
       }}>
@@ -1508,7 +1508,7 @@ const MessengerChat: React.FC = () => {
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
             {telnyxEligibility?.eligible && (
-              <div onClick={() => { setShowDialer(!showDialer); setShowNewChat(false); setActiveConversationId(null); }}
+              <div role="button" tabIndex={0} onClick={() => { setShowDialer(!showDialer); setShowNewChat(false); setActiveConversationId(null); }}
                 title={t('telnyx.phone', 'Téléphone')}
                 style={{
                   width: 32, height: 32, borderRadius: '50%',
@@ -1519,11 +1519,11 @@ const MessengerChat: React.FC = () => {
                 <PhoneOutlined style={{ fontSize: 16, color: showDialer ? '#fff' : undefined }} />
               </div>
             )}
-            <div onClick={() => { setShowNewChat(!showNewChat); setShowDialer(false); }}
+            <div role="button" tabIndex={0} onClick={() => { setShowNewChat(!showNewChat); setShowDialer(false); }}
               style={{ width: 32, height: 32, borderRadius: '50%', background: FB.hover, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
               <EditOutlined style={{ fontSize: 16 }} />
             </div>
-            <div onClick={() => setIsListOpen(false)}
+            <div role="button" tabIndex={0} onClick={() => setIsListOpen(false)}
               style={{ width: 32, height: 32, borderRadius: '50%', background: FB.hover, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
               <CloseOutlined style={{ fontSize: 14 }} />
             </div>
@@ -1573,7 +1573,7 @@ const MessengerChat: React.FC = () => {
             </div>
             {filteredFriends.map(friend => (
               <div key={friend.id}
-                onClick={() => startNewChat(friend.id)}
+                role="button" tabIndex={0} onClick={() => startNewChat(friend.id)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
                   cursor: 'pointer', transition: 'background 0.15s',
@@ -1611,7 +1611,7 @@ const MessengerChat: React.FC = () => {
               }}>
                 {friends.slice(0, 20).map(f => (
                   <div key={f.id}
-                    onClick={() => startNewChat(f.id)}
+                    role="button" tabIndex={0} onClick={() => startNewChat(f.id)}
                     style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', flexShrink: 0, width: 56 }}
                   >
                     <div style={{ position: 'relative' }}>
@@ -1643,7 +1643,7 @@ const MessengerChat: React.FC = () => {
                 </div>
                 {searchMatchedFriends.map(f => (
                   <div key={`search-${f.id}`}
-                    onClick={() => startNewChat(f.id)}
+                    role="button" tabIndex={0} onClick={() => startNewChat(f.id)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
                       cursor: 'pointer', transition: 'background 0.15s',
@@ -1672,7 +1672,7 @@ const MessengerChat: React.FC = () => {
 
             {filteredConversations.map(conv => (
               <div key={conv.id}
-                onClick={() => openChat(conv.id)}
+                role="button" tabIndex={0} onClick={() => openChat(conv.id)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
                   cursor: 'pointer', transition: 'background 0.15s',
@@ -1741,7 +1741,7 @@ const MessengerChat: React.FC = () => {
   // ═══════════════════════════════════════════════════════════
   const renderFab = () => (
     <div
-      onClick={() => { 
+      role="button" tabIndex={0} onClick={() => { 
         if (isListOpen) {
           setIsListOpen(false);
           setActiveConversationId(null);
@@ -1754,7 +1754,7 @@ const MessengerChat: React.FC = () => {
       style={{
         position: 'fixed', bottom: 16, right: 16, width: 48, height: 48,
         borderRadius: '50%', background: FB.blue, display: 'flex', alignItems: 'center',
-        justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+        justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 12px ${SF.overlayDark}',
         zIndex: 1100, transition: 'transform 0.2s',
       }}
       onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
@@ -1770,7 +1770,7 @@ const MessengerChat: React.FC = () => {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: '0 5px',
           border: '2px solid #fff',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+          boxShadow: '0 1px 4px ${SF.overlayDark}',
         }}>
           {totalUnread > 99 ? '99+' : totalUnread}
         </div>
@@ -1934,10 +1934,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
   if (minimized) {
     return (
       <div
-        onClick={() => setMinimized(false)}
+        role="button" tabIndex={0} onClick={() => setMinimized(false)}
         style={{
           position: 'fixed', bottom: 16, right: rightOffset, width: 48, height: 48,
-          borderRadius: '50%', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          borderRadius: '50%', cursor: 'pointer', boxShadow: '0 2px 8px ${SF.overlayDarkSubtle}',
           zIndex: 1100, overflow: 'hidden',
         }}
       >
@@ -1951,7 +1951,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
     <div style={{
       position: 'fixed', bottom: 0, right: rightOffset, width: CHAT_WIDTH,
       height: CHAT_HEIGHT, background: FB.white, borderRadius: '8px 8px 0 0',
-      boxShadow: '0 -2px 12px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column',
+      boxShadow: '0 -2px 12px ${SF.overlayDarkLight}', display: 'flex', flexDirection: 'column',
       zIndex: 1100, border: `1px solid ${FB.border}`,
     }}>
       {/* Header */}
@@ -1962,33 +1962,33 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
       }}>
         <Avatar size={32} src={convAvatar} icon={isGroup ? <TeamOutlined /> : <UserOutlined />}
           style={{ backgroundColor: convAvatar ? undefined : FB.blue, flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0 }} onClick={() => setMinimized(true)}>
+        <div style={{ flex: 1, minWidth: 0 }} role="button" tabIndex={0} onClick={() => setMinimized(true)}>
           <div style={{ fontSize: 13, fontWeight: 700, color: FB.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {convName}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
-          <div onClick={() => onStartCall(conversationId, 'audio', convName)}
+          <div role="button" tabIndex={0} onClick={() => onStartCall(conversationId, 'audio', convName)}
             title={t('messenger.audioCall')}
             style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.background = FB.hover}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
             <PhoneOutlined style={{ fontSize: 14, color: FB.blue }} />
           </div>
-          <div onClick={() => onStartCall(conversationId, 'video', convName)}
+          <div role="button" tabIndex={0} onClick={() => onStartCall(conversationId, 'video', convName)}
             title={t('messenger.videoCall')}
             style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.background = FB.hover}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
             <VideoCameraOutlined style={{ fontSize: 14, color: FB.blue }} />
           </div>
-          <div onClick={() => setMinimized(true)}
+          <div role="button" tabIndex={0} onClick={() => setMinimized(true)}
             style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.background = FB.hover}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
             <MinusOutlined style={{ fontSize: 14, color: FB.blue }} />
           </div>
-          <div onClick={onClose}
+          <div role="button" tabIndex={0} onClick={onClose}
             style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.background = FB.hover}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -2066,7 +2066,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
         alignItems: 'center', gap: 6, flexShrink: 0,
       }}>
         <div
-          onClick={() => setScheduleModalOpen(true)}
+          role="button" tabIndex={0} onClick={() => setScheduleModalOpen(true)}
           title="Planifier un RDV"
           style={{
             width: 32, height: 32, borderRadius: '50%', display: 'flex',
@@ -2089,7 +2089,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
           }}
         />
         <div
-          onClick={sendMessage}
+          role="button" tabIndex={0} onClick={sendMessage}
           style={{
             width: 32, height: 32, borderRadius: '50%', display: 'flex',
             alignItems: 'center', justifyContent: 'center', cursor: newMessage.trim() ? 'pointer' : 'default',
@@ -2190,7 +2190,7 @@ export const FriendsWidget: React.FC<FriendsWidgetProps> = ({ onStartChat }) => 
       </div>
       {orgFriends.slice(0, 8).map(friend => (
         <div key={friend.id}
-          onClick={() => onStartChat(friend.id)}
+          role="button" tabIndex={0} onClick={() => onStartChat(friend.id)}
           style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: '6px 4px',
             borderRadius: 8, cursor: 'pointer', transition: 'background 0.15s',
@@ -2225,7 +2225,7 @@ export const FriendsWidget: React.FC<FriendsWidgetProps> = ({ onStartChat }) => 
           </div>
           {externalFriends.slice(0, 5).map(friend => (
             <div key={friend.id}
-              onClick={() => onStartChat(friend.id)}
+              role="button" tabIndex={0} onClick={() => onStartChat(friend.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: '6px 4px',
                 borderRadius: 8, cursor: 'pointer', transition: 'background 0.15s',

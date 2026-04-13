@@ -15,6 +15,7 @@ import { Modal, Spin, Tooltip, Image } from 'antd';
 import { PictureOutlined, EyeOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../../../../hooks/useAuthenticatedApi';
 import { tblLog } from '../../../../../utils/tblDebug';
+import { SF } from '../../../../zhiive/ZhiiveTheme';
 
 interface ImageDisplayBubbleProps {
   /** ID du champ courant */
@@ -224,7 +225,7 @@ export const ImageDisplayBubble: React.FC<ImageDisplayBubbleProps> = ({
     left: 0,
     right: 0,
     bottom: 0,
-    background: 'rgba(0,0,0,0.4)',
+    background: SF.overlayDarkMedium,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -297,7 +298,7 @@ export const ImageDisplayBubble: React.FC<ImageDisplayBubbleProps> = ({
         <div
           style={bubbleStyle}
           className={`image-display-bubble ${className || ''} hover:shadow-lg`}
-          onClick={handleClick}
+          role="button" tabIndex={0} onClick={handleClick}
           onMouseEnter={(e) => {
             const overlay = e.currentTarget.querySelector('.image-overlay') as HTMLElement;
             if (overlay) overlay.style.opacity = '1';

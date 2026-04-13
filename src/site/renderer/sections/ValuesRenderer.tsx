@@ -12,6 +12,7 @@ import React from 'react';
 import { Row, Col, Card, Typography, Space } from 'antd';
 import { CheckCircleOutlined } from '@ant-design/icons';
 import { renderIconNode } from '../utils/icon';
+import { SF } from '../../../components/zhiive/ZhiiveTheme';
 
 const { Title, Paragraph } = Typography;
 
@@ -99,7 +100,7 @@ export const ValuesRenderer: React.FC<ValuesRendererProps> = ({ content }) => {
                   height: '100%',
                   background: cardBackground,
                   borderRadius: '12px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+                  boxShadow: '0 4px 12px ${SF.overlayDarkFaint}'
                 }}
               >
                 <Space 

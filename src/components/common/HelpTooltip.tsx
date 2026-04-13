@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import DOMPurify from 'dompurify';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { useImageModal } from './ImageModal';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 // 🎨 Composant interne pour le rendu riche (HTML) dans les tooltips
 // Convertit les \n en <br> pour respecter les retours à la ligne du texte brut
@@ -124,12 +125,12 @@ export const HelpTooltip: React.FC<HelpTooltipProps> = ({
             borderRadius: '4px',
             transition: 'background-color 0.2s ease'
           }}
-          onClick={(e) => {
+          role="button" tabIndex={0} onClick={(e) => {
             e.stopPropagation();
             handleContentClick();
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+            e.currentTarget.style.backgroundColor = SF.overlayLightSubtle;
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'transparent';
@@ -195,14 +196,14 @@ export const HelpTooltip: React.FC<HelpTooltipProps> = ({
             padding: '8px',
             borderRadius: '6px',
             transition: 'background-color 0.2s ease',
-            border: '1px dashed rgba(255,255,255,0.3)'
+            border: '1px dashed ${SF.overlayLightActive}'
           }}
-          onClick={(e) => {
+          role="button" tabIndex={0} onClick={(e) => {
             e.stopPropagation();
             handleContentClick();
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+            e.currentTarget.style.backgroundColor = SF.overlayLightSubtle;
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'transparent';
@@ -238,7 +239,7 @@ export const HelpTooltip: React.FC<HelpTooltipProps> = ({
             textAlign: 'center', 
             marginTop: '8px',
             fontStyle: 'italic',
-            borderTop: '1px dashed rgba(255,255,255,0.2)',
+            borderTop: '1px dashed ${SF.overlayLight}',
             paddingTop: '6px'
           }}>
             🔍📝 Cliquez n'importe où pour voir en grand
@@ -289,7 +290,7 @@ export const HelpTooltip: React.FC<HelpTooltipProps> = ({
               fontSize: '14px',
               zIndex: 10000,
               maxWidth: '320px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              boxShadow: '0 4px 12px ${SF.overlayDark}',
               pointerEvents: 'auto'
             }}
             onMouseEnter={() => setIsTooltipVisible(true)}

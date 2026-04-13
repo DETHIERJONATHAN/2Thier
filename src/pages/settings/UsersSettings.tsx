@@ -1,4 +1,3 @@
-import { FB } from '../../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
@@ -17,6 +16,7 @@ import {
   LoadingOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
 
 const useScreenSize = () => {
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -43,7 +43,7 @@ const FBToggle: React.FC<{
   const pad = 2;
   return (
     <div
-      onClick={() => onChange(!checked)}
+      role="button" tabIndex={0} onClick={() => onChange(!checked)}
       style={{
         width: w, height: h, borderRadius: h,
         background: checked ? FB.blue : '#bec3c9',
@@ -54,7 +54,7 @@ const FBToggle: React.FC<{
       <div style={{
         position: 'absolute', top: pad, left: checked ? w - dot - pad : pad,
         width: dot, height: dot, borderRadius: '50%',
-        background: FB.white, boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        background: FB.white, boxShadow: '0 1px 3px ${SF.overlayDark}',
         transition: 'left 0.25s',
       }} />
     </div>
@@ -314,7 +314,7 @@ const UsersSettings: React.FC = () => {
                 {deleteConfirm === u.id ? (
                   <div style={{
                     position: 'absolute', right: 0, top: -8,
-                    background: FB.white, borderRadius: FB.radius, boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+                    background: FB.white, borderRadius: FB.radius, boxShadow: '0 2px 12px ${SF.overlayDarkLight}',
                     padding: 12, zIndex: 10, width: 200,
                   }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 8 }}>Supprimer cet utilisateur ?</div>
@@ -350,13 +350,13 @@ const UsersSettings: React.FC = () => {
       {/* ── Invite Modal ── */}
       {inviteModal && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          position: 'fixed', inset: 0, background: SF.overlayDarkMd,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           zIndex: 1000, padding: 16,
-        }} onClick={() => setInviteModal(false)}>
-          <div onClick={e => e.stopPropagation()} style={{
+        }} role="button" tabIndex={0} onClick={() => setInviteModal(false)}>
+          <div role="button" tabIndex={0} onClick={e => e.stopPropagation()} style={{
             background: FB.white, borderRadius: FB.radius, width: '100%',
-            maxWidth: 480, boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+            maxWidth: 480, boxShadow: '0 8px 32px ${SF.overlayDarkSubtle}',
           }}>
             {/* Modal Header */}
             <div style={{
@@ -367,7 +367,7 @@ const UsersSettings: React.FC = () => {
                 <UserAddOutlined style={{ marginRight: 8 }} />Inviter un membre
               </div>
               <div
-                onClick={() => setInviteModal(false)}
+                role="button" tabIndex={0} onClick={() => setInviteModal(false)}
                 style={{
                   width: 32, height: 32, borderRadius: '50%', background: FB.btnGray,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',

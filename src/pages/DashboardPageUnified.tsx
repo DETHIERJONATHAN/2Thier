@@ -742,7 +742,7 @@ export const WallPostCard: React.FC<{
         </Avatar>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div>
-            <span onClick={handleAuthorClick} style={{ fontWeight: 600, fontSize: 14, color: FB.text, cursor: 'pointer' }}
+            <span role="button" tabIndex={0} onClick={handleAuthorClick} style={{ fontWeight: 600, fontSize: 14, color: FB.text, cursor: 'pointer' }}
               onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
               onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
             >{authorName}</span>
@@ -893,20 +893,20 @@ export const WallPostCard: React.FC<{
       {/* Lightbox overlay */}
       {lightboxUrl && (
         <div
-          onClick={() => setLightboxUrl(null)}
+          role="button" tabIndex={0} onClick={() => setLightboxUrl(null)}
           style={{
             position: "fixed", inset: 0, zIndex: 9999,
-            background: "rgba(0,0,0,0.9)",
+            background: "${SF.overlayDarkNearOpaque}",
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "zoom-out",
           }}>
-          <div onClick={e => e.stopPropagation()}
+          <div role="button" tabIndex={0} onClick={e => e.stopPropagation()}
             style={{ position: "absolute", top: 16, right: 16, color: SF.textLight, fontSize: 32,
               cursor: "pointer", fontWeight: 700, lineHeight: 1, zIndex: 10000 }}
             onMouseEnter={e => (e.currentTarget.style.color = "#ccc")}
             onMouseLeave={e => (e.currentTarget.style.color = "#fff")}
           >
-            <span onClick={() => setLightboxUrl(null)}>✕</span>
+            <span role="button" tabIndex={0} onClick={() => setLightboxUrl(null)}>✕</span>
           </div>
           {/\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(lightboxUrl) ? (
             <video src={lightboxUrl} controls autoPlay
@@ -914,14 +914,14 @@ export const WallPostCard: React.FC<{
               style={{
                 maxWidth: "92vw", maxHeight: "92vh",
                 borderRadius: 4,
-                boxShadow: "0 4px 40px rgba(0,0,0,0.5)",
+                boxShadow: "0 4px 40px ${SF.overlayDarkMd}",
               }} />
           ) : (
             <img src={lightboxUrl} alt="" loading="lazy"
               style={{
                 maxWidth: "92vw", maxHeight: "92vh",
                 objectFit: "contain", borderRadius: 4,
-                boxShadow: "0 4px 40px rgba(0,0,0,0.5)",
+                boxShadow: "0 4px 40px ${SF.overlayDarkMd}",
               }} />
           )}
         </div>
@@ -936,7 +936,7 @@ export const WallPostCard: React.FC<{
           {likesCount > 0 && (
             <span
               style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}
-              onClick={handleShowReactors}
+              role="button" tabIndex={0} onClick={handleShowReactors}
             >
               {/* Show unique reaction type emojis */}
               <span style={{ display: "inline-flex", gap: -2 }}>
@@ -958,12 +958,12 @@ export const WallPostCard: React.FC<{
         </div>
         <div style={{ display: "flex", gap: 12 }}>
           {commentsCount > 0 && (
-            <span style={{ cursor: "pointer" }} onClick={handleToggleComments}>
+            <span style={{ cursor: "pointer" }} role="button" tabIndex={0} onClick={handleToggleComments}>
               {commentsCount > 1 ? t('wall.buzzCountPlural', { count: commentsCount }) : t('wall.buzzCount', { count: commentsCount })}
             </span>
           )}
           {post.totalShares > 0 && (
-            <span style={{ cursor: "pointer" }} onClick={handleShowSharers}>
+            <span style={{ cursor: "pointer" }} role="button" tabIndex={0} onClick={handleShowSharers}>
               {post.totalShares > 1 ? t('wall.shareCountPlural', { count: post.totalShares }) : t('wall.shareCount', { count: post.totalShares })}
             </span>
           )}
@@ -991,12 +991,12 @@ export const WallPostCard: React.FC<{
             <div style={{
               position: "absolute", bottom: "100%", left: 0, marginBottom: 4,
               display: "flex", gap: 2, padding: "6px 8px",
-              background: FB.white, borderRadius: 24, boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+              background: FB.white, borderRadius: 24, boxShadow: "0 4px 16px ${SF.overlayDarkLight}",
               zIndex: 100,
             }}>
               {REACTION_TYPES.map(r => (
                 <div key={r.type}
-                  onClick={(e) => { e.stopPropagation(); handleReaction(r.type); setShowReactionPicker(false); }}
+                  role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); handleReaction(r.type); setShowReactionPicker(false); }}
                   style={{
                     width: 38, height: 38, borderRadius: "50%", display: "flex",
                     alignItems: "center", justifyContent: "center", cursor: "pointer",
@@ -1012,7 +1012,7 @@ export const WallPostCard: React.FC<{
             </div>
           )}
           {/* Like button */}
-          <div onClick={() => handleReaction(myReaction?.type || "LIKE")}
+          <div role="button" tabIndex={0} onClick={() => handleReaction(myReaction?.type || "LIKE")}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               gap: 6, padding: "8px 0", borderRadius: FB.radius, cursor: "pointer",
@@ -1030,7 +1030,7 @@ export const WallPostCard: React.FC<{
         </div>}
 
         {/* Comment button — gated on commentsEnabled */}
-        {isAppEnabled('comments') && <div onClick={handleToggleComments}
+        {isAppEnabled('comments') && <div role="button" tabIndex={0} onClick={handleToggleComments}
           style={{
             flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
             gap: 6, padding: "8px 0", borderRadius: FB.radius, cursor: "pointer",
@@ -1046,7 +1046,7 @@ export const WallPostCard: React.FC<{
 
         {/* Share button with menu — gated on sharesEnabled */}
         {isAppEnabled('shares') && <div style={{ flex: 1, position: "relative" }}>
-          <div onClick={() => setShowShareMenu(!showShareMenu)}
+          <div role="button" tabIndex={0} onClick={() => setShowShareMenu(!showShareMenu)}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               gap: 6, padding: "8px 0", borderRadius: FB.radius, cursor: "pointer",
@@ -1062,7 +1062,7 @@ export const WallPostCard: React.FC<{
           {showShareMenu && (
             <div style={{
               position: "absolute", bottom: "100%", right: 0, marginBottom: 4,
-              background: FB.white, borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              background: FB.white, borderRadius: 8, boxShadow: "0 4px 12px ${SF.overlayDarkLight}",
               padding: 4, minWidth: 180, zIndex: 100,
             }}>
               {[
@@ -1076,7 +1076,7 @@ export const WallPostCard: React.FC<{
                 { type: "EMAIL", icon: "📧", label: "Email" },
               ].map(s => (
                 <div key={s.type}
-                  onClick={() => handleShare(s.type)}
+                  role="button" tabIndex={0} onClick={() => handleShare(s.type)}
                   style={{
                     display: "flex", alignItems: "center", gap: 8, padding: "8px 12px",
                     borderRadius: 6, cursor: "pointer", fontSize: 14, color: FB.text,
@@ -1140,12 +1140,12 @@ export const WallPostCard: React.FC<{
                         onMouseLeave={hideCommentReactionPicker}
                         style={{
                           position: 'absolute', bottom: '100%', left: 0, marginBottom: 4,
-                          background: FB.white, borderRadius: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+                          background: FB.white, borderRadius: 20, boxShadow: '0 2px 12px ${SF.overlayDarkLight}',
                           padding: '4px 6px', display: 'flex', gap: 2, zIndex: 100,
                         }}>
                         {REACTION_TYPES.map(r => (
                           <span key={r.type}
-                            onClick={(e) => { e.stopPropagation(); handleCommentLike(comment.id, r.emoji); }}
+                            role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); handleCommentLike(comment.id, r.emoji); }}
                             title={t(r.i18nKey)}
                             style={{ fontSize: 18, cursor: 'pointer', padding: '2px 4px', borderRadius: 8,
                               transition: 'transform 0.15s' }}
@@ -1156,7 +1156,7 @@ export const WallPostCard: React.FC<{
                       </div>
                     )}
                     <span
-                      onClick={() => { setReplyingTo(replyingTo === comment.id ? null : comment.id); setReplyText(''); }}
+                      role="button" tabIndex={0} onClick={() => { setReplyingTo(replyingTo === comment.id ? null : comment.id); setReplyText(''); }}
                       style={{ fontSize: 12, fontWeight: 700, cursor: 'pointer', color: FB.textSecondary }}>
                       {t('common.reply')}
                     </span>
@@ -1205,12 +1205,12 @@ export const WallPostCard: React.FC<{
                                     onMouseLeave={hideCommentReactionPicker}
                                     style={{
                                       position: 'absolute', bottom: '100%', left: 0, marginBottom: 4,
-                                      background: FB.white, borderRadius: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+                                      background: FB.white, borderRadius: 20, boxShadow: '0 2px 12px ${SF.overlayDarkLight}',
                                       padding: '4px 6px', display: 'flex', gap: 2, zIndex: 100,
                                     }}>
                                     {REACTION_TYPES.map(r => (
                                       <span key={r.type}
-                                        onClick={(e) => { e.stopPropagation(); handleCommentLike(reply.id, r.emoji); }}
+                                        role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); handleCommentLike(reply.id, r.emoji); }}
                                         title={t(r.i18nKey)}
                                         style={{ fontSize: 16, cursor: 'pointer', padding: '2px 3px', borderRadius: 8,
                                           transition: 'transform 0.15s' }}
@@ -1221,7 +1221,7 @@ export const WallPostCard: React.FC<{
                                   </div>
                                 )}
                                 <span
-                                  onClick={() => { setReplyingTo(replyingTo === comment.id ? null : comment.id); setReplyText(''); }}
+                                  role="button" tabIndex={0} onClick={() => { setReplyingTo(replyingTo === comment.id ? null : comment.id); setReplyText(''); }}
                                   style={{ fontSize: 11, fontWeight: 700, cursor: 'pointer', color: FB.textSecondary }}>
                                   {t('common.reply')}
                                 </span>
@@ -1258,7 +1258,7 @@ export const WallPostCard: React.FC<{
                             fontSize: 13, color: FB.text, padding: "5px 0",
                           }}
                         />
-                        <div onClick={() => handleComment(comment.id)}
+                        <div role="button" tabIndex={0} onClick={() => handleComment(comment.id)}
                           style={{
                             width: 24, height: 24, borderRadius: "50%", display: "flex",
                             alignItems: "center", justifyContent: "center",
@@ -1297,7 +1297,7 @@ export const WallPostCard: React.FC<{
                   fontSize: 14, color: FB.text, padding: "6px 0",
                 }}
               />
-              <div onClick={() => handleComment()}
+              <div role="button" tabIndex={0} onClick={() => handleComment()}
                 style={{
                   width: 28, height: 28, borderRadius: "50%", display: "flex",
                   alignItems: "center", justifyContent: "center", cursor: commentText.trim() ? "pointer" : "default",
@@ -2615,10 +2615,10 @@ export default function DashboardPageUnified() {
         <FBCard>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: FB.text }}>{t('dashboard.topLeads')}</span>
-            <span onClick={() => openModule('/leads')} style={{ fontSize: 12, color: FB.blue, textDecoration: "none", cursor: "pointer" }}>{t('common.viewAll')}</span>
+            <span role="button" tabIndex={0} onClick={() => openModule('/leads')} style={{ fontSize: 12, color: FB.blue, textDecoration: "none", cursor: "pointer" }}>{t('common.viewAll')}</span>
           </div>
           {topLeads.slice(0, 4).map(lead => (
-            <div key={lead.id} onClick={() => openModule('/leads')} style={{ textDecoration: "none", cursor: "pointer" }}>
+            <div key={lead.id} role="button" tabIndex={0} onClick={() => openModule('/leads')} style={{ textDecoration: "none", cursor: "pointer" }}>
               <div style={{
                 display: "flex", alignItems: "center", gap: 8, padding: "5px 2px",
                 borderRadius: 6, cursor: "pointer", transition: "background 0.15s",
@@ -2791,7 +2791,7 @@ export default function DashboardPageUnified() {
         <FBCard>
           <span style={{ fontSize: 13, fontWeight: 700, color: FB.text, display: "block", marginBottom: 6 }}>{t('dashboard.topLeads')}</span>
           {topLeads.slice(0, 5).map(lead => (
-            <div key={lead.id} onClick={() => openModule('/leads')} style={{ textDecoration: "none", cursor: "pointer" }}>
+            <div key={lead.id} role="button" tabIndex={0} onClick={() => openModule('/leads')} style={{ textDecoration: "none", cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0" }}>
                 <Avatar size={24} style={{ background: lead.statusColor || FB.blue, fontSize: 10 }}>
                   {(lead.prenom[0] || lead.nom[0] || "?")}
@@ -2821,7 +2821,7 @@ export default function DashboardPageUnified() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, paddingLeft: 36 }}>
             <span style={{ fontSize: 14 }}>{postMood}</span>
             <span style={{ fontSize: 11, color: FB.textSecondary }}>{moods.find(m => m.emoji === postMood)?.label}</span>
-            <span onClick={() => setPostMood(null)} style={{ fontSize: 11, color: FB.textSecondary, cursor: 'pointer' }}>✕</span>
+            <span role="button" tabIndex={0} onClick={() => setPostMood(null)} style={{ fontSize: 11, color: FB.textSecondary, cursor: 'pointer' }}>✕</span>
           </div>
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -2852,7 +2852,7 @@ export default function DashboardPageUnified() {
               { emoji: "📎", action: () => handleMediaSelect('*/*'), tip: t('wall.mediaFile') },
             ].map((btn, i) => (
               <AntTooltip key={i} title={btn.tip}>
-                <div onClick={btn.action}
+                <div role="button" tabIndex={0} onClick={btn.action}
                   style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, transition: "background 0.15s" }}
                   onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
                   onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
@@ -2862,7 +2862,7 @@ export default function DashboardPageUnified() {
             ))}
             <div style={{ position: 'relative' }}>
               <AntTooltip title={t('wall.moodTooltip')}>
-                <div onClick={() => setShowMoodPicker(!showMoodPicker)}
+                <div role="button" tabIndex={0} onClick={() => setShowMoodPicker(!showMoodPicker)}
                   style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, transition: "background 0.15s" }}
                   onMouseEnter={e => (e.currentTarget.style.background = FB.btnGray)}
                   onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
@@ -2872,12 +2872,12 @@ export default function DashboardPageUnified() {
               {showMoodPicker && (
                 <div style={{
                   position: 'absolute', bottom: '100%', right: 0, marginBottom: 4,
-                  background: FB.white, borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                  background: FB.white, borderRadius: 12, boxShadow: '0 4px 16px ${SF.overlayDarkLight}',
                   padding: 6, display: 'flex', flexWrap: 'wrap', gap: 2, width: 200, zIndex: 100,
                 }}>
                   {moods.map(m => (
                     <div key={m.emoji}
-                      onClick={() => { setPostMood(m.emoji); setShowMoodPicker(false); }}
+                      role="button" tabIndex={0} onClick={() => { setPostMood(m.emoji); setShowMoodPicker(false); }}
                       style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '4px 6px', borderRadius: 6, cursor: 'pointer', fontSize: 12, background: postMood === m.emoji ? FB.blue + '15' : 'transparent' }}
                       onMouseEnter={e => { e.currentTarget.style.background = FB.btnGray; }}
                       onMouseLeave={e => { e.currentTarget.style.background = postMood === m.emoji ? FB.blue + '15' : 'transparent'; }}>
@@ -2901,7 +2901,7 @@ export default function DashboardPageUnified() {
                 ) : (
                   <img src={m.preview} alt="" loading="lazy" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6 }} />
                 )}
-                <div onClick={() => removeMediaPreview(i)} style={{
+                <div role="button" tabIndex={0} onClick={() => removeMediaPreview(i)} style={{
                   position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: '50%',
                   background: SF.dangerAlt, color: SF.textLight, display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 10, cursor: 'pointer', fontWeight: 700,
@@ -2924,7 +2924,7 @@ export default function DashboardPageUnified() {
               { value: 'market', label: t('wall.category.market'), color: '#f97316' },
             ].map(cat => (
               <div key={cat.value}
-                onClick={() => setPostCategory(postCategory === cat.value ? null : cat.value)}
+                role="button" tabIndex={0} onClick={() => setPostCategory(postCategory === cat.value ? null : cat.value)}
                 style={{
                   padding: '2px 8px', borderRadius: 12, fontSize: 11, cursor: 'pointer',
                   background: postCategory === cat.value ? cat.color + '20' : FB.btnGray,
@@ -2946,7 +2946,7 @@ export default function DashboardPageUnified() {
                 const vis = getVisibilityLabel(t)[v];
                 const active = newPostVisibility === v;
                 return (
-                  <div key={v} onClick={() => setNewPostVisibility(v)}
+                  <div key={v} role="button" tabIndex={0} onClick={() => setNewPostVisibility(v)}
                     style={{
                       display: "flex", alignItems: "center", gap: 3, padding: "2px 8px",
                       borderRadius: 12, cursor: "pointer", fontSize: 11, fontWeight: 600,
@@ -3015,7 +3015,7 @@ export default function DashboardPageUnified() {
             const isFav = favModules.has(route);
             return (
               <div key={mod.key || mod.id || i}
-                onClick={() => {
+                role="button" tabIndex={0} onClick={() => {
                   if (pillsDrag.current.moved) return;
                   if (longPressTriggered.current) return;
                   openModule(route);
@@ -3074,7 +3074,7 @@ export default function DashboardPageUnified() {
                     — {wallSearchResults.length > 1 ? t('search.resultCountPlural', { count: wallSearchResults.length }) : t('search.resultCount', { count: wallSearchResults.length })}
                   </span>
                 </div>
-                <div onClick={() => setWallSearchQuery(null)}
+                <div role="button" tabIndex={0} onClick={() => setWallSearchQuery(null)}
                   style={{ cursor: "pointer", fontSize: 18, color: FB.textSecondary, lineHeight: 1, padding: "0 4px" }}>
                   ×
                 </div>
@@ -3084,7 +3084,7 @@ export default function DashboardPageUnified() {
               {wallSearchResults.map((result, idx) => (
                 <div
                   key={`ws-${idx}`}
-                  onClick={async () => {
+                  role="button" tabIndex={0} onClick={async () => {
                     if (!result.url) return;
                     // Native (Android/iOS) → Custom Tab / InAppBrowser
                     const { openInNativeBrowser } = await import('../utils/capacitor');
@@ -3198,15 +3198,15 @@ export default function DashboardPageUnified() {
         {feedFilter && (
           <span style={{ fontSize: 10, background: FB.blue + "15", color: FB.blue, borderRadius: 8, padding: "1px 6px", fontWeight: 600 }}>
             {({ projet: t('wall.filterIcon.projects'), chantier_realise: t('wall.filterIcon.chantiers'), promotion: t('wall.filterIcon.promos'), conseil: t('wall.filterIcon.conseils') } as Record<string,string>)[feedFilter]}
-            <span onClick={() => { setFeedFilter(""); setWallPosts([]); setWallCursor(null); }} style={{ cursor: "pointer", marginLeft: 3 }}>✕</span>
+            <span role="button" tabIndex={0} onClick={() => { setFeedFilter(""); setWallPosts([]); setWallCursor(null); }} style={{ cursor: "pointer", marginLeft: 3 }}>✕</span>
           </span>
         )}
         <div style={{ marginLeft: "auto", display: "flex", gap: 4, alignItems: "center" }}>
-          <div onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+          <div role="button" tabIndex={0} onClick={() => setShowFilterDropdown(!showFilterDropdown)}
             style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", background: feedFilter ? FB.blue + "15" : FB.btnGray, cursor: "pointer", position: "relative" }}>
             <FilterOutlined style={{ fontSize: 12, color: feedFilter ? FB.blue : FB.textSecondary }} />
           </div>
-          <div onClick={handleRefresh}
+          <div role="button" tabIndex={0} onClick={handleRefresh}
             style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", background: FB.btnGray, cursor: "pointer" }}>
             <ReloadOutlined spin={refreshing} style={{ fontSize: 12, color: FB.textSecondary }} />
           </div>
@@ -3215,7 +3215,7 @@ export default function DashboardPageUnified() {
         {showFilterDropdown && (
           <div style={{
             position: "absolute", top: "100%", right: 0, zIndex: 50,
-            background: FB.white, borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+            background: FB.white, borderRadius: 10, boxShadow: "0 4px 16px ${SF.overlayDarkLight}",
             padding: 6, display: "flex", flexDirection: "column", gap: 2, minWidth: 150, marginTop: 2,
           }}>
             {[
@@ -3225,7 +3225,7 @@ export default function DashboardPageUnified() {
               { key: "promotion", label: t('wall.filter.promos'), icon: "📢" },
               { key: "conseil", label: t('wall.filter.conseils'), icon: "💡" },
             ].map(cat => (
-              <div key={cat.key} onClick={() => { setFeedFilter(cat.key); setWallPosts([]); setWallCursor(null); setShowFilterDropdown(false); }}
+              <div key={cat.key} role="button" tabIndex={0} onClick={() => { setFeedFilter(cat.key); setWallPosts([]); setWallCursor(null); setShowFilterDropdown(false); }}
                 style={{
                   display: "flex", alignItems: "center", gap: 6, padding: "5px 10px",
                   borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600,

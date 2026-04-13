@@ -6,6 +6,7 @@ import { renderIconNode } from '../utils/icon';
 import WebsiteFormModal from '../../components/WebsiteFormModal';
 import usePublicFormModal from '../../hooks/usePublicFormModal';
 import '../../../styles/site-responsive.css';
+import { SF } from '../../../components/zhiive/ZhiiveTheme';
 
 /**
  * 🎨 HERO RENDERER - 100% MOBILE RESPONSIVE
@@ -332,7 +333,7 @@ export const HeroRenderer: React.FC<HeroRendererProps> = ({ content }) => {
           {/* SUBTITLE - 100% RESPONSIVE */}
           {subtitle && subtitle.text && (
             <p className="hero-subtitle" style={{
-              color: subtitle.color || 'rgba(255,255,255,0.95)',
+              color: subtitle.color || SF.overlayLightNearOpaque,
               fontSize: ensureUnit(subtitle.fontSize, 'clamp(16px, 3vw, 20px)'),
               maxWidth: '800px',
               margin: '0 auto',
@@ -398,7 +399,7 @@ export const HeroRenderer: React.FC<HeroRendererProps> = ({ content }) => {
                   fontSize: ensureUnit(secondaryButton.style?.fontSize, 'clamp(16px, 2.5vw, 18px)'),
                   borderColor: secondaryButton.style?.borderColor || 'white',
                   color: secondaryButton.style?.color || 'white',
-                  background: secondaryButton.style?.backgroundColor || 'rgba(255,255,255,0.1)',
+                  background: secondaryButton.style?.backgroundColor || SF.overlayLightSubtle,
                   borderRadius: secondaryButton.style?.borderRadius || '8px',
                   width: '100%',
                   maxWidth: '300px',
@@ -414,7 +415,7 @@ export const HeroRenderer: React.FC<HeroRendererProps> = ({ content }) => {
           {footer && footer.text && (
             <div style={{ marginTop: 'clamp(32px, 5vw, 40px)' }}>
               <span style={{
-                color: footer.color || 'rgba(255,255,255,0.9)',
+                color: footer.color || SF.overlayLightStrong,
                 fontSize: ensureUnit(footer.fontSize, 'clamp(14px, 2.5vw, 16px)'),
                 display: 'flex',
                 alignItems: 'center',

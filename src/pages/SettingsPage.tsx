@@ -130,7 +130,7 @@ const SettingsIndex: React.FC<{ can: (p: string) => boolean; isMobile: boolean; 
         {visibleCards.map(card => (
           <div
             key={card.to}
-            onClick={() => navigate(card.to)}
+            role="button" tabIndex={0} onClick={() => navigate(card.to)}
             onMouseEnter={() => setHoverCard(card.to)}
             onMouseLeave={() => setHoverCard(null)}
             style={{

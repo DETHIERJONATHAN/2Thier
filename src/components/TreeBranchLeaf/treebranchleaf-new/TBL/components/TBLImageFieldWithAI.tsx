@@ -37,6 +37,7 @@ import { ReferenceObjectsConfig } from '../../../../SmartCamera/ReferenceObjects
 import { ImageMeasurementPreview } from '../../../../ImageMeasurement/ImageMeasurementPreview';
 import ImageWithAnnotationsOverlay from '../../../../ImageMeasurement/ImageWithAnnotationsOverlay';
 import type { MeasurementResults, ImageAnnotations } from '../../../../../types/measurement';
+import { SF } from '../../../../zhiive/ZhiiveTheme';
 
 // Cache mémoire pour les images annotées (remplace sessionStorage — zéro stockage local)
 const imageMemoryCache = new Map<string, string>();
@@ -1165,7 +1166,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
                 </div>
                 {/* Bouton supprimer */}
                 <div
-                  onClick={(e) => {
+                  role="button" tabIndex={0} onClick={(e) => {
                     e.stopPropagation();
                     removeAdditionalPhoto(photo.id);
                   }}
@@ -1213,7 +1214,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
         {(value || capturedPhotos.length > 0 || annotatedImageUrl) && !isAnalyzingReference && (
           <div 
             style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}
-            onClick={() => setShowFullscreenImage(true)}
+            role="button" tabIndex={0} onClick={() => setShowFullscreenImage(true)}
             title="Cliquez pour voir en plein écran"
           >
             {/* 🎯 Afficher la meilleure photo (avec tracés si dispo) */}
@@ -1271,7 +1272,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
                       justifyContent: 'center',
                       fontSize: 16,
                       fontWeight: 'bold',
-                      boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                      boxShadow: '0 2px 6px ${SF.overlayDark}'
                     }}>
                       V10
                     </div>
@@ -1282,7 +1283,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
                     position: 'absolute',
                     bottom: 4,
                     left: 4,
-                    background: 'rgba(0,0,0,0.6)',
+                    background: SF.overlayDarkStrong,
                     color: 'white',
                     borderRadius: '4px',
                     padding: '2px 6px',
@@ -1297,7 +1298,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
                       position: 'absolute',
                       bottom: 4,
                       right: 4,
-                      background: 'rgba(0,0,0,0.7)',
+                      background: SF.overlayDarkHeavy,
                       color: 'white',
                       borderRadius: '4px',
                       padding: '2px 6px',
@@ -1321,7 +1322,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'rgba(255,255,255,0.7)',
+                background: SF.textLightMuted,
                 borderRadius: '6px'
               }}>
                 <Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />} tip="Analyse IA..." />
@@ -1491,7 +1492,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
                 {/* Barre d'infos en bas */}
                 <div style={{ 
                   padding: '12px 16px', 
-                  background: 'rgba(0,0,0,0.8)',
+                  background: SF.overlayDarkExtraHeavy,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1553,7 +1554,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
                 <div style={{ 
                   marginTop: 12, 
                   padding: '12px 16px', 
-                  background: 'rgba(255,255,255,0.1)', 
+                  background: SF.overlayLightSubtle, 
                   color: 'white',
                   borderRadius: 4,
                   textAlign: 'left',

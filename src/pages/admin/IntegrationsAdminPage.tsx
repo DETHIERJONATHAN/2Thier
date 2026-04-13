@@ -1,8 +1,8 @@
-import { FB } from '../../components/zhiive/ZhiiveTheme';
 import { useEffect, useState, useCallback, useMemo, FC, FormEvent } from 'react';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { message as antdMessage } from 'antd';
+import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
 
 // ── Facebook Design Tokens ──
 // ── Responsive Hook ──
@@ -20,7 +20,7 @@ function useScreenSize() {
 const FBToggle = ({ checked, onChange, disabled }: {
   checked: boolean; onChange: (v: boolean) => void; disabled?: boolean;
 }) => (
-  <div onClick={() => !disabled && onChange(!checked)} style={{
+  <div role="button" tabIndex={0} onClick={() => !disabled && onChange(!checked)} style={{
     width: 44, height: 24, borderRadius: 24, cursor: disabled ? 'not-allowed' : 'pointer',
     background: checked ? FB.green : '#ccc', transition: 'background .2s', position: 'relative',
     opacity: disabled ? 0.5 : 1,
@@ -28,7 +28,7 @@ const FBToggle = ({ checked, onChange, disabled }: {
     <div style={{
       width: 20, height: 20, borderRadius: '50%', background: '#fff',
       position: 'absolute', top: 2, left: checked ? 22 : 2,
-      transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+      transition: 'left .2s', boxShadow: '0 1px 3px ${SF.overlayDark}',
     }} />
   </div>
 );
@@ -73,8 +73,8 @@ const IntegrationSettingsModal: FC<{
   const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: FB.text, marginBottom: 4, display: 'block' };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-      <div style={{ background: FB.white, borderRadius: 12, boxShadow: '0 8px 30px rgba(0,0,0,0.2)', width: '90%', maxWidth: 500, padding: 24 }}>
+    <div style={{ position: 'fixed', inset: 0, background: SF.overlayDarkMd, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+      <div style={{ background: FB.white, borderRadius: 12, boxShadow: '0 8px 30px ${SF.overlayDarkSubtle}', width: '90%', maxWidth: 500, padding: 24 }}>
         <div style={{ fontSize: 20, fontWeight: 700, color: FB.text, marginBottom: 20 }}>
           {integrationType === 'mail' ? '📧 Configuration Email (SMTP)' : '📞 Configuration Telnyx'}
         </div>

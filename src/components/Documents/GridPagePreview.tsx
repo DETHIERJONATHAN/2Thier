@@ -10,6 +10,7 @@ import { DocumentPage, ModuleInstance } from './types';
 import { getModuleById } from './ModuleRegistry';
 import ModuleRenderer from './ModuleRenderer';
 import { useTranslation } from 'react-i18next';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 // Taille de la grille en pixels (pour A4 à 96dpi: 794 x 1123 px)
 const GRID_SIZE = 20; // Taille d'une cellule de grille
@@ -132,7 +133,7 @@ const GridPagePreview = ({
       padding: page.padding 
         ? `${page.padding.top}px ${page.padding.right}px ${page.padding.bottom}px ${page.padding.left}px`
         : '40px',
-      boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+      boxShadow: '0 4px 24px ${SF.overlayDark}',
       margin: '0 auto',
       position: 'relative' as const,
       fontFamily: globalTheme.fontFamily,
@@ -297,7 +298,7 @@ const GridPagePreview = ({
     return (
       <div
         key={module.id}
-        onClick={(e) => {
+        role="button" tabIndex={0} onClick={(e) => {
           e.stopPropagation();
           onModuleSelect?.(module.id);
         }}
@@ -329,7 +330,7 @@ const GridPagePreview = ({
           transition: isDragging || isResizing ? 'none' : 'outline 0.2s, opacity 0.2s',
           cursor: previewMode ? 'default' : isDragging ? 'grabbing' : 'grab',
           zIndex: isDragging ? 1000 : isSelected ? 100 : module.order,
-          boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,0.3)' : undefined,
+          boxShadow: isDragging ? '0 8px 24px ${SF.overlayDark}' : undefined,
           overflow: previewMode ? 'hidden' : 'visible',
           backgroundColor: moduleDef.id === 'BACKGROUND' ? 'transparent' : undefined,
         }}
@@ -345,10 +346,10 @@ const GridPagePreview = ({
               display: 'flex',
               gap: '2px',
               zIndex: 1001,
-              backgroundColor: 'rgba(0, 0, 0, 0.85)',
+              backgroundColor: SF.overlayDarkVeryHeavy,
               padding: '4px 8px',
               borderRadius: '6px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              boxShadow: '0 2px 8px ${SF.overlayDark}',
               cursor: 'grab',
             }}
           >
@@ -364,7 +365,7 @@ const GridPagePreview = ({
               <span style={{ fontWeight: 600, color: '#fff' }}>{moduleDef.icon}</span>
             </div>
 
-            <div style={{ width: '1px', backgroundColor: 'rgba(255,255,255,0.5)' }} />
+            <div style={{ width: '1px', backgroundColor: SF.textLightDimmed }} />
 
             <Tooltip title={t('common.configure')}>
               <div
@@ -468,7 +469,7 @@ const GridPagePreview = ({
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '10px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+              boxShadow: '0 2px 4px ${SF.overlayDarkSubtle}',
               zIndex: 10,
             }}>
               ⚡
@@ -489,7 +490,7 @@ const GridPagePreview = ({
               backgroundColor: '#1890ff',
               borderRadius: '2px',
               cursor: 'se-resize',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+              boxShadow: '0 1px 3px ${SF.overlayDark}',
             }}
           />
         )}
@@ -500,7 +501,7 @@ const GridPagePreview = ({
             position: 'absolute',
             bottom: '4px',
             right: '4px',
-            backgroundColor: 'rgba(0,0,0,0.7)',
+            backgroundColor: SF.overlayDarkHeavy,
             color: '#fff',
             padding: '2px 6px',
             borderRadius: '3px',
@@ -523,7 +524,7 @@ const GridPagePreview = ({
         backgroundImage: undefined,  // IMPORTANT: Pas de background ici!
         backgroundSize: undefined,
       }}
-      onClick={() => onModuleSelect?.(null as unknown)}
+      role="button" tabIndex={0} onClick={() => onModuleSelect?.(null as unknown)}
     >
       {/* Élément de background qui s'affiche DERRIÈRE les modules */}
       {(pageStyle.backgroundImage || pageStyle.backgroundColor) && (
@@ -612,7 +613,7 @@ const GridPagePreview = ({
           position: 'absolute',
           top: '4px',
           right: '4px',
-          backgroundColor: 'rgba(0,0,0,0.5)',
+          backgroundColor: SF.overlayDarkMd,
           color: '#fff',
           padding: '2px 8px',
           borderRadius: '4px',

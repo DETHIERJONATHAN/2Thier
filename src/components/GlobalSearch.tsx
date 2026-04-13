@@ -364,7 +364,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
       <div style={{
         background: 'linear-gradient(135deg, #0B0E2A 0%, #1a1e4e 100%)',
         padding: isMobile ? '8px 12px' : '8px 16px',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+        boxShadow: '0 4px 20px ${SF.overlayDarkMedium}',
         display: 'flex',
         flexDirection: 'column',
         gap: 0,
@@ -419,7 +419,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
               return (
                 <div
                   key={tab.id}
-                  onClick={() => handleTabChange(tab.id)}
+                  role="button" tabIndex={0} onClick={() => handleTabChange(tab.id)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 4,
                     padding: isMobile ? '4px 8px' : '5px 12px',
@@ -428,8 +428,8 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                     fontSize: isMobile ? 11 : 12,
                     fontWeight: isActive ? 600 : 400,
                     whiteSpace: 'nowrap',
-                    color: isActive ? '#fff' : 'rgba(255,255,255,0.6)',
-                    background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
+                    color: isActive ? '#fff' : SF.overlayLightMedium,
+                    background: isActive ? SF.overlayLighter : 'transparent',
                     borderBottom: isActive ? '2px solid #8c7ae6' : '2px solid transparent',
                     transition: 'all 0.2s',
                   }}
@@ -450,7 +450,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
         <div style={{
           background: SF.cardBg,
           borderRadius: `0 0 ${SF.radius}px ${SF.radius}px`,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          boxShadow: '0 8px 32px ${SF.overlayDarkSubtle}',
           overflowY: 'auto',
           maxHeight: isMobile ? '70vh' : '60vh',
           margin: isMobile ? '0 4px' : '0 16px',
@@ -490,12 +490,12 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                 return (
                   <div
                     key={item.id}
-                    onClick={() => handleSelect(item)}
+                    role="button" tabIndex={0} onClick={() => handleSelect(item)}
                     onMouseEnter={() => setSelectedIndex(idx)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '8px 16px', cursor: 'pointer', transition: 'background 0.12s',
-                      background: isSelected ? 'rgba(108,92,231,0.08)' : 'transparent',
+                      background: isSelected ? SF.primaryAlpha08 : 'transparent',
                     }}
                   >
                     {/* Thumbnail */}
@@ -548,7 +548,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                     </div>
                     {/* Bookmark star */}
                     <div
-                      onClick={e => {
+                      role="button" tabIndex={0} onClick={e => {
                         e.stopPropagation();
                         toggleBookmark({
                           url: item._route,
@@ -577,7 +577,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                 );
               })}
               <div
-                onClick={() => { setCenterApp(null); setBrowseUrl(null); setWallSearchQuery(query.trim()); navigate('/dashboard'); onClose(); }}
+                role="button" tabIndex={0} onClick={() => { setCenterApp(null); setBrowseUrl(null); setWallSearchQuery(query.trim()); navigate('/dashboard'); onClose(); }}
                 style={{
                   padding: '8px 16px', fontSize: 12, color: SF.primary,
                   cursor: 'pointer', fontWeight: 600, textAlign: 'center',
@@ -620,7 +620,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                       return (
                         <div
                           key={`${item._type}-${item.id}`}
-                          onClick={() => handleSelect(item)}
+                          role="button" tabIndex={0} onClick={() => handleSelect(item)}
                           onMouseEnter={() => setSelectedIndex(globalIdx)}
                           style={{
                             display: 'flex', alignItems: 'center', gap: 10,
@@ -698,7 +698,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
               {webResults.slice(0, 4).map((item) => (
                 <div
                   key={item.id}
-                  onClick={() => handleSelect(item)}
+                  role="button" tabIndex={0} onClick={() => handleSelect(item)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10,
                     padding: '8px 16px', cursor: 'pointer', transition: 'background 0.12s',
@@ -747,7 +747,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
                   </div>
                   {/* Bookmark star */}
                   <div
-                    onClick={e => {
+                    role="button" tabIndex={0} onClick={e => {
                       e.stopPropagation();
                       toggleBookmark({
                         url: item._route,
@@ -776,7 +776,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
               ))}
               {webResults.length > 4 && (
                 <div
-                  onClick={() => { setCenterApp(null); setBrowseUrl(null); setWallSearchQuery(query.trim()); navigate('/dashboard'); onClose(); }}
+                  role="button" tabIndex={0} onClick={() => { setCenterApp(null); setBrowseUrl(null); setWallSearchQuery(query.trim()); navigate('/dashboard'); onClose(); }}
                   style={{
                     padding: '8px 16px', fontSize: 12, color: SF.primary,
                     cursor: 'pointer', fontWeight: 600, textAlign: 'center',
@@ -794,12 +794,12 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ visible, onClose, headerHei
       {/* Backdrop */}
       {showDropdown && (
         <div
-          onClick={onClose}
+          role="button" tabIndex={0} onClick={onClose}
           style={{
             position: 'fixed',
             top: `${headerHeight}px`,
             left: 0, right: 0, bottom: 0,
-            background: 'rgba(0,0,0,0.2)',
+            background: SF.overlayDarkSubtle,
             zIndex: -1,
           }}
         />

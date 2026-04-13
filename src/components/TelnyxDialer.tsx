@@ -215,7 +215,7 @@ const TelnyxDialer: React.FC<TelnyxDialerProps> = ({
         <div style={{ display: 'flex', justifyContent: 'center', gap: 32 }}>
           <Tooltip title={t('telnyx.decline', 'Refuser')}>
             <div
-              onClick={hangup}
+              role="button" tabIndex={0} onClick={hangup}
               style={{
                 width: 56, height: 56, borderRadius: '50%',
                 background: DIALER.red, color: '#fff',
@@ -232,7 +232,7 @@ const TelnyxDialer: React.FC<TelnyxDialerProps> = ({
           </Tooltip>
           <Tooltip title={t('telnyx.answer', 'Répondre')}>
             <div
-              onClick={answer}
+              role="button" tabIndex={0} onClick={answer}
               style={{
                 width: 56, height: 56, borderRadius: '50%',
                 background: DIALER.green, color: '#fff',
@@ -268,7 +268,7 @@ const TelnyxDialer: React.FC<TelnyxDialerProps> = ({
       }}>
         {/* Close button */}
         {onClose && callState === 'idle' && (
-          <div onClick={onClose} style={{
+          <div role="button" tabIndex={0} onClick={onClose} style={{
             position: 'absolute', top: 8, right: 8,
             cursor: 'pointer', color: DIALER.textSecondary,
           }}>
@@ -320,7 +320,7 @@ const TelnyxDialer: React.FC<TelnyxDialerProps> = ({
         }}>
           <Tooltip title={isMuted ? t('telnyx.unmute', 'Rétablir le son') : t('telnyx.mute', 'Couper le son')}>
             <div
-              onClick={toggleMute}
+              role="button" tabIndex={0} onClick={toggleMute}
               style={{
                 width: 48, height: 48, borderRadius: '50%',
                 background: isMuted ? DIALER.red : DIALER.keyBg,
@@ -336,7 +336,7 @@ const TelnyxDialer: React.FC<TelnyxDialerProps> = ({
 
           <Tooltip title={isOnHold ? t('telnyx.resume', 'Reprendre') : t('telnyx.hold', 'Mettre en attente')}>
             <div
-              onClick={toggleHold}
+              role="button" tabIndex={0} onClick={toggleHold}
               style={{
                 width: 48, height: 48, borderRadius: '50%',
                 background: isOnHold ? DIALER.orange : DIALER.keyBg,
@@ -352,7 +352,7 @@ const TelnyxDialer: React.FC<TelnyxDialerProps> = ({
 
           <Tooltip title={t('telnyx.keypad', 'Clavier')}>
             <div
-              onClick={() => setShowKeypad(!showKeypad)}
+              role="button" tabIndex={0} onClick={() => setShowKeypad(!showKeypad)}
               style={{
                 width: 48, height: 48, borderRadius: '50%',
                 background: showKeypad ? DIALER.primary : DIALER.keyBg,
@@ -376,7 +376,7 @@ const TelnyxDialer: React.FC<TelnyxDialerProps> = ({
             {KEYPAD.map(({ key, sub }) => (
               <div
                 key={key}
-                onClick={() => sendDTMF(key)}
+                role="button" tabIndex={0} onClick={() => sendDTMF(key)}
                 style={{
                   height: 40, borderRadius: 8,
                   background: DIALER.keyBg,
@@ -398,7 +398,7 @@ const TelnyxDialer: React.FC<TelnyxDialerProps> = ({
         {/* Hangup button */}
         <Tooltip title={t('telnyx.hangup', 'Raccrocher')}>
           <div
-            onClick={hangup}
+            role="button" tabIndex={0} onClick={hangup}
             style={{
               width: 56, height: 56, borderRadius: '50%',
               background: DIALER.red, color: '#fff',
@@ -447,7 +447,7 @@ const TelnyxDialer: React.FC<TelnyxDialerProps> = ({
           </span>
         )}
         {onClose && (
-          <div onClick={onClose} style={{ cursor: 'pointer', color: DIALER.textSecondary, marginLeft: 8 }}>
+          <div role="button" tabIndex={0} onClick={onClose} style={{ cursor: 'pointer', color: DIALER.textSecondary, marginLeft: 8 }}>
             <CloseOutlined style={{ fontSize: 12 }} />
           </div>
         )}
@@ -478,7 +478,7 @@ const TelnyxDialer: React.FC<TelnyxDialerProps> = ({
         </span>
         {phoneNumber && (
           <div
-            onClick={handleBackspace}
+            role="button" tabIndex={0} onClick={handleBackspace}
             style={{ cursor: 'pointer', color: DIALER.textSecondary, marginLeft: 8, padding: 4 }}
           >
             <DeleteOutlined />
@@ -505,7 +505,7 @@ const TelnyxDialer: React.FC<TelnyxDialerProps> = ({
         {KEYPAD.map(({ key, sub }) => (
           <div
             key={key}
-            onClick={() => handleKeyPress(key)}
+            role="button" tabIndex={0} onClick={() => handleKeyPress(key)}
             style={{
               height: 52, borderRadius: 12,
               background: DIALER.keyBg,
@@ -529,7 +529,7 @@ const TelnyxDialer: React.FC<TelnyxDialerProps> = ({
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <Tooltip title={!isRegistered ? t('telnyx.notRegistered', 'Non connecté') : !phoneNumber ? t('telnyx.enterNumber', 'Entrer un numéro') : t('telnyx.call', 'Appeler')}>
           <div
-            onClick={handleCall}
+            role="button" tabIndex={0} onClick={handleCall}
             style={{
               width: 56, height: 56, borderRadius: '50%',
               background: isRegistered && phoneNumber ? DIALER.green : DIALER.keyBg,

@@ -155,7 +155,7 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
           transform: isSelected ? 'scale(1.02)' : 'scale(1)',
           boxShadow: isSelected ? '0 4px 12px rgba(24, 144, 255, 0.3)' : 'none',
         }}
-        onClick={handleSelect}
+        role="button" tabIndex={0} onClick={handleSelect}
       >
         {/* Aperçu du fond */}
         <div

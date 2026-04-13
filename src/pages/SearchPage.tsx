@@ -182,7 +182,7 @@ const FeedWidget: React.FC<{
           <GlobalOutlined style={{ fontSize: 18, color: SF.textSecondary, flexShrink: 0 }} />
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div onClick={onTitleClick} style={{ fontWeight: 600, fontSize: 14, color: SF.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: onTitleClick ? 'pointer' : 'default' }}>
+          <div role="button" tabIndex={0} onClick={onTitleClick} style={{ fontWeight: 600, fontSize: 14, color: SF.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: onTitleClick ? 'pointer' : 'default' }}>
             {feed.title}
           </div>
           {feed.domain && <div style={{ fontSize: 11, color: SF.textSecondary }}>{feed.domain}</div>}
@@ -196,7 +196,7 @@ const FeedWidget: React.FC<{
       {/* Content */}
       <div style={{ padding: '8px 0', flex: 1 }}>
         {hasError && !hasItems && (
-          <div onClick={() => onOpenUrl(feed.url, ext)} style={{ cursor: 'pointer', transition: 'background 0.15s' }} className="hover:bg-gray-50">
+          <div role="button" tabIndex={0} onClick={() => onOpenUrl(feed.url, ext)} style={{ cursor: 'pointer', transition: 'background 0.15s' }} className="hover:bg-gray-50">
             {feed.imageUrl && (
               <div style={{ width: '100%', height: 140, overflow: 'hidden', background: SF.bg }}>
                 <img src={feed.imageUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -222,7 +222,7 @@ const FeedWidget: React.FC<{
           const isHero = idx === 0 && !!item.imageUrl;
           if (isHero) {
             return (
-              <div key={idx} onClick={() => onOpenUrl(resolveLink(item.link), ext)}
+              <div key={idx} role="button" tabIndex={0} onClick={() => onOpenUrl(resolveLink(item.link), ext)}
                 style={{ cursor: 'pointer', transition: 'background 0.15s', borderBottom: idx < feed.items.length - 1 ? `1px solid ${SF.border}` : undefined }}
                 className="hover:bg-gray-50">
                 <div style={{ width: '100%', height: 160, overflow: 'hidden', background: SF.bg }}>
@@ -240,7 +240,7 @@ const FeedWidget: React.FC<{
             );
           }
           return (
-            <div key={idx} onClick={() => onOpenUrl(resolveLink(item.link), ext)}
+            <div key={idx} role="button" tabIndex={0} onClick={() => onOpenUrl(resolveLink(item.link), ext)}
               style={{ display: 'flex', padding: '8px 16px', gap: 10, cursor: 'pointer', transition: 'background 0.15s', borderBottom: idx < feed.items.length - 1 ? `1px solid ${SF.border}` : undefined }}
               className="hover:bg-gray-50">
               {item.imageUrl && (
@@ -267,7 +267,7 @@ const FeedWidget: React.FC<{
       </div>
 
       {/* Footer */}
-      <div onClick={() => onOpenUrl(feed.url, ext)}
+      <div role="button" tabIndex={0} onClick={() => onOpenUrl(feed.url, ext)}
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 16px', borderTop: `1px solid ${SF.border}`, fontSize: 12, color: SF.primary, fontWeight: 500, cursor: 'pointer', transition: 'background 0.15s' }}
         className="hover:bg-purple-50">
         <GlobalOutlined style={{ fontSize: 12 }} />
@@ -287,7 +287,7 @@ const FeedButton: React.FC<{
   const itemCount = feed.items.length;
   return (
     <div
-      onClick={onClick}
+      role="button" tabIndex={0} onClick={onClick}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '10px 16px',
@@ -612,7 +612,7 @@ const SearchPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
             {SEARCH_TABS.map(tab => {
               const isActive = activeTab === tab.id;
               return (
-                <div key={tab.id} onClick={() => { setActiveTab(tab.id); setSelectedIndex(-1); if (tab.id === 'web' && query.trim().length >= MIN_QUERY_LENGTH) doWebSearch(query.trim()); }}
+                <div key={tab.id} role="button" tabIndex={0} onClick={() => { setActiveTab(tab.id); setSelectedIndex(-1); if (tab.id === 'web' && query.trim().length >= MIN_QUERY_LENGTH) doWebSearch(query.trim()); }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 4, padding: '5px 12px',
                     borderRadius: 16, cursor: 'pointer', fontSize: 12, fontWeight: isActive ? 600 : 400,
@@ -648,8 +648,8 @@ const SearchPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
                   <GlobalOutlined /><span>{webResults.length} résultat{webResults.length > 1 ? 's' : ''} web</span>
                 </div>
                 {(activeTab === 'web' ? webResults : webResults.slice(0, 4)).map((item, idx) => (
-                  <div key={item.id} onClick={() => handleSelect(item)} onMouseEnter={() => setSelectedIndex(idx)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', cursor: 'pointer', transition: 'background 0.12s', background: selectedIndex === idx ? 'rgba(108,92,231,0.08)' : 'transparent' }}>
+                  <div key={item.id} role="button" tabIndex={0} onClick={() => handleSelect(item)} onMouseEnter={() => setSelectedIndex(idx)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', cursor: 'pointer', transition: 'background 0.12s', background: selectedIndex === idx ? SF.primaryAlpha08 : 'transparent' }}>
                     {item.imageUrl ? (
                       <div style={{ width: 80, minWidth: 80, height: 56, borderRadius: 6, overflow: 'hidden', background: '#f0f0f0', flexShrink: 0 }}>
                         <img src={item.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }} />
@@ -664,7 +664,7 @@ const SearchPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
                       <div style={{ fontSize: 13, fontWeight: 600, color: SF.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item._label}</div>
                       {item._desc && <div style={{ fontSize: 11, color: SF.textSecondary, lineHeight: 1.35, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{item._desc}</div>}
                     </div>
-                    <div onClick={e => { e.stopPropagation(); toggleBookmark({ url: item._route, title: item._label || '', description: item._desc, favicon: item.favicon, imageUrl: item.imageUrl }); }}
+                    <div role="button" tabIndex={0} onClick={e => { e.stopPropagation(); toggleBookmark({ url: item._route, title: item._label || '', description: item._desc, favicon: item.favicon, imageUrl: item.imageUrl }); }}
                       style={{ padding: 4, cursor: 'pointer', flexShrink: 0, transition: 'transform 0.15s' }}
                       onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.2)'; }}
                       onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}>
@@ -693,7 +693,7 @@ const SearchPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
                       {items.map(item => {
                         const globalIdx = flatResults.indexOf(item);
                         return (
-                          <div key={`${item._type}-${item.id}`} onClick={() => handleSelect(item)} onMouseEnter={() => setSelectedIndex(globalIdx)}
+                          <div key={`${item._type}-${item.id}`} role="button" tabIndex={0} onClick={() => handleSelect(item)} onMouseEnter={() => setSelectedIndex(globalIdx)}
                             style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px', cursor: 'pointer', transition: 'background 0.1s', background: selectedIndex === globalIdx ? `${config.color}12` : 'transparent' }}>
                             {item._type === 'user' || item._type === 'lead' ? (
                               <Avatar size={28} src={item.avatarUrl} style={{ backgroundColor: config.color, flexShrink: 0, fontSize: 12 }}>
@@ -722,7 +722,7 @@ const SearchPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
           </div>
 
           {/* Backdrop to close results */}
-          <div onClick={() => { setQuery(''); setSearchResults(null); setWebResults([]); }}
+          <div role="button" tabIndex={0} onClick={() => { setQuery(''); setSearchResults(null); setWebResults([]); }}
             style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 }} />
         </div>
       )}

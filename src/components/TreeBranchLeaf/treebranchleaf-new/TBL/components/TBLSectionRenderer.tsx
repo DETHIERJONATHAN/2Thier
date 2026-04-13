@@ -5022,7 +5022,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       border: effectiveBubbleBg
         ? `2px solid ${effectiveBubbleBg}`
         : isTotalField ? '2px solid #094d56' : '2px solid #99f6e4',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+      boxShadow: '0 2px 8px ${SF.overlayDarkFaint}',
       cursor: 'default',
       transition: 'all 0.2s ease',
       margin: '0 auto',
@@ -5045,7 +5045,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       alignItems: 'center',
       justifyContent: 'center',
       border: '2px solid #ffffff',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+      boxShadow: '0 1px 3px ${SF.overlayDarkSubtle}',
     };
     
     const iconStyle: React.CSSProperties = {
@@ -5161,7 +5161,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             {/* Style spécial pour section "Données" avec toggle ouvrir/fermer */}
             {section.title === 'Données' || section.title.includes('Données') ? (
               <div 
-                onClick={() => setIsDataSectionOpen(!isDataSectionOpen)}
+                role="button" tabIndex={0} onClick={() => setIsDataSectionOpen(!isDataSectionOpen)}
                 style={{
                   background: 'linear-gradient(135deg, #14b8a6 0%, #0891b2 100%)',
                   color: 'white',
@@ -5217,7 +5217,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
               <>
                 {/* 🎯 Flèche simple pour ouvrir/fermer les bulles */}
                 <div 
-                  onClick={() => setIsDataSectionOpen(!isDataSectionOpen)}
+                  role="button" tabIndex={0} onClick={() => setIsDataSectionOpen(!isDataSectionOpen)}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -5420,7 +5420,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                             style: { ...(el.props as unknown)?.style, position: 'relative' as const, ...(depth > 0 ? { animation: 'tbl-child-slide-in 0.3s ease-out' } : {}) },
                             children: (
                               <div 
-                                onClick={() => toggleExpand(fieldId)} 
+                                role="button" tabIndex={0} onClick={() => toggleExpand(fieldId)} 
                                 style={{ cursor: 'pointer', position: 'relative' }}
                               >
                                 {/* Badge nombre d'enfants */}
@@ -5441,7 +5441,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                                   justifyContent: 'center' as const,
                                   padding: '0 5px',
                                   border: '2px solid #ffffff',
-                                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                  boxShadow: '0 1px 3px ${SF.overlayDarkSubtle}',
                                   transition: 'all 0.2s ease',
                                 }}>
                                   {isExpanded ? '−' : `+${childrenOfField.length}`}

@@ -16,6 +16,7 @@ import {
 } from '@ant-design/icons';
 import { useAuth } from '../../auth/useAuth';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -173,21 +174,21 @@ const EspaceProPage: React.FC = () => {
             <Title level={2} style={{ color: 'white', margin: 0 }}>
               Espace Professionnel Devis1Minute
             </Title>
-            <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: '16px' }}>
+            <Text style={{ color: SF.overlayPlayBtn, fontSize: '16px' }}>
               Bienvenue {user?.prenom} {user?.nom}
             </Text>
             <br />
             <Space style={{ marginTop: '8px' }}>
               <StarFilled style={{ color: '#ffd700' }} />
               <Text style={{ color: 'white' }}>{stats.noteGlobale}/5</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.6)' }}>
+              <Text style={{ color: SF.overlayLightMedium }}>
                 ({stats.avisClients} avis)
               </Text>
             </Space>
           </Col>
           <Col span={4} style={{ textAlign: 'right' }}>
             <Badge count={leads.filter(l => l.statut === 'nouveau').length} offset={[10, 0]}>
-              <Button type="primary" size="large" style={{ backgroundColor: 'rgba(255,255,255,0.2)', border: 'none' }}>
+              <Button type="primary" size="large" style={{ backgroundColor: SF.overlayLight, border: 'none' }}>
                 Nouveaux Leads
               </Button>
             </Badge>

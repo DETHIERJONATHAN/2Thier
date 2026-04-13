@@ -216,7 +216,7 @@ const SortableField = ({ field, sectionId, isSelected, setSelectedField, onRemov
       style={style}
       className={`palette-field-item section-palette-item ${isSelected ? 'selected' : ''}`}
       data-type={field.type}
-      onClick={() => setSelectedField({ sectionId, fieldId: field.id })}
+      role="button" tabIndex={0} onClick={() => setSelectedField({ sectionId, fieldId: field.id })}
       draggable="true"
       onDragStart={(e) => {
         e.dataTransfer.setData('field-id', field.id);

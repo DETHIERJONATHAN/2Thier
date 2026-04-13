@@ -232,7 +232,7 @@ const SiteVitrine2Thier: React.FC = () => {
                 🌞 Votre Partenaire en Transition Énergétique
               </Title>
               
-              <Paragraph style={{ color: 'rgba(255,255,255,0.95)', fontSize: 'clamp(16px, 4vw, 20px)', maxWidth: '800px', margin: '0 auto' }}>
+              <Paragraph style={{ color: SF.overlayLightNearOpaque, fontSize: 'clamp(16px, 4vw, 20px)', maxWidth: '800px', margin: '0 auto' }}>
                 Photovoltaïque • Batteries • Bornes de Recharge • Pompes à Chaleur<br/>
                 Isolation • Toiture • Électricité • Gros Œuvre
               </Paragraph>
@@ -262,7 +262,7 @@ const SiteVitrine2Thier: React.FC = () => {
                     fontSize: '18px',
                     borderColor: 'white',
                     color: 'white',
-                    background: 'rgba(255,255,255,0.1)'
+                    background: SF.overlayLightSubtle
                   }}
                 >
                   NOS RÉALISATIONS
@@ -270,7 +270,7 @@ const SiteVitrine2Thier: React.FC = () => {
               </Space>
 
               <div style={{ marginTop: '40px' }}>
-                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px' }}>
+                <Text style={{ color: SF.overlayLightStrong, fontSize: '16px' }}>
                   <CheckCircleOutlined /> +500 installations réalisées • 4.9/5 de satisfaction
                 </Text>
               </div>
@@ -289,7 +289,7 @@ const SiteVitrine2Thier: React.FC = () => {
                     textAlign: 'center',
                     background: 'white',
                     borderRadius: '12px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+                    boxShadow: '0 4px 12px ${SF.overlayDarkFaint}'
                   }}
                 >
                   <div style={{ fontSize: '48px', marginBottom: '8px' }}>{stat.icon}</div>
@@ -515,7 +515,7 @@ const SiteVitrine2Thier: React.FC = () => {
             <Title level={2} style={{ color: 'white', margin: 0 }}>
               🌟 Prêt à Passer à l'Énergie Verte ?
             </Title>
-            <Paragraph style={{ color: 'rgba(255,255,255,0.95)', fontSize: '18px' }}>
+            <Paragraph style={{ color: SF.overlayLightNearOpaque, fontSize: '18px' }}>
               Demandez votre devis gratuit et sans engagement<br/>
               Réponse sous 24h garantie
             </Paragraph>
@@ -542,7 +542,7 @@ const SiteVitrine2Thier: React.FC = () => {
                 style={{ 
                   borderColor: 'white',
                   color: 'white',
-                  background: 'rgba(255,255,255,0.1)',
+                  background: SF.overlayLightSubtle,
                   height: 'auto',
                   padding: '16px 32px',
                   fontSize: '18px'
@@ -551,7 +551,7 @@ const SiteVitrine2Thier: React.FC = () => {
                 DEVIS EN LIGNE
               </Button>
             </Space>
-            <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px' }}>
+            <Text style={{ color: SF.overlayLightStrong, fontSize: '16px' }}>
               <EnvironmentOutlined /> Route de Gosselies 23, 6220 Fleurus (Charleroi)
             </Text>
           </Space>

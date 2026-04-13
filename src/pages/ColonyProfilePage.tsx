@@ -155,7 +155,7 @@ const ColonyProfilePage: React.FC = () => {
                 border: '4px solid #fff',
                 backgroundColor: !colony.logoUrl ? ORG_COLOR : undefined,
                 fontSize: logoSize * 0.4,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                boxShadow: '0 2px 8px ${SF.overlayDarkLight}',
               }}
             >
               {!colony.logoUrl && (colony.name[0]?.toUpperCase() || 'C')}
@@ -176,7 +176,7 @@ const ColonyProfilePage: React.FC = () => {
                 border: '4px solid #fff',
                 backgroundColor: !colony.logoUrl ? ORG_COLOR : undefined,
                 fontSize: logoSize * 0.4,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                boxShadow: '0 2px 8px ${SF.overlayDarkLight}',
                 flexShrink: 0,
               }}
             >
@@ -203,7 +203,7 @@ const ColonyProfilePage: React.FC = () => {
           {tabs.map(tab => (
             <div
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              role="button" tabIndex={0} onClick={() => setActiveTab(tab.key)}
               style={{
                 padding: '16px 16px',
                 fontSize: 15, fontWeight: activeTab === tab.key ? 700 : 600,
@@ -280,7 +280,7 @@ const ColonyProfilePage: React.FC = () => {
                   {colony.members.slice(0, 6).map(m => (
                     <div
                       key={m.id}
-                      onClick={() => navigate(`/profile/${m.id}`)}
+                      role="button" tabIndex={0} onClick={() => navigate(`/profile/${m.id}`)}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
                         borderRadius: 8, background: FB.bg, cursor: 'pointer', flex: '1 1 calc(50% - 6px)', minWidth: 160,
@@ -304,7 +304,7 @@ const ColonyProfilePage: React.FC = () => {
                 </div>
                 {colony.memberCount > 6 && (
                   <div
-                    onClick={() => setActiveTab('members')}
+                    role="button" tabIndex={0} onClick={() => setActiveTab('members')}
                     style={{
                       textAlign: 'center', paddingTop: 12, fontSize: 14,
                       fontWeight: 600, color: FB.blue, cursor: 'pointer',
@@ -351,7 +351,7 @@ const ColonyProfilePage: React.FC = () => {
               {colony.members.map(m => (
                 <div
                   key={m.id}
-                  onClick={() => navigate(`/profile/${m.id}`)}
+                  role="button" tabIndex={0} onClick={() => navigate(`/profile/${m.id}`)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12, padding: 12,
                     borderRadius: 8, background: FB.bg, cursor: 'pointer',

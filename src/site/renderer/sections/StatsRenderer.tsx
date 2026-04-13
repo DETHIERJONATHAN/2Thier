@@ -2,6 +2,7 @@ import React from 'react';
 import { Row, Col, Card, Statistic } from 'antd';
 import { CheckCircleOutlined } from '@ant-design/icons';
 import { renderIconNode } from '../utils/icon';
+import { SF } from '../../../components/zhiive/ZhiiveTheme';
 
 /**
  * 🎨 STATS RENDERER - REPRODUCTION EXACTE SITE VITRINE 2THIER
@@ -64,7 +65,7 @@ export const StatsRenderer: React.FC<StatsRendererProps> = ({ content }) => {
                   textAlign: 'center',
                   background: style.cardBackground || 'white',
                   borderRadius: ensureUnit(style.cardBorderRadius, '12px'),
-                  boxShadow: style.cardShadow || '0 4px 12px rgba(0,0,0,0.08)'
+                  boxShadow: style.cardShadow || '0 4px 12px ${SF.overlayDarkFaint}'
                 }}
               >
                 <div style={{ 

@@ -215,7 +215,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
         {sections.map(sec => (
           <div
             key={sec.key}
-            onClick={() => setActiveSection(sec.key)}
+            role="button" tabIndex={0} onClick={() => setActiveSection(sec.key)}
             style={{
               flex: 1, padding: '10px 0', textAlign: 'center', cursor: 'pointer',
               borderRadius: SF.radiusSm, fontSize: 12, fontWeight: 700,
@@ -255,7 +255,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
               {t('flow.revealAt100')}
             </div>
             <div
-              onClick={() => setSparkModalOpen(true)}
+              role="button" tabIndex={0} onClick={() => setSparkModalOpen(true)}
               style={{
               padding: '8px 20px', borderRadius: 20, display: 'inline-block',
               background: SF.gradientGold, color: SF.text, fontWeight: 700,
@@ -295,7 +295,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
                 const opt = labels[v];
                 const active = sparkVisibility === v;
                 return (
-                  <div key={v} onClick={() => setSparkVisibility(v)} style={{
+                  <div key={v} role="button" tabIndex={0} onClick={() => setSparkVisibility(v)} style={{
                     display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
                     borderRadius: 14, cursor: 'pointer', fontSize: 12, fontWeight: 600,
                     background: active ? opt.color + '18' : SF.bgLighter,
@@ -351,7 +351,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
               {!spark.isRevealed && (
                 <div style={{ display: 'flex', gap: 8 }}>
                   <div
-                    onClick={() => !spark.hasVoted && handleVoteSpark(spark.id)}
+                    role="button" tabIndex={0} onClick={() => !spark.hasVoted && handleVoteSpark(spark.id)}
                     style={{
                     flex: 1, padding: '6px 0', textAlign: 'center', borderRadius: 20,
                     background: spark.hasVoted ? SF.success + '20' : SF.bg,
@@ -361,7 +361,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
                   }}>
                     <LikeOutlined /> {spark.hasVoted ? t('flow.voted') : t('flow.vote')}
                   </div>
-                  <div onClick={async () => {
+                  <div role="button" tabIndex={0} onClick={async () => {
                     setSparks(prev => prev.filter(s => s.id !== spark.id));
                     try { await api.post(`/api/zhiive/sparks/${spark.id}/dismiss`); } catch {}
                   }} style={{
@@ -399,7 +399,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
               {t('flow.challengeSomeone')}
             </div>
             <div
-              onClick={() => setBattleModalOpen(true)}
+              role="button" tabIndex={0} onClick={() => setBattleModalOpen(true)}
               style={{
               padding: '8px 20px', borderRadius: 20, display: 'inline-block',
               background: SF.overlayLight, fontWeight: 700, fontSize: 13, cursor: 'pointer',
@@ -487,7 +487,7 @@ const FlowPanel: React.FC<FlowPanelProps> = ({ api }) => {
 
                 {battle.status === 'OPEN' && (
                   <div
-                    onClick={() => handleJoinBattle(battle.id)}
+                    role="button" tabIndex={0} onClick={() => handleJoinBattle(battle.id)}
                     style={{
                     marginTop: 8, padding: '6px 0', textAlign: 'center', borderRadius: 20,
                     background: SF.gradientHot, color: 'white', fontWeight: 700,

@@ -7,6 +7,7 @@ import { renderIconNode, resolveIconValue } from '../utils/icon';
 import WebsiteFormModal from '../../components/WebsiteFormModal';
 import usePublicFormModal from '../../hooks/usePublicFormModal';
 import '../../../styles/site-responsive.css';
+import { SF } from '../../../components/zhiive/ZhiiveTheme';
 
 /**
  * 🎨 HEADER RENDERER V3 - 100% MOBILE RESPONSIVE
@@ -351,7 +352,7 @@ export const HeaderRenderer: React.FC<HeaderRendererProps> = ({ content }) => {
       'clamp(8px, 2vw, 12px) clamp(16px, 4vw, 48px)' : 
       'clamp(12px, 2vw, 16px) clamp(16px, 4vw, 48px)'
     ),
-    boxShadow: style.boxShadow || (isScrolled ? '0 4px 12px rgba(0,0,0,0.08)' : '0 2px 4px rgba(0,0,0,0.04)'),
+    boxShadow: style.boxShadow || (isScrolled ? '0 4px 12px ${SF.overlayDarkFaint}' : '0 2px 4px rgba(0,0,0,0.04)'),
     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     // ✅ Appliquer les autres styles du seed (display, alignItems, etc.)
     display: 'flex',

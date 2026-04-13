@@ -6,6 +6,7 @@ import SectionConfigPanel from './SectionConfigPanel';
 import InteractivePDFPreview from './InteractivePDFPreview';
 import DocumentGlobalThemeEditor, { DocumentGlobalTheme } from './DocumentGlobalThemeEditor';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 interface Section {
   id: string;
@@ -285,7 +286,7 @@ const DocumentTemplateEditor = ({ templateId, onSave, onClose }: DocumentTemplat
                             <Card
                               style={{ 
                                 boxShadow: snapshot.isDragging 
-                                  ? '0 8px 24px rgba(0,0,0,0.15)' 
+                                  ? '0 8px 24px ${SF.overlayDarkLight}' 
                                   : '0 2px 8px rgba(0,0,0,0.06)',
                                 cursor: 'move'
                               }}

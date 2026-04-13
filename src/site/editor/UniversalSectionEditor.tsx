@@ -55,6 +55,7 @@ import { SectionSchema, SectionInstance } from '../schemas/types';
 import FieldRenderer from './fields/FieldRenderer';
 import AIContentGenerator from '../ai/AIContentGenerator';
 import { SectionRenderer } from '../renderer/SectionRenderer';
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 
 /**
  * 🔧 Props du UniversalSectionEditor
@@ -502,7 +503,7 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
             backgroundColor: '#fff',
             borderTop: '1px solid #f0f0f0',
             zIndex: 10,
-            boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.08)'
+            boxShadow: '0 -2px 8px ${SF.overlayDarkFaint}'
           }}
         >
           <Space 

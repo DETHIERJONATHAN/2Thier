@@ -13,6 +13,7 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import type { ImageAnnotations } from '../../types/measurement';
+import { SF } from '../zhiive/ZhiiveTheme';
 
 interface ImageWithAnnotationsOverlayProps {
   /** URL de l'image source */
@@ -306,7 +307,7 @@ const ImageWithAnnotationsOverlay: React.FC<ImageWithAnnotationsOverlayProps> = 
         const boxX = canvasWidth - boxWidth - 10;
         const boxY = canvasHeight - boxHeight - 10;
         
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillStyle = SF.overlayDarkHeavy;
         ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
         
         // Texte

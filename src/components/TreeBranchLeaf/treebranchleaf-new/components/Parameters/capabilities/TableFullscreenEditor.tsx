@@ -109,7 +109,7 @@ const EditableCell: React.FC<{
   if (!editing) {
     return (
       <div
-        onClick={() => setEditing(true)}
+        role="button" tabIndex={0} onClick={() => setEditing(true)}
         style={{
           padding: '4px 8px',
           minHeight: 28,

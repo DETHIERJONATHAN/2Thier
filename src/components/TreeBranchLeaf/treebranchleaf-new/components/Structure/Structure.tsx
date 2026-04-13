@@ -82,7 +82,7 @@ const SubTabDropHeader: React.FC<{
   return (
     <div
       ref={setNodeRef}
-      onClick={onToggle}
+      role="button" tabIndex={0} onClick={onToggle}
       style={{
         marginLeft: `${level * 12}px`,
         padding: '3px 8px',

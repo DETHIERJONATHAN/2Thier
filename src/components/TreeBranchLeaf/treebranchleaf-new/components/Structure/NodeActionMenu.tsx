@@ -342,7 +342,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
         ref={triggerRef}
         className="flex items-center justify-center w-6 h-6 hover:bg-gray-100 rounded cursor-pointer opacity-60 hover:opacity-100"
         style={{ zIndex: 1000, position: 'relative' }}
-        onClick={handleTriggerClick}
+        role="button" tabIndex={0} onClick={handleTriggerClick}
         onMouseDown={handleTriggerPointerDown}
         onPointerDown={handleTriggerPointerDown}
         onDragStart={(event) => {
@@ -368,7 +368,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
               minWidth: 160,
               zIndex: 2000
             }}
-            onClick={(event) => {
+            role="button" tabIndex={0} onClick={(event) => {
               event.stopPropagation();
             }}
           >

@@ -20,6 +20,7 @@ import {
 const { Text, Title } = Typography;
 
 import { STATUS_LABELS } from './pointageConstants';
+import { SF } from '../../components/zhiive/ZhiiveTheme';
 
 interface PointageClockInProps {
   chantierId: string;
@@ -195,7 +196,7 @@ const PointageClockIn: React.FC<PointageClockInProps> = ({
     // Add timestamp watermark
     const now = new Date();
     const timeStr = now.toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillStyle = SF.overlayDarkMd;
     ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 16px monospace';
@@ -464,7 +465,7 @@ const PointageClockIn: React.FC<PointageClockInProps> = ({
                   {!cameraReady && (
                     <div style={{
                       position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: 'rgba(0,0,0,0.7)',
+                      background: SF.overlayDarkHeavy,
                     }}>
                       <Spin size="large" />
                     </div>
@@ -473,7 +474,7 @@ const PointageClockIn: React.FC<PointageClockInProps> = ({
                   {geoPosition && (
                     <div style={{
                       position: 'absolute', bottom: 8, left: 8, right: 8,
-                      background: 'rgba(0,0,0,0.6)', borderRadius: 6, padding: '4px 8px',
+                      background: SF.overlayDarkStrong, borderRadius: 6, padding: '4px 8px',
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     }}>
                       <Text style={{ color: '#fff', fontSize: 10, fontFamily: 'monospace' }}>

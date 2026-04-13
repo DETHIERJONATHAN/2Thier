@@ -1,4 +1,3 @@
-import { FB } from '../../components/zhiive/ZhiiveTheme';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Spin, message } from 'antd';
 import {
@@ -17,6 +16,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
+import { FB, SF } from '../../components/zhiive/ZhiiveTheme';
 
 const useScreenSize = () => {
   const [w, setW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -38,13 +38,13 @@ const FBModal: React.FC<{
   if (!open) return null;
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      position: 'fixed', inset: 0, background: SF.overlayDarkMd,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       zIndex: 1000, padding: 16,
-    }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{
+    }} role="button" tabIndex={0} onClick={onClose}>
+      <div role="button" tabIndex={0} onClick={e => e.stopPropagation()} style={{
         background: FB.white, borderRadius: FB.radius, width: '100%',
-        maxWidth: 480, boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+        maxWidth: 480, boxShadow: '0 8px 32px ${SF.overlayDarkSubtle}',
         maxHeight: '90vh', display: 'flex', flexDirection: 'column',
       }}>
         <div style={{
@@ -52,7 +52,7 @@ const FBModal: React.FC<{
           padding: '16px 20px', borderBottom: '1px solid ' + FB.border, flexShrink: 0,
         }}>
           <div style={{ fontSize: 18, fontWeight: 700, color: FB.text }}>{title}</div>
-          <div onClick={onClose} style={{
+          <div role="button" tabIndex={0} onClick={onClose} style={{
             width: 32, height: 32, borderRadius: '50%', background: FB.btnGray,
             display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
           }}>
@@ -379,7 +379,7 @@ const OrganizationEmailSettings: React.FC = () => {
                 }}
               />
               {field.isPassword && (
-                <div onClick={() => setShowPassword(!showPassword)} style={{
+                <div role="button" tabIndex={0} onClick={() => setShowPassword(!showPassword)} style={{
                   padding: '0 12px', cursor: 'pointer', color: FB.textSecondary,
                 }}>
                   {showPassword ? <EyeOutlined /> : <EyeInvisibleOutlined />}

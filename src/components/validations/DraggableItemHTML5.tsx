@@ -60,7 +60,7 @@ const DraggableItem: React.FC<DraggableItemProps> = ({ id, type, data, children,
       id={id}
       draggable={true}
       onDragStart={handleDragStart}
-      onClick={onClick}
+      role="button" tabIndex={0} onClick={onClick}
       className={`cursor-grab active:cursor-grabbing ${className} ${type}-item`}
       data-type={type}
       data-id={data.id}

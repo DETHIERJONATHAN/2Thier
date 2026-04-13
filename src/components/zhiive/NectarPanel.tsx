@@ -322,7 +322,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
         };
         const opt = labels[v]; const active = value === v;
         return (
-          <div key={v} onClick={() => onChange(v)} style={{
+          <div key={v} role="button" tabIndex={0} onClick={() => onChange(v)} style={{
             display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
             borderRadius: 14, cursor: 'pointer', fontSize: 12, fontWeight: 600,
             background: active ? opt.color + '18' : SF.bgLighter,
@@ -398,7 +398,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
       <div style={{ display: 'flex', gap: 4, marginBottom: 12, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 2, maxWidth: '100%', flexWrap: 'nowrap' }}>
         {sections.map(sec => (
           <Tooltip key={sec.key} title={sec.label} placement="bottom">
-            <div onClick={() => setActiveSection(sec.key)} style={{
+            <div role="button" tabIndex={0} onClick={() => setActiveSection(sec.key)} style={{
               flexShrink: 0, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', borderRadius: SF.radiusSm, fontSize: 16,
               transition: 'all 0.25s',
@@ -428,7 +428,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
             <EyeInvisibleOutlined style={{ fontSize: 28, color: SF.gold }} />
             <div style={{ fontSize: 14, fontWeight: 700, color: SF.text, marginTop: 6 }}>{t('flow.postAnonymously')}</div>
             <div style={{ fontSize: 11, color: SF.textSecondary, marginTop: 2, marginBottom: 10 }}>{t('flow.revealAt100')}</div>
-            <div onClick={() => setSparkModalOpen(true)} style={{ padding: '8px 20px', borderRadius: 20, display: 'inline-block', background: SF.gradientGold, color: SF.text, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>{t('flow.createSpark')}</div>
+            <div role="button" tabIndex={0} onClick={() => setSparkModalOpen(true)} style={{ padding: '8px 20px', borderRadius: 20, display: 'inline-block', background: SF.gradientGold, color: SF.text, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>{t('flow.createSpark')}</div>
           </div>
           <Modal open={sparkModalOpen} onCancel={() => setSparkModalOpen(false)} onOk={handleCreateSpark} confirmLoading={sparkSubmitting} title={t('flow.newSpark')} okText={t('flow.buzzIt')} cancelText={t('common.cancel')}>
             <Input.TextArea value={sparkContent} onChange={e => setSparkContent(e.target.value)} placeholder={t('flow.sparkFullPlaceholder')} maxLength={3000} rows={4} showCount style={{ marginTop: 8 }} />
@@ -447,8 +447,8 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
               <div style={{ fontSize: 14, color: SF.text, lineHeight: 1.5, marginBottom: 10 }}>{spark.content}</div>
               {!spark.isRevealed && (
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <div onClick={() => !spark.hasVoted && handleVoteSpark(spark.id)} style={{ flex: 1, padding: '6px 0', textAlign: 'center', borderRadius: 20, background: spark.hasVoted ? SF.success + '20' : SF.bg, color: spark.hasVoted ? SF.success : SF.textSecondary, cursor: spark.hasVoted ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, opacity: spark.hasVoted ? 0.7 : 1 }}><LikeOutlined /> {spark.hasVoted ? t('flow.voted') : t('flow.vote')}</div>
-                  <div onClick={async () => { setSparks(prev => prev.filter(s => s.id !== spark.id)); try { await api.post(`/api/zhiive/sparks/${spark.id}/dismiss`); } catch { /* ignore */ } }} style={{ flex: 1, padding: '6px 0', textAlign: 'center', borderRadius: 20, background: SF.bg, color: SF.textSecondary, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><DislikeOutlined /> {t('flow.skip')}</div>
+                  <div role="button" tabIndex={0} onClick={() => !spark.hasVoted && handleVoteSpark(spark.id)} style={{ flex: 1, padding: '6px 0', textAlign: 'center', borderRadius: 20, background: spark.hasVoted ? SF.success + '20' : SF.bg, color: spark.hasVoted ? SF.success : SF.textSecondary, cursor: spark.hasVoted ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, opacity: spark.hasVoted ? 0.7 : 1 }}><LikeOutlined /> {spark.hasVoted ? t('flow.voted') : t('flow.vote')}</div>
+                  <div role="button" tabIndex={0} onClick={async () => { setSparks(prev => prev.filter(s => s.id !== spark.id)); try { await api.post(`/api/zhiive/sparks/${spark.id}/dismiss`); } catch { /* ignore */ } }} style={{ flex: 1, padding: '6px 0', textAlign: 'center', borderRadius: 20, background: SF.bg, color: SF.textSecondary, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><DislikeOutlined /> {t('flow.skip')}</div>
                 </div>
               )}
             </div>
@@ -463,7 +463,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
             <TrophyOutlined style={{ fontSize: 28 }} />
             <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>{t('flow.launchBattle')}</div>
             <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2, marginBottom: 10 }}>{t('flow.challengeSomeone')}</div>
-            <div onClick={() => setBattleModalOpen(true)} style={{ padding: '8px 20px', borderRadius: 20, display: 'inline-block', background: SF.overlayLight, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>{t('flow.launchBattleBtn')}</div>
+            <div role="button" tabIndex={0} onClick={() => setBattleModalOpen(true)} style={{ padding: '8px 20px', borderRadius: 20, display: 'inline-block', background: SF.overlayLight, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>{t('flow.launchBattleBtn')}</div>
           </div>
           <Modal open={battleModalOpen} onCancel={() => setBattleModalOpen(false)} onOk={handleCreateBattle} confirmLoading={battleSubmitting} title={t('flow.newBattle')} okText={t('common.launch')} cancelText={t('common.cancel')}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
@@ -492,7 +492,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
                     <div style={{ fontSize: 11, fontWeight: 600, color: SF.text, marginTop: 4 }}>{battle.opponentName || '???'}</div>
                   </div>
                 </div>
-                {battle.status === 'OPEN' && <div onClick={() => handleJoinBattle(battle.id)} style={{ marginTop: 8, padding: '6px 0', textAlign: 'center', borderRadius: 20, background: SF.gradientHot, color: 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>{t('flow.takeChallenge')}</div>}
+                {battle.status === 'OPEN' && <div role="button" tabIndex={0} onClick={() => handleJoinBattle(battle.id)} style={{ marginTop: 8, padding: '6px 0', textAlign: 'center', borderRadius: 20, background: SF.gradientHot, color: 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>{t('flow.takeChallenge')}</div>}
               </div>
             );
           }) : <EmptyState icon="⚔️" title={t('flow.noBattles')} subtitle={t('flow.launchFirst')} />}
@@ -559,7 +559,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
             <CalendarOutlined style={{ fontSize: 28 }} />
             <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>{t('universe.createEvent')}</div>
             <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2, marginBottom: 8 }}>{t('universe.meetupsWorkshops')}</div>
-            <div onClick={() => setEventModalOpen(true)} style={{ padding: '6px 18px', borderRadius: 20, display: 'inline-block', background: SF.overlayLight, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>📅 {t('common.create')}</div>
+            <div role="button" tabIndex={0} onClick={() => setEventModalOpen(true)} style={{ padding: '6px 18px', borderRadius: 20, display: 'inline-block', background: SF.overlayLight, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>📅 {t('common.create')}</div>
           </div>
           <Modal open={eventModalOpen} onCancel={() => setEventModalOpen(false)} onOk={handleCreateEvent} confirmLoading={eventSubmitting} title={t('universe.createEvent')} okText={t('common.create')} cancelText={t('common.cancel')}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
@@ -587,7 +587,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
                   {event.location && <div><EnvironmentOutlined /> {event.location}</div>}
                   <div><TeamOutlined /> {t('universe.attendees', { count: event.attendeesCount })}{event.maxAttendees ? ` / ${event.maxAttendees}` : ''}</div>
                 </div>
-                <div onClick={() => handleRSVP(event.id)} style={{ padding: '6px 0', textAlign: 'center', borderRadius: 20, background: rsvpSet.has(event.id) ? SF.success + '20' : SF.gradientSecondary, color: rsvpSet.has(event.id) ? SF.success : 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>{rsvpSet.has(event.id) ? t('universe.going') : t('universe.attend')}</div>
+                <div role="button" tabIndex={0} onClick={() => handleRSVP(event.id)} style={{ padding: '6px 0', textAlign: 'center', borderRadius: 20, background: rsvpSet.has(event.id) ? SF.success + '20' : SF.gradientSecondary, color: rsvpSet.has(event.id) ? SF.success : 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>{rsvpSet.has(event.id) ? t('universe.going') : t('universe.attend')}</div>
               </div>
             </div>
           )) : <EmptyState icon="📅" title={t('universe.noEvents')} subtitle={t('universe.hostFirstEvent')} />}
@@ -601,7 +601,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
             <LockOutlined style={{ fontSize: 28, color: SF.text }} />
             <div style={{ fontSize: 14, fontWeight: 700, color: SF.text, marginTop: 6 }}>{t('universe.timeCapsule')}</div>
             <div style={{ fontSize: 11, color: SF.text, opacity: 0.7, marginTop: 2, marginBottom: 8 }}>{t('universe.sendToFuture')}</div>
-            <div onClick={() => setCapsuleModalOpen(true)} style={{ padding: '6px 18px', borderRadius: 20, display: 'inline-block', background: 'rgba(255,255,255,0.5)', fontWeight: 700, fontSize: 12, cursor: 'pointer', color: SF.text }}>{t('universe.createCapsule')}</div>
+            <div role="button" tabIndex={0} onClick={() => setCapsuleModalOpen(true)} style={{ padding: '6px 18px', borderRadius: 20, display: 'inline-block', background: SF.textLightDimmed, fontWeight: 700, fontSize: 12, cursor: 'pointer', color: SF.text }}>{t('universe.createCapsule')}</div>
           </div>
           <Modal open={capsuleModalOpen} onCancel={() => setCapsuleModalOpen(false)} onOk={handleCreateCapsule} confirmLoading={capsuleSubmitting} title={t('universe.newTimeCapsule')} okText={t('universe.seal')} cancelText={t('common.cancel')}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
@@ -621,7 +621,7 @@ const NectarPanel: React.FC<NectarPanelProps> = ({ api, currentUser }) => {
                     <div style={{ fontSize: 10, color: cap.isUnlocked ? SF.gold : SF.textMuted, marginTop: 2 }}>{cap.isUnlocked ? t('universe.unlocked') : t('universe.unlocksIn', { days: daysLeft })}</div>
                   </div>
                 </div>
-                {cap.isUnlocked && <div onClick={() => handleOpenCapsule(cap)} style={{ marginTop: 8, padding: '6px 0', textAlign: 'center', borderRadius: 20, background: SF.gradientGold, color: SF.text, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}><GiftOutlined /> {t('universe.openCapsule')}</div>}
+                {cap.isUnlocked && <div role="button" tabIndex={0} onClick={() => handleOpenCapsule(cap)} style={{ marginTop: 8, padding: '6px 0', textAlign: 'center', borderRadius: 20, background: SF.gradientGold, color: SF.text, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}><GiftOutlined /> {t('universe.openCapsule')}</div>}
               </div>
             );
           }) : <EmptyState icon="⏳" title={t('universe.noCapsules')} subtitle={t('universe.createCapsuleHint')} />}

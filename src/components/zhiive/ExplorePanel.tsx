@@ -571,7 +571,7 @@ const ExplorePanel: React.FC<{ api: unknown; openModule?: (route: string) => voi
                 label={activeCategory ? `${categories.find(c => c.key === activeCategory)?.emoji || ''} ${categories.find(c => c.key === activeCategory)?.label || ''}` : t('explore.popular')}
                 items={[ { key: '_none', label: t('common.all') }, ...categories.map(c => ({ key: c.key, label: `${c.emoji} ${c.label}` })) ]}
                 selected={activeCategory || '_none'} onSelect={k => setActiveCategory(k === '_none' ? null : k)} />
-              <div onClick={() => setSortMode(s => s === 'popular' ? 'recent' : 'popular')} style={{
+              <div role="button" tabIndex={0} onClick={() => setSortMode(s => s === 'popular' ? 'recent' : 'popular')} style={{
                 padding: '4px 10px', borderRadius: 16, cursor: 'pointer', fontSize: 11, fontWeight: 600,
                 background: SF.cardBg, color: SF.text, boxShadow: SF.shadow,
                 display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', marginLeft: 'auto',
@@ -611,7 +611,7 @@ const ExplorePanel: React.FC<{ api: unknown; openModule?: (route: string) => voi
               {([ { key: 'all' as const, label: t('explore.allFilter') }, { key: 'friends' as const, label: t('explore.friendsFilter') },
                 ...(currentOrganization ? [{ key: 'org' as const, label: '⬡ Colony' }] : []),
               ]).map(s => (
-                <div key={s.key} onClick={() => setPeopleScope(s.key)} style={{
+                <div key={s.key} role="button" tabIndex={0} onClick={() => setPeopleScope(s.key)} style={{
                   flexShrink: 0, padding: '6px 12px', textAlign: 'center', cursor: 'pointer', borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
                   background: peopleScope === s.key ? SF.gradientPrimary : SF.cardBg,
                   color: peopleScope === s.key ? SF.textLight : SF.textSecondary,
@@ -636,7 +636,7 @@ const ExplorePanel: React.FC<{ api: unknown; openModule?: (route: string) => voi
         {activeTab === 'hashtags' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {hashtags.length > 0 ? hashtags.map((ht, i) => (
-              <div key={ht.id} onClick={() => { setSearchQuery(`#${ht.name}`); setActiveTab('gallery'); fetchGallery(`#${ht.name}`, null); }}
+              <div key={ht.id} role="button" tabIndex={0} onClick={() => { setSearchQuery(`#${ht.name}`); setActiveTab('gallery'); fetchGallery(`#${ht.name}`, null); }}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
                   background: SF.cardBg, borderRadius: SF.radiusSm, boxShadow: SF.shadow, cursor: 'pointer' }}>
                 <div style={{ width: 40, height: 40, borderRadius: SF.radiusSm, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -670,16 +670,16 @@ const ExplorePanel: React.FC<{ api: unknown; openModule?: (route: string) => voi
 
             {/* Top bar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', flexShrink: 0 }}>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{selectedIndex + 1} / {items.length}</div>
-              <div onClick={() => setSelectedIndex(null)} style={{
-                width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)',
+              <div style={{ fontSize: 13, color: SF.textLightMuted, fontWeight: 600 }}>{selectedIndex + 1} / {items.length}</div>
+              <div role="button" tabIndex={0} onClick={() => setSelectedIndex(null)} style={{
+                width: 36, height: 36, borderRadius: '50%', background: SF.overlayLighter,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                 <CloseOutlined style={{ color: '#fff', fontSize: 16 }} />
               </div>
             </div>
 
             {/* Media — double-tap zone */}
-            <div onClick={() => handleDoubleTap(selectedPost.id)} style={{
+            <div role="button" tabIndex={0} onClick={() => handleDoubleTap(selectedPost.id)} style={{
               flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
               position: 'relative', overflow: 'hidden', minHeight: 0, cursor: 'pointer' }}>
               {heartAnimId === selectedPost.id && (
@@ -702,7 +702,7 @@ const ExplorePanel: React.FC<{ api: unknown; openModule?: (route: string) => voi
 
             {/* Bottom panel */}
             <div style={{ flexShrink: 0, maxHeight: '38vh', overflowY: 'auto',
-              background: 'linear-gradient(transparent, rgba(0,0,0,0.9) 15%)', padding: '16px 16px 12px', scrollbarWidth: 'thin' }}>
+              background: 'linear-gradient(transparent, ${SF.overlayDarkNearOpaque} 15%)', padding: '16px 16px 12px', scrollbarWidth: 'thin' }}>
 
               {/* Author + Follow + time */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -713,17 +713,17 @@ const ExplorePanel: React.FC<{ api: unknown; openModule?: (route: string) => voi
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontWeight: 700, fontSize: 14, color: '#fff', cursor: 'pointer' }}
-                      onClick={() => { setSelectedIndex(null); if (selectedPost.authorId) navigate(`/profile/${selectedPost.authorId}`); }}>
+                      role="button" tabIndex={0} onClick={() => { setSelectedIndex(null); if (selectedPost.authorId) navigate(`/profile/${selectedPost.authorId}`); }}>
                       {selectedPost.authorName}
                     </span>
                     {selectedPost.authorId && selectedPost.authorId !== user?.id && !followingSet.has(selectedPost.authorId) && (
-                      <span onClick={() => selectedPost.authorId && handleFollow(selectedPost.authorId)}
+                      <span role="button" tabIndex={0} onClick={() => selectedPost.authorId && handleFollow(selectedPost.authorId)}
                         style={{ fontSize: 11, color: SF.primary, fontWeight: 700, cursor: 'pointer', padding: '2px 8px', borderRadius: 10, border: `1px solid ${SF.primary}` }}>
                         {t('common.follow')}
                       </span>
                     )}
                     {selectedPost.authorId && followingSet.has(selectedPost.authorId) && (
-                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>✓ {t('common.following')}</span>
+                      <span style={{ fontSize: 10, color: SF.textLightDimmed }}>✓ {t('common.following')}</span>
                     )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -743,32 +743,32 @@ const ExplorePanel: React.FC<{ api: unknown; openModule?: (route: string) => voi
               <>
                 <div style={{ display: 'flex', gap: 16, padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.12)', alignItems: 'center' }}>
                   <ActionBtn icon={likedSet.has(selectedPost.id) ? <HeartFilled style={{ fontSize: 20 }} /> : <HeartOutlined style={{ fontSize: 20 }} />}
-                    label={String(selectedPost.likesCount)} color={likedSet.has(selectedPost.id) ? SF.like : 'rgba(255,255,255,0.7)'}
+                    label={String(selectedPost.likesCount)} color={likedSet.has(selectedPost.id) ? SF.like : SF.textLightMuted}
                     onClick={() => handleLikePost(selectedPost.id)} />
                   <ActionBtn icon={<MessageOutlined style={{ fontSize: 20 }} />}
                     label={selectedPost.commentsCount > 0 ? String(selectedPost.commentsCount) : '0'}
-                    color="rgba(255,255,255,0.7)" onClick={() => setShowComments(s => !s)} />
+                    color="${SF.textLightMuted}" onClick={() => setShowComments(s => !s)} />
                   {selectedPost.isStory && (
                     <ActionBtn icon={<EyeOutlined style={{ fontSize: 18 }} />}
                       label={`${selectedPost.viewCount ?? 0}`}
-                      color="rgba(255,255,255,0.4)" />
+                      color="${SF.overlayLightBorder}" />
                   )}
-                  <ActionBtn icon={<ShareAltOutlined style={{ fontSize: 20 }} />} color="rgba(255,255,255,0.7)"
+                  <ActionBtn icon={<ShareAltOutlined style={{ fontSize: 20 }} />} color="${SF.textLightMuted}"
                     onClick={() => handleShare(selectedPost.id)} />
                   {selectedPost.authorId && selectedPost.authorId !== user?.id && (
-                    <ActionBtn icon={<SendOutlined style={{ fontSize: 18 }} />} color="rgba(255,255,255,0.7)"
+                    <ActionBtn icon={<SendOutlined style={{ fontSize: 18 }} />} color="${SF.textLightMuted}"
                       onClick={() => selectedPost.authorId && handleSendDM(selectedPost.authorId)} />
                   )}
                   <div style={{ flex: 1 }} />
                   <ActionBtn icon={savedSet.has(selectedPost.id) ? <BookFilled style={{ fontSize: 20 }} /> : <BookOutlined style={{ fontSize: 20 }} />}
-                    color={savedSet.has(selectedPost.id) ? '#FFD700' : 'rgba(255,255,255,0.7)'}
+                    color={savedSet.has(selectedPost.id) ? '#FFD700' : SF.textLightMuted}
                     onClick={() => handleSave(selectedPost.id)} />
                 </div>
 
                 {/* "View N comments" toggle */}
                 {selectedPost.commentsCount > 0 && !showComments && (
-                  <div onClick={() => setShowComments(true)}
-                    style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px 0' }}>
+                  <div role="button" tabIndex={0} onClick={() => setShowComments(true)}
+                    style={{ fontSize: 12, color: SF.textLightDimmed, cursor: 'pointer', padding: '4px 0' }}>
                     {t('explore.viewComments', { count: selectedPost.commentsCount })}
                   </div>
                 )}
@@ -777,7 +777,7 @@ const ExplorePanel: React.FC<{ api: unknown; openModule?: (route: string) => voi
                   <>
                     <div style={{ maxHeight: 140, overflowY: 'auto', marginTop: 4, scrollbarWidth: 'thin' }}>
                       {commentsLoading ? (
-                        <div style={{ textAlign: 'center', padding: 8, color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
+                        <div style={{ textAlign: 'center', padding: 8, color: SF.textLightDimmed, fontSize: 12 }}>
                           <LoadingOutlined /> {t('common.loading')}
                         </div>
                       ) : postComments.length > 0 ? (
@@ -791,28 +791,28 @@ const ExplorePanel: React.FC<{ api: unknown; openModule?: (route: string) => voi
                                 style={{ background: !cAvatar ? SF.primary : undefined, flexShrink: 0 }} />
                               <div style={{ flex: 1 }}>
                                 <span style={{ fontWeight: 600, fontSize: 12, color: '#fff' }}>{cName} </span>
-                                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>{c.content}</span>
-                                {c.createdAt && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginLeft: 6 }}>{timeAgo(c.createdAt)}</span>}
+                                <span style={{ fontSize: 12, color: SF.overlayPlayBtn }}>{c.content}</span>
+                                {c.createdAt && <span style={{ fontSize: 10, color: SF.overlayLightActive, marginLeft: 6 }}>{timeAgo(c.createdAt)}</span>}
                               </div>
                               <HeartFilled
                                 onClick={async () => {
                                   try { const res = await api.post(`/api/zhiive/comments/${c.id}/like`); setLikedCommentsSet(prev => { const n = new Set(prev); if (res.liked) n.add(c.id); else n.delete(c.id); return n; }); } catch { /* non-blocking */ }
                                 }}
-                                style={{ fontSize: 12, color: likedCommentsSet.has(c.id) ? SF.like : 'rgba(255,255,255,0.3)', cursor: 'pointer', flexShrink: 0, marginTop: 2 }} />
+                                style={{ fontSize: 12, color: likedCommentsSet.has(c.id) ? SF.like : SF.overlayLightActive, cursor: 'pointer', flexShrink: 0, marginTop: 2 }} />
                             </div>
                           );
                         })
                       ) : (
-                        <div style={{ textAlign: 'center', padding: 8, color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>{t('explore.noBuzzesYet')}</div>
+                        <div style={{ textAlign: 'center', padding: 8, color: SF.overlayLightBorder, fontSize: 12 }}>{t('explore.noBuzzesYet')}</div>
                       )}
                     </div>
 
                     <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
                       <Input value={commentText} onChange={e => setCommentText(e.target.value)} onPressEnter={handleAddComment}
                         placeholder={t('explore.dropABuzz')}
-                        style={{ borderRadius: 20, flex: 1, background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff' }} size="small" />
+                        style={{ borderRadius: 20, flex: 1, background: SF.overlayLightSubtle, border: 'none', color: '#fff' }} size="small" />
                       <SendOutlined onClick={handleAddComment}
-                        style={{ fontSize: 16, color: commentText.trim() ? SF.primary : 'rgba(255,255,255,0.3)', cursor: commentText.trim() ? 'pointer' : 'default' }} />
+                        style={{ fontSize: 16, color: commentText.trim() ? SF.primary : SF.overlayLightActive, cursor: commentText.trim() ? 'pointer' : 'default' }} />
                     </div>
                   </>
                 )}
@@ -829,7 +829,7 @@ const ExplorePanel: React.FC<{ api: unknown; openModule?: (route: string) => voi
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input ref={createFileRef} type="file" accept={createMediaType === 'photo' ? 'image/*' : 'video/*'}
               onChange={e => setCreateFile(e.target.files?.[0] || null)} style={{ display: 'none' }} />
-            <div onClick={() => createFileRef.current?.click()} style={{
+            <div role="button" tabIndex={0} onClick={() => createFileRef.current?.click()} style={{
               border: `2px dashed ${SF.border}`, borderRadius: 12, padding: 32,
               textAlign: 'center', cursor: 'pointer', background: SF.cardBg }}>
               {createFile ? (
@@ -865,7 +865,7 @@ const FilterPill: React.FC<{ label: string; items: { key: string; label: string 
 );
 
 const ActionBtn: React.FC<{ icon: React.ReactNode; label?: string; color: string; onClick: () => void }> = ({ icon, label, color, onClick }) => (
-  <span onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 13, color, transition: 'color 0.15s' }}>
+  <span role="button" tabIndex={0} onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 13, color, transition: 'color 0.15s' }}>
     {icon} {label && <span>{label}</span>}
   </span>
 );
@@ -924,7 +924,7 @@ const GridCell: React.FC<{ item: GalleryItem; liked: boolean; onOpen: (item: Gal
   const videoRef = useRef<HTMLVideoElement>(null);
 
   return (
-    <div onClick={() => onOpen(item)}
+    <div role="button" tabIndex={0} onClick={() => onOpen(item)}
       onMouseEnter={() => { if (item.mediaType === 'video' && videoRef.current) videoRef.current.play().catch(() => {}); }}
       onMouseLeave={() => { if (item.mediaType === 'video' && videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } }}
       style={{ position: 'relative', cursor: 'pointer', aspectRatio: tall ? undefined : '1/1',
@@ -938,8 +938,8 @@ const GridCell: React.FC<{ item: GalleryItem; liked: boolean; onOpen: (item: Gal
 
       {/* Badges top-right */}
       <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 3 }}>
-        {item.mediaType === 'video' && <span style={{ color: '#fff', fontSize: 13, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}><PlayCircleOutlined /></span>}
-        {(item.mediaCount ?? 0) > 1 && <span style={{ color: '#fff', fontSize: 11, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}><CopyOutlined /></span>}
+        {item.mediaType === 'video' && <span style={{ color: '#fff', fontSize: 13, textShadow: '0 1px 3px ${SF.overlayDarkExtraHeavy}' }}><PlayCircleOutlined /></span>}
+        {(item.mediaCount ?? 0) > 1 && <span style={{ color: '#fff', fontSize: 11, textShadow: '0 1px 3px ${SF.overlayDarkExtraHeavy}' }}><CopyOutlined /></span>}
       </div>
 
       {item.isStory && (
@@ -980,7 +980,7 @@ const PeopleCard: React.FC<{
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: SF.cardBg, borderRadius: SF.radiusSm, boxShadow: SF.shadow }}>
       <Avatar size={48} src={su.avatarUrl} icon={!su.avatarUrl ? <UserOutlined /> : undefined}
         style={{ background: !su.avatarUrl ? SF.primary : undefined, flexShrink: 0, cursor: 'pointer' }} onClick={onNavigate} />
-      <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={onNavigate}>
+      <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} role="button" tabIndex={0} onClick={onNavigate}>
         <div style={{ fontSize: 14, fontWeight: 600, color: SF.text }}>
           {su.firstName} {su.lastName}
           {isFriend && <span style={{ marginLeft: 4, fontSize: 11, color: SF.successAlt }}>{t('explore.isFriend')}</span>}
@@ -997,7 +997,7 @@ const PeopleCard: React.FC<{
           color={isFriend ? SF.successAlt : (isPending && su.friendDirection === 'received') ? SF.info : isPending ? SF.orangeAlt : SF.textSecondary}
           border={isFriend ? `1px solid ${SF.successBorder}` : (isPending && su.friendDirection === 'received') ? `2px solid ${SF.info}` : isPending ? `1px solid ${SF.warningBorder}` : `1px solid ${SF.borderLight}`}
           pulse={isPending && su.friendDirection === 'received'} onClick={onFriend} />}
-        {onFollow && <div onClick={onFollow} style={{
+        {onFollow && <div role="button" tabIndex={0} onClick={onFollow} style={{
           padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
           background: isFollowed ? SF.bg : SF.gradientPrimary, color: isFollowed ? SF.textSecondary : 'white',
           cursor: 'pointer', display: 'flex', alignItems: 'center',
@@ -1010,7 +1010,7 @@ const PeopleCard: React.FC<{
 });
 
 const CircleBtn: React.FC<{ icon: React.ReactNode; bg: string; color: string; border?: string; pulse?: boolean; onClick: () => void }> = ({ icon, bg, color, border, pulse, onClick }) => (
-  <div onClick={onClick} style={{
+  <div role="button" tabIndex={0} onClick={onClick} style={{
     width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
     cursor: 'pointer', background: bg, color, fontSize: 14, transition: 'all 0.15s',
     border: border || 'none', animation: pulse ? 'pulse 1.5s infinite' : 'none' }}>

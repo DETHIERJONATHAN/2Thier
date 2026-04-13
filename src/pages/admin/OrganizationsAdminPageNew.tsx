@@ -77,7 +77,7 @@ const FBToggle = ({ checked, onChange, disabled, size = 'default' }: {
   const dot = size === 'small' ? 16 : 20;
   return (
     <div
-      onClick={() => !disabled && onChange(!checked)}
+      role="button" tabIndex={0} onClick={() => !disabled && onChange(!checked)}
       style={{
         width: w, height: h, borderRadius: h,
         background: disabled ? '#ccc' : checked ? FB.blue : '#ccc',
@@ -90,7 +90,7 @@ const FBToggle = ({ checked, onChange, disabled, size = 'default' }: {
         width: dot, height: dot, borderRadius: '50%', background: FB.white,
         position: 'absolute', top: (h - dot) / 2,
         left: checked ? w - dot - (h - dot) / 2 : (h - dot) / 2,
-        transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        transition: 'left 0.2s', boxShadow: '0 1px 3px ${SF.overlayDark}',
       }} />
     </div>
   );
