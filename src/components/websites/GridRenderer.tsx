@@ -54,7 +54,7 @@ export const GridRenderer: React.FC<GridRendererProps> = ({
     >
       {items.map((item, index) => (
         <div
-          key={index}
+          key={`item-${index}`}
           className={`grid-item ${itemClassName}`}
           style={{
             minHeight: config.minHeight || 'auto',

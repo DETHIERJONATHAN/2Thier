@@ -331,7 +331,7 @@ model DocumentTemplate {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime
   treeId             String?
-  productValue       String?             // Lié à un produit spécifique (ex: "PV", "ISO", "PAC_AIR_AIR")
+  productValue       String? // Lié à un produit spécifique (ex: "PV", "ISO", "PAC_AIR_AIR")
   isDefault          Boolean             @default(false) // Document par défaut (page d'entrée, conditions générales, etc.)
   DocumentSection    DocumentSection[]
   User               User?               @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -457,6 +457,31 @@ model EmailTemplate {
   @@unique([organizationId, name])
   @@index([organizationId])
   @@index([type])
+}
+
+model EmailBounce {
+  id              String   @id @default(uuid())
+  recipientEmail  String
+  senderEmail     String?
+  bounceType      String   // 'hard' | 'soft'
+  bounceDetails   String?
+  postalMessageId String?
+  postalToken     String?
+  createdAt       DateTime @default(now())
+
+  @@index([recipientEmail])
+  @@index([createdAt])
+}
+
+model EmailSuppression {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  reason         String   // 'hard_bounce' | 'complaint' | 'unsubscribe'
+  bounceCount    Int      @default(1)
+  lastBounceAt   DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@index([email])
 }
 
 model Field {
@@ -910,11 +935,11 @@ model Lead {
   TelnyxMessage       TelnyxMessage[]
   TimelineEvent       TimelineEvent[]
 
-  Chantier            Chantier[]
+  Chantier Chantier[]
 
   // Wall — posts ciblant ce client
-  WallPostsTargeted   WallPost[]      @relation("WallPostTargetLead")
-  ClientAccounts      ClientAccount[]
+  WallPostsTargeted WallPost[]      @relation("WallPostTargetLead")
+  ClientAccounts    ClientAccount[]
 
   @@index([email])
   @@index([firstName, lastName])
@@ -993,8 +1018,8 @@ model Notification {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime
   userId         String?
-  priority       String             @default("normal")  // low, normal, high, urgent
-  actionUrl      String?                                 // lien vers l'élément source
+  priority       String             @default("normal") // low, normal, high, urgent
+  actionUrl      String? // lien vers l'élément source
   readAt         DateTime?
   Organization   Organization?      @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   User           User?              @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1002,6 +1027,7 @@ model Notification {
   @@index([organizationId])
   @@index([userId])
   @@index([status, createdAt])
+  @@index([userId, readAt])
 }
 
 model Order {
@@ -1125,51 +1151,51 @@ model Organization {
   websites                   websites[]
 
   // Wall / Réseau social
-  WallPost                   WallPost[]
-  WallComments               WallComment[] @relation("WallCommentOrg")
-  ClientAccount              ClientAccount[]
+  WallPost      WallPost[]
+  WallComments  WallComment[]   @relation("WallCommentOrg")
+  ClientAccount ClientAccount[]
 
   // SpaceFlow
-  Stories                    Story[]
-  Sparks                     Spark[]
-  Battles                    Battle[]
-  TimeCapsules               TimeCapsule[]
-  Quests                     Quest[]
-  SocialEvents               SocialEvent[]
+  Stories      Story[]
+  Sparks       Spark[]
+  Battles      Battle[]
+  TimeCapsules TimeCapsule[]
+  Quests       Quest[]
+  SocialEvents SocialEvent[]
 
   // Hive Live
-  HiveLiveMoments            HiveLiveMoment[]
+  HiveLiveMoments HiveLiveMoment[]
 
   // Blocks
-  OrgBlockedBy               OrgBlock[] @relation("OrgBlockOrg")
+  OrgBlockedBy OrgBlock[] @relation("OrgBlockOrg")
 
   // Colony Follow
-  OrgFollowers               OrgFollow[] @relation("OrgFollowOrg")
+  OrgFollowers OrgFollow[] @relation("OrgFollowOrg")
 
   // Social Settings
-  SocialSettings             SocialSettings?
+  SocialSettings SocialSettings?
 
   // Peppol e-Invoicing
-  PeppolConfig               PeppolConfig?
-  PeppolIncomingInvoice      PeppolIncomingInvoice[]
+  PeppolConfig          PeppolConfig?
+  PeppolIncomingInvoice PeppolIncomingInvoice[]
 
   // Standalone Invoices (hors chantier)
-  StandaloneInvoice          StandaloneInvoice[]
+  StandaloneInvoice StandaloneInvoice[]
 
   // Clients facturation
-  InvoiceClient              InvoiceClient[]
+  InvoiceClient InvoiceClient[]
 
   // Dépenses / Expenses
-  Expense                    Expense[]
+  Expense Expense[]
 
   // Wax pins
-  WaxPins                    WaxPin[]
+  WaxPins WaxPin[]
 
   // Messenger Quick Replies
-  QuickReplyTemplates        QuickReplyTemplate[]
+  QuickReplyTemplates QuickReplyTemplate[]
 
   // Arena — Tournois & Championnats
-  ArenaTournaments           ArenaTournament[]
+  ArenaTournaments ArenaTournament[]
 }
 
 model OrganizationModuleStatus {
@@ -1519,20 +1545,20 @@ model TelnyxSettings {
 }
 
 model TelnyxUserConfig {
-  id             String       @id
-  userId         String       @unique
-  organizationId String
-  assignedNumber String?
-  forwardToNumber String?
-  canMakeCalls   Boolean      @default(false)
-  canReceiveCalls Boolean     @default(true)
-  canSendSms     Boolean      @default(false)
-  monthlyLimit   Float?
-  messengerRingTimeout Int    @default(25)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime
-  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  User           User         @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                   String       @id
+  userId               String       @unique
+  organizationId       String
+  assignedNumber       String?
+  forwardToNumber      String?
+  canMakeCalls         Boolean      @default(false)
+  canReceiveCalls      Boolean      @default(true)
+  canSendSms           Boolean      @default(false)
+  monthlyLimit         Float?
+  messengerRingTimeout Int          @default(25)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime
+  Organization         Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  User                 User         @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([assignedNumber])
   @@index([organizationId])
@@ -1964,9 +1990,9 @@ model TreeBranchLeafNodeTable {
   lookupSelectColumn   String?
   columnCount          Int                             @default(0)
   rowCount             Int                             @default(0)
-  sourceTableId           String?
-  gestionnaireExposed     Boolean                         @default(false)
-  gestionnaireLabel       String?
+  sourceTableId        String?
+  gestionnaireExposed  Boolean                         @default(false)
+  gestionnaireLabel    String?
   TreeBranchLeafNode   TreeBranchLeafNode              @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   sourceTable          TreeBranchLeafNodeTable?        @relation("TableViews", fields: [sourceTableId], references: [id], onDelete: SetNull)
   views                TreeBranchLeafNodeTable[]       @relation("TableViews")
@@ -2009,26 +2035,26 @@ model TreeBranchLeafNodeTableRow {
 }
 
 model TreeBranchLeafNodeVariable {
-  id                 String             @id
-  nodeId             String             @unique
-  exposedKey         String             @unique
-  displayName        String
-  displayFormat      String             @default("number")
-  unit               String?
-  precision          Int?               @default(2)
-  visibleToUser      Boolean            @default(true)
-  isReadonly         Boolean            @default(false)
-  defaultValue       String?
-  metadata           Json               @default("{}")
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime
-  fixedValue         String?
-  selectedNodeId     String?
-  sourceRef          String?
-  sourceType              String?            @default("fixed")
-  gestionnaireExposed     Boolean            @default(false)
-  gestionnaireLabel       String?
-  TreeBranchLeafNode TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  id                  String             @id
+  nodeId              String             @unique
+  exposedKey          String             @unique
+  displayName         String
+  displayFormat       String             @default("number")
+  unit                String?
+  precision           Int?               @default(2)
+  visibleToUser       Boolean            @default(true)
+  isReadonly          Boolean            @default(false)
+  defaultValue        String?
+  metadata            Json               @default("{}")
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime
+  fixedValue          String?
+  selectedNodeId      String?
+  sourceRef           String?
+  sourceType          String?            @default("fixed")
+  gestionnaireExposed Boolean            @default(false)
+  gestionnaireLabel   String?
+  TreeBranchLeafNode  TreeBranchLeafNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@index([exposedKey])
   @@index([nodeId])
@@ -2253,31 +2279,31 @@ model TreeOrganizationAccess {
 }
 
 model User {
-  id                                                  String                                   @id
-  email                                               String                                   @unique
-  createdAt                                           DateTime                                 @default(now())
-  updatedAt                                           DateTime
-  passwordHash                                        String
-  status                                              String                                   @default("active")
-  language                                            String                                   @default("fr")
-  address                                             String?
-  avatarUrl                                           String?
-  coverUrl                                            String?
-  coverPositionY                                      Float?                                   @default(50)
-  firstName                                           String?
-  lastName                                            String?
-  phoneNumber                                         String?
-  vatNumber                                           String?
-  role                                                String                                   @default("user")
-  commercialSlug                                      String?
-  organizationId                                      String?
-  emailVerified                                       Boolean                                  @default(false)
-  emailVerificationToken                              String?
-  emailVerificationExpires                            DateTime?
-  confirmationEmailSentAt                             DateTime?
-  preferredFeedMode                                   String?                                  @default("org")
-  CalendarEvent                                       CalendarEvent[]
-  CalendarParticipant                                 CalendarParticipant[]
+  id                       String                @id
+  email                    String                @unique
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime
+  passwordHash             String
+  status                   String                @default("active")
+  language                 String                @default("fr")
+  address                  String?
+  avatarUrl                String?
+  coverUrl                 String?
+  coverPositionY           Float?                @default(50)
+  firstName                String?
+  lastName                 String?
+  phoneNumber              String?
+  vatNumber                String?
+  role                     String                @default("user")
+  commercialSlug           String?
+  organizationId           String?
+  emailVerified            Boolean               @default(false)
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
+  confirmationEmailSentAt  DateTime?
+  preferredFeedMode        String?               @default("org")
+  CalendarEvent            CalendarEvent[]
+  CalendarParticipant      CalendarParticipant[]
 
   DeletedEmail                                        DeletedEmail[]
   DocumentTemplate                                    DocumentTemplate[]
@@ -2318,74 +2344,79 @@ model User {
   Technicians                                         Technician[]
 
   // Wall / Réseau social
-  WallPosts                                           WallPost[]          @relation("WallPostAuthor")
-  WallReactions                                       WallReaction[]      @relation("WallReactionUser")
-  WallComments                                        WallComment[]       @relation("WallCommentAuthor")
-  WallShares                                          WallShare[]         @relation("WallShareUser")
-  ClientAccount                                       ClientAccount?
-  PushSubscriptions                                   PushSubscription[]
-  UserPhotos                                          UserPhoto[]
+  WallPosts         WallPost[]         @relation("WallPostAuthor")
+  WallReactions     WallReaction[]     @relation("WallReactionUser")
+  WallComments      WallComment[]      @relation("WallCommentAuthor")
+  WallShares        WallShare[]        @relation("WallShareUser")
+  ClientAccount     ClientAccount?
+  PushSubscriptions PushSubscription[]
+  UserPhotos        UserPhoto[]
 
   // Friends & Messenger
-  FriendshipsSent                                     Friendship[]        @relation("FriendshipRequester")
-  FriendshipsReceived                                 Friendship[]        @relation("FriendshipAddressee")
-  OrgBlocks                                           OrgBlock[]          @relation("OrgBlockUser")
-  OrgFollows                                          OrgFollow[]         @relation("OrgFollowUser")
-  ConversationParticipants                            ConversationParticipant[]
-  MessagesSent                                        Message[]           @relation("MessageSender")
-  CallParticipants                                    CallParticipant[]
-  CallsInitiated                                      VideoCall[]         @relation("VideoCallInitiator")
+  FriendshipsSent          Friendship[]              @relation("FriendshipRequester")
+  FriendshipsReceived      Friendship[]              @relation("FriendshipAddressee")
+  OrgBlocks                OrgBlock[]                @relation("OrgBlockUser")
+  OrgFollows               OrgFollow[]               @relation("OrgFollowUser")
+  ConversationParticipants ConversationParticipant[]
+  MessagesSent             Message[]                 @relation("MessageSender")
+  CallParticipants         CallParticipant[]
+  CallsInitiated           VideoCall[]               @relation("VideoCallInitiator")
 
   // SpaceFlow
-  Followers                                           Follow[]            @relation("UserFollowers")
-  Following                                           Follow[]            @relation("UserFollowing")
-  Stories                                             Story[]             @relation("StoryAuthor")
-  StoryViews                                          StoryView[]         @relation("StoryViewer")
-  Sparks                                              Spark[]             @relation("SparkAuthor")
-  SparkVotes                                          SparkVote[]         @relation("SparkVoter")
-  SparkDismissals                                     SparkDismiss[]      @relation("SparkDismissUser")
-  BattlesCreated                                      Battle[]            @relation("BattleChallenger")
-  BattlesOpponent                                     Battle[]            @relation("BattleOpponent")
-  BattlesWon                                          Battle[]            @relation("BattleWinner")
-  BattleEntries                                       BattleEntry[]       @relation("BattleEntryUser")
-  CapsulesSent                                        TimeCapsule[]       @relation("CapsuleAuthor")
-  CapsulesReceived                                    TimeCapsule[]       @relation("CapsuleRecipient")
-  QuestsSponsored                                     Quest[]             @relation("QuestSponsor")
-  QuestProgress                                       QuestProgress[]     @relation("QuestProgressUser")
-  SavedReels                                          SavedReel[]         @relation("SavedReelUser")
-  CommentLikes                                        CommentLike[]       @relation("CommentLikeUser")
-  UserBadges                                          UserBadge[]         @relation("UserBadges")
-  UserStreak                                          UserStreak?         @relation("UserStreakData")
-  ContentReports                                      ContentReport[]     @relation("ContentReporter")
-  ContentReviews                                      ContentReport[]     @relation("ContentReviewer")
-  EventsCreated                                       SocialEvent[]       @relation("EventCreator")
-  EventAttendances                                    EventAttendee[]     @relation("EventAttendees")
+  Followers        Follow[]        @relation("UserFollowers")
+  Following        Follow[]        @relation("UserFollowing")
+  Stories          Story[]         @relation("StoryAuthor")
+  StoryViews       StoryView[]     @relation("StoryViewer")
+  Sparks           Spark[]         @relation("SparkAuthor")
+  SparkVotes       SparkVote[]     @relation("SparkVoter")
+  SparkDismissals  SparkDismiss[]  @relation("SparkDismissUser")
+  BattlesCreated   Battle[]        @relation("BattleChallenger")
+  BattlesOpponent  Battle[]        @relation("BattleOpponent")
+  BattlesWon       Battle[]        @relation("BattleWinner")
+  BattleEntries    BattleEntry[]   @relation("BattleEntryUser")
+  CapsulesSent     TimeCapsule[]   @relation("CapsuleAuthor")
+  CapsulesReceived TimeCapsule[]   @relation("CapsuleRecipient")
+  QuestsSponsored  Quest[]         @relation("QuestSponsor")
+  QuestProgress    QuestProgress[] @relation("QuestProgressUser")
+  SavedReels       SavedReel[]     @relation("SavedReelUser")
+  CommentLikes     CommentLike[]   @relation("CommentLikeUser")
+  UserBadges       UserBadge[]     @relation("UserBadges")
+  UserStreak       UserStreak?     @relation("UserStreakData")
+  ContentReports   ContentReport[] @relation("ContentReporter")
+  ContentReviews   ContentReport[] @relation("ContentReviewer")
+  EventsCreated    SocialEvent[]   @relation("EventCreator")
+  EventAttendances EventAttendee[] @relation("EventAttendees")
 
   // Hive Live
-  HiveLiveMoments                                     HiveLiveMoment[]    @relation("HiveLiveMoments")
+  HiveLiveMoments HiveLiveMoment[] @relation("HiveLiveMoments")
 
   // User Preferences (replaces localStorage)
-  UserPreferences                                     UserPreference[]
-  
+  UserPreferences UserPreference[]
+
   // Notification Preferences (per-user per-channel)
-  NotificationPreference                              UserNotificationPreference?
+  NotificationPreference UserNotificationPreference?
 
   // Wax (carte + éphémère)
-  UserLocation                                        UserLocation?
-  WaxPins                                             WaxPin[]
+  UserLocation UserLocation?
+  WaxPins      WaxPin[]
 
   // Messenger Phase 2
-  MessageReactions                                    MessageReaction[]    @relation("MessageReactionUser")
-  MessagesPinned                                      Message[]            @relation("MessagePinner")
-  TasksAssigned                                       MessageTask[]        @relation("TaskAssignee")
-  TasksCreated                                        MessageTask[]        @relation("TaskCreator")
-  QuickReplyTemplates                                 QuickReplyTemplate[] @relation("QuickReplyUser")
+  MessageReactions    MessageReaction[]    @relation("MessageReactionUser")
+  MessagesPinned      Message[]            @relation("MessagePinner")
+  TasksAssigned       MessageTask[]        @relation("TaskAssignee")
+  TasksCreated        MessageTask[]        @relation("TaskCreator")
+  QuickReplyTemplates QuickReplyTemplate[] @relation("QuickReplyUser")
 
   // Arena — Tournois & Championnats
-  ArenaTournamentsCreated                             ArenaTournament[]    @relation("ArenaTournamentCreator")
-  ArenaPlayerEntries                                  ArenaPlayerEntry[]   @relation("ArenaPlayerEntryUser")
-  ArenaTeamMemberships                                ArenaTeamMember[]    @relation("ArenaTeamMemberUser")
-  ArenaScoresSubmitted                                ArenaMatchScore[]    @relation("ArenaScoreSubmitter")
+  ArenaTournamentsCreated ArenaTournament[]  @relation("ArenaTournamentCreator")
+  ArenaPlayerEntries      ArenaPlayerEntry[] @relation("ArenaPlayerEntryUser")
+  ArenaTeamMemberships    ArenaTeamMember[]  @relation("ArenaTeamMemberUser")
+  ArenaScoresSubmitted    ArenaMatchScore[]  @relation("ArenaScoreSubmitter")
+
+  // 2FA / MFA
+  mfaSecret     String?   // TOTP secret (chiffré)
+  mfaEnabled    Boolean   @default(false)
+  mfaBackupCodes String[] @default([]) // codes de secours hachés
 
   @@index([organizationId, commercialSlug])
 }
@@ -3031,17 +3062,17 @@ model website_form_submissions {
 }
 
 model GestionnaireOverride {
-  id              String   @id @default(uuid())
-  organizationId  String
-  treeId          String
-  nodeId          String
-  capabilityType  String   // 'variable' | 'table'
-  capabilityId    String   // ID of the Variable or Table record
-  overrideValue   String?  // For variables: the overridden fixedValue
-  overrideData    Json?    // For tables: overridden table data (rows/columns/data)
-  updatedBy       String?  // userId who last modified
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(uuid())
+  organizationId String
+  treeId         String
+  nodeId         String
+  capabilityType String // 'variable' | 'table'
+  capabilityId   String // ID of the Variable or Table record
+  overrideValue  String? // For variables: the overridden fixedValue
+  overrideData   Json? // For tables: overridden table data (rows/columns/data)
+  updatedBy      String? // userId who last modified
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@unique([organizationId, capabilityId])
   @@index([organizationId])
@@ -3156,18 +3187,18 @@ enum OperationSource {
 // ═══════════════════════════════════════════════════════
 
 model ChantierStatus {
-  id             String     @id
-  organizationId String
-  name           String
-  color          String     @default("#1677ff")
-  order          Int        @default(0)
-  isDefault      Boolean    @default(false)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime
-  Chantier       Chantier[]
-  Organization   Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  TransitionsFrom ChantierStatusTransition[] @relation("TransitionFrom")
-  TransitionsTo   ChantierStatusTransition[] @relation("TransitionTo")
+  id               String                     @id
+  organizationId   String
+  name             String
+  color            String                     @default("#1677ff")
+  order            Int                        @default(0)
+  isDefault        Boolean                    @default(false)
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime
+  Chantier         Chantier[]
+  Organization     Organization               @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  TransitionsFrom  ChantierStatusTransition[] @relation("TransitionFrom")
+  TransitionsTo    ChantierStatusTransition[] @relation("TransitionTo")
   InvoiceTemplates ChantierInvoiceTemplate[]
   BillingPlanItems ChantierBillingPlanItem[]
 
@@ -3176,54 +3207,54 @@ model ChantierStatus {
 }
 
 model Chantier {
-  id                    String             @id
-  organizationId        String
-  leadId                String?
-  statusId              String?
-  responsableId         String?
-  commercialId          String?
-  generatedDocumentId   String?
-  submissionId          String?
-  productValue          String
-  productLabel          String
-  productIcon           String?
-  productColor          String?
-  customLabel           String?
-  clientName            String?
-  siteAddress           String?
-  latitude              Float?             // GPS du chantier (pour géofencing pointage)
-  longitude             Float?             // GPS du chantier (pour géofencing pointage)
-  geoFenceRadius        Int?               @default(500) // Rayon de tolérance en mètres
-  notes                 String?
-  amount                Float?
-  signedAt              DateTime?
-  documentUrl           String?
-  documentName          String?
-  uploadedById          String?
-  data                  Json?
-  isValidated           Boolean            @default(false)
-  validatedAt           DateTime?
-  validatedById         String?
-  validationNotes       String?
-  plannedDate           DateTime?
-  receptionDate         DateTime?
-  deliveryDate          DateTime?
-  completedDate         DateTime?
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime
+  id                  String    @id
+  organizationId      String
+  leadId              String?
+  statusId            String?
+  responsableId       String?
+  commercialId        String?
+  generatedDocumentId String?
+  submissionId        String?
+  productValue        String
+  productLabel        String
+  productIcon         String?
+  productColor        String?
+  customLabel         String?
+  clientName          String?
+  siteAddress         String?
+  latitude            Float? // GPS du chantier (pour géofencing pointage)
+  longitude           Float? // GPS du chantier (pour géofencing pointage)
+  geoFenceRadius      Int?      @default(500) // Rayon de tolérance en mètres
+  notes               String?
+  amount              Float?
+  signedAt            DateTime?
+  documentUrl         String?
+  documentName        String?
+  uploadedById        String?
+  data                Json?
+  isValidated         Boolean   @default(false)
+  validatedAt         DateTime?
+  validatedById       String?
+  validationNotes     String?
+  plannedDate         DateTime?
+  receptionDate       DateTime?
+  deliveryDate        DateTime?
+  completedDate       DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime
 
-  Lead                  Lead?              @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  Organization          Organization       @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  ChantierStatus        ChantierStatus?    @relation(fields: [statusId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  Responsable           User?              @relation("ChantierResponsable", fields: [responsableId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  Commercial            User?              @relation("ChantierCommercial", fields: [commercialId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  ValidatedBy           User?              @relation("ChantierValidator", fields: [validatedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  GeneratedDocument     GeneratedDocument? @relation(fields: [generatedDocumentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Lead                     Lead?                     @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ChantierStatus           ChantierStatus?           @relation(fields: [statusId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Responsable              User?                     @relation("ChantierResponsable", fields: [responsableId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Commercial               User?                     @relation("ChantierCommercial", fields: [commercialId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ValidatedBy              User?                     @relation("ChantierValidator", fields: [validatedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  GeneratedDocument        GeneratedDocument?        @relation(fields: [generatedDocumentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   TreeBranchLeafSubmission TreeBranchLeafSubmission? @relation(fields: [submissionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  ChantierInvoice        ChantierInvoice[]
-  ChantierEvent          ChantierEvent[]
-  ChantierHistory        ChantierHistory[]
-  ChantierBillingPlanItem ChantierBillingPlanItem[]
+  ChantierInvoice          ChantierInvoice[]
+  ChantierEvent            ChantierEvent[]
+  ChantierHistory          ChantierHistory[]
+  ChantierBillingPlanItem  ChantierBillingPlanItem[]
   ChantierAssignments      ChantierAssignment[]
   TimeEntries              TimeEntry[]
   ChantierReception        ChantierReception?
@@ -3311,20 +3342,20 @@ model ChantierStatusTransition {
   fromStatusId       String
   toStatusId         String
   triggerType        String   @default("MANUAL") // MANUAL | AUTO_INVOICE_PAID | AUTO_MATERIAL_RECEIVED | AUTO_VISIT_VALIDATED | AUTO_CLIENT_SIGNED | AUTO_DATE_REACHED
-  requiredConditions Json?    // {"invoiceType": "ACOMPTE", "allPaid": true} etc.
-  allowedRoles       Json?    // ["admin", "comptable", "super_admin"] — qui peut drag-drop
-  notifyRoles        Json?    // ["commercial", "admin"] — qui reçoit notification
+  requiredConditions Json? // {"invoiceType": "ACOMPTE", "allPaid": true} etc.
+  allowedRoles       Json? // ["admin", "comptable", "super_admin"] — qui peut drag-drop
+  notifyRoles        Json? // ["commercial", "admin"] — qui reçoit notification
   sendEmail          Boolean  @default(false)
-  emailTemplateId    String?  // optionnel : template email à envoyer
-  label              String?  // "Passage auto après paiement acompte"
+  emailTemplateId    String? // optionnel : template email à envoyer
+  label              String? // "Passage auto après paiement acompte"
   isActive           Boolean  @default(true)
   order              Int      @default(0)
   createdAt          DateTime @default(now())
   updatedAt          DateTime
 
-  Organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  FromStatus         ChantierStatus  @relation("TransitionFrom", fields: [fromStatusId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  ToStatus           ChantierStatus  @relation("TransitionTo", fields: [toStatusId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Organization Organization   @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  FromStatus   ChantierStatus @relation("TransitionFrom", fields: [fromStatusId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  ToStatus     ChantierStatus @relation("TransitionTo", fields: [toStatusId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([organizationId])
   @@index([fromStatusId])
@@ -3337,19 +3368,19 @@ model ChantierBillingPlanItem {
   id             String   @id
   chantierId     String
   organizationId String
-  statusId       String?  // à quel statut cette facture est associée
+  statusId       String? // à quel statut cette facture est associée
   type           String   @default("CUSTOM") // ACOMPTE | MATERIEL | FIN_CHANTIER | RECEPTION | CUSTOM
   label          String
-  percentage     Float?   // ex: 30.0 pour 30%
-  fixedAmount    Float?   // montant fixe alternatif
+  percentage     Float? // ex: 30.0 pour 30%
+  fixedAmount    Float? // montant fixe alternatif
   isRequired     Boolean  @default(false)
   order          Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime
 
-  Chantier       Chantier        @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  Organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  Status         ChantierStatus? @relation(fields: [statusId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  Chantier     Chantier        @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Organization Organization    @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Status       ChantierStatus? @relation(fields: [statusId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([chantierId])
   @@index([organizationId])
@@ -3359,19 +3390,19 @@ model ChantierBillingPlanItem {
 model ChantierInvoiceTemplate {
   id             String   @id
   organizationId String
-  statusId       String?  // à quel statut cette facture est associée (null = global)
+  statusId       String? // à quel statut cette facture est associée (null = global)
   type           String   @default("CUSTOM") // ACOMPTE | MATERIEL | FIN_CHANTIER | RECEPTION | CUSTOM
-  label          String   // "Facture acompte 30%"
-  percentage     Float?   // ex: 30.0 pour 30%
-  fixedAmount    Float?   // montant fixe alternatif
+  label          String // "Facture acompte 30%"
+  percentage     Float? // ex: 30.0 pour 30%
+  fixedAmount    Float? // montant fixe alternatif
   isRequired     Boolean  @default(false) // doit être payée pour passer au statut suivant
   isActive       Boolean  @default(true)
   order          Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime
 
-  Organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  Status         ChantierStatus? @relation(fields: [statusId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  Organization Organization    @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Status       ChantierStatus? @relation(fields: [statusId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([organizationId])
   @@index([organizationId, statusId])
@@ -3379,36 +3410,36 @@ model ChantierInvoiceTemplate {
 
 // Factures réelles liées à un chantier
 model ChantierInvoice {
-  id                    String    @id
-  chantierId            String
-  organizationId        String
-  type                  String    @default("CUSTOM") // ACOMPTE | MATERIEL | FIN_CHANTIER | RECEPTION | CUSTOM
-  label                 String
-  amount                Float
-  percentage            Float?    // % du montant total du devis
-  status                String    @default("DRAFT") // DRAFT | SENT | PAID | OVERDUE | CANCELLED
-  dueDate               DateTime?
-  paidAt                DateTime?
-  sentAt                DateTime?
-  documentUrl           String?   // lien vers le PDF
-  generatedDocumentId   String?   // lien vers le système de documents TBL
-  invoiceNumber         String?   // numéro de facture
-  notes                 String?
-  order                 Int       @default(0)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime
+  id                  String    @id
+  chantierId          String
+  organizationId      String
+  type                String    @default("CUSTOM") // ACOMPTE | MATERIEL | FIN_CHANTIER | RECEPTION | CUSTOM
+  label               String
+  amount              Float
+  percentage          Float? // % du montant total du devis
+  status              String    @default("DRAFT") // DRAFT | SENT | PAID | OVERDUE | CANCELLED
+  dueDate             DateTime?
+  paidAt              DateTime?
+  sentAt              DateTime?
+  documentUrl         String? // lien vers le PDF
+  generatedDocumentId String? // lien vers le système de documents TBL
+  invoiceNumber       String? // numéro de facture
+  notes               String?
+  order               Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime
 
   // Peppol e-Invoicing
-  peppolStatus          String?   // PENDING | PROCESSING | SENT | ERROR
-  peppolMessageId       String?   // ID du message Peppol (retourné par le proxy)
-  peppolError           String?   // Message d'erreur Peppol
-  peppolSentAt          DateTime? // Date d'envoi via Peppol
-  peppolXmlUrl          String?   // URL du fichier UBL XML généré
-  peppolRetryCount      Int       @default(0) // Nombre de tentatives d'envoi Peppol
-  peppolOdooInvoiceId   Int?      // ID de la facture dans Odoo (pour retry)
+  peppolStatus        String? // PENDING | PROCESSING | SENT | ERROR
+  peppolMessageId     String? // ID du message Peppol (retourné par le proxy)
+  peppolError         String? // Message d'erreur Peppol
+  peppolSentAt        DateTime? // Date d'envoi via Peppol
+  peppolXmlUrl        String? // URL du fichier UBL XML généré
+  peppolRetryCount    Int       @default(0) // Nombre de tentatives d'envoi Peppol
+  peppolOdooInvoiceId Int? // ID de la facture dans Odoo (pour retry)
 
-  Chantier              Chantier       @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  Organization          Organization   @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Chantier     Chantier     @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Organization Organization @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([chantierId])
   @@index([organizationId])
@@ -3418,25 +3449,25 @@ model ChantierInvoice {
 
 // Événements liés à un chantier (visites, chantier, réception) — lien vers CalendarEvent
 model ChantierEvent {
-  id               String    @id
-  chantierId       String
-  calendarEventId  String?
-  type             String    @default("CUSTOM") // VISITE_TECHNIQUE | CHANTIER | RECEPTION | CUSTOM
-  status           String    @default("PLANNED") // PLANNED | COMPLETED | CANCELLED | PROBLEM
-  problemNote      String?   // note si problème signalé par technicien
-  validatedAt      DateTime?
-  validatedById    String?   // qui a validé
-  subcontractAmount Float?   // montant sous-traitance fixé après validation
-  subcontractLocked Boolean  @default(false) // verrouillé après validation
-  notes            String?
-  reviewStatus     String?   // PENDING | CONFIRMED | CHANGES_DETECTED
-  reviewData       Json?     // snapshot des données de revue
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime
+  id                String    @id
+  chantierId        String
+  calendarEventId   String?
+  type              String    @default("CUSTOM") // VISITE_TECHNIQUE | CHANTIER | RECEPTION | CUSTOM
+  status            String    @default("PLANNED") // PLANNED | COMPLETED | CANCELLED | PROBLEM
+  problemNote       String? // note si problème signalé par technicien
+  validatedAt       DateTime?
+  validatedById     String? // qui a validé
+  subcontractAmount Float? // montant sous-traitance fixé après validation
+  subcontractLocked Boolean   @default(false) // verrouillé après validation
+  notes             String?
+  reviewStatus      String? // PENDING | CONFIRMED | CHANGES_DETECTED
+  reviewData        Json? // snapshot des données de revue
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime
 
-  Chantier         Chantier       @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  CalendarEvent    CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  ValidatedBy      User?          @relation("ChantierEventValidator", fields: [validatedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Chantier               Chantier                @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  CalendarEvent          CalendarEvent?          @relation(fields: [calendarEventId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  ValidatedBy            User?                   @relation("ChantierEventValidator", fields: [validatedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
   TechnicianFieldReviews TechnicianFieldReview[]
 
   @@index([chantierId])
@@ -3446,17 +3477,17 @@ model ChantierEvent {
 
 // Historique complet de toutes les actions sur un chantier
 model ChantierHistory {
-  id          String   @id
-  chantierId  String
-  action      String   // STATUS_CHANGED | INVOICE_CREATED | INVOICE_PAID | EVENT_PLANNED | EVENT_VALIDATED | PROBLEM_REPORTED | NOTE_ADDED | SUBCONTRACT_LOCKED | DRAG_DROP
-  fromValue   String?  // ancienne valeur (ex: ancien statut)
-  toValue     String?  // nouvelle valeur (ex: nouveau statut)
-  userId      String?  // qui a fait l'action
-  data        Json?    // détails supplémentaires
-  createdAt   DateTime @default(now())
+  id         String   @id
+  chantierId String
+  action     String // STATUS_CHANGED | INVOICE_CREATED | INVOICE_PAID | EVENT_PLANNED | EVENT_VALIDATED | PROBLEM_REPORTED | NOTE_ADDED | SUBCONTRACT_LOCKED | DRAG_DROP
+  fromValue  String? // ancienne valeur (ex: ancien statut)
+  toValue    String? // nouvelle valeur (ex: nouveau statut)
+  userId     String? // qui a fait l'action
+  data       Json? // détails supplémentaires
+  createdAt  DateTime @default(now())
 
-  Chantier    Chantier @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  User        User?    @relation("ChantierHistoryUser", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Chantier Chantier @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  User     User?    @relation("ChantierHistoryUser", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([chantierId])
   @@index([chantierId, action])
@@ -3473,52 +3504,52 @@ enum TechnicianType {
 }
 
 enum BillingMode {
-  FORFAIT   // Sous-traitant au forfait (pas de pointage)
-  REGIE     // Sous-traitant en régie (pointage requis)
+  FORFAIT // Sous-traitant au forfait (pas de pointage)
+  REGIE // Sous-traitant en régie (pointage requis)
 }
 
 enum TimeEntryType {
-  CHANTIER        // Travail sur chantier (legacy)
-  DEPLACEMENT     // Trajet (legacy)
-  PAUSE           // Pause (legacy)
-  REGIE           // Heures en régie sous-traitant (legacy)
-  ARRIVEE         // Arrivée sur chantier
-  DEPART_PAUSE    // Départ en pause
-  RETOUR_PAUSE    // Retour de pause
-  DEPART_MIDI     // Départ midi
-  RETOUR_MIDI     // Retour de midi
+  CHANTIER // Travail sur chantier (legacy)
+  DEPLACEMENT // Trajet (legacy)
+  PAUSE // Pause (legacy)
+  REGIE // Heures en régie sous-traitant (legacy)
+  ARRIVEE // Arrivée sur chantier
+  DEPART_PAUSE // Départ en pause
+  RETOUR_PAUSE // Retour de pause
+  DEPART_MIDI // Départ midi
+  RETOUR_MIDI // Retour de midi
   DEPART_DEPLACEMENT // Départ en déplacement
   RETOUR_DEPLACEMENT // Retour de déplacement
-  FIN             // Fin de journée / départ du chantier
+  FIN // Fin de journée / départ du chantier
 }
 
 model Technician {
-  id             String          @id @default(cuid())
+  id             String         @id @default(cuid())
   organizationId String
-  userId         String?         // null pour sous-traitants, lié pour internes
-  type           TechnicianType  @default(INTERNAL)
-  billingMode    BillingMode?    // null pour internes, FORFAIT ou REGIE pour sous-traitants
+  userId         String? // null pour sous-traitants, lié pour internes
+  type           TechnicianType @default(INTERNAL)
+  billingMode    BillingMode? // null pour internes, FORFAIT ou REGIE pour sous-traitants
   firstName      String
   lastName       String
   email          String?
   phone          String?
-  company        String?         // Société du sous-traitant
-  vatNumber      String?         // Numéro de TVA (obligatoire pour sous-traitants)
-  address        String?         // Adresse (rue + numéro)
-  postalCode     String?         // Code postal
-  city           String?         // Ville
-  country        String?         @default("Belgique") // Pays
-  iban           String?         // Compte bancaire (IBAN)
-  specialties    String[]        @default([]) // productValue[] : ["pc", "all", "toiture"]
+  company        String? // Société du sous-traitant
+  vatNumber      String? // Numéro de TVA (obligatoire pour sous-traitants)
+  address        String? // Adresse (rue + numéro)
+  postalCode     String? // Code postal
+  city           String? // Ville
+  country        String?        @default("Belgique") // Pays
+  iban           String? // Compte bancaire (IBAN)
+  specialties    String[]       @default([]) // productValue[] : ["pc", "all", "toiture"]
   hourlyRate     Float?
   notes          String?
-  color          String          @default("#1677ff")
-  isActive       Boolean         @default(true)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  color          String         @default("#1677ff")
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  Organization        Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  User                User?                     @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  Organization        Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  User                User?                      @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   TeamMemberships     TeamMember[]
   ChantierAssignments ChantierAssignment[]
   Unavailabilities    TechnicianUnavailability[]
@@ -3530,40 +3561,40 @@ model Technician {
 }
 
 model TimeEntry {
-  id             String        @id @default(cuid())
-  organizationId String
-  technicianId   String
-  chantierId     String?       // null si pointage hors-chantier
-  date           DateTime      @db.Date
-  startTime      DateTime      // Heure d'arrivée
-  endTime        DateTime?     // Heure de départ (null = en cours)
-  breakMinutes   Int           @default(0)  // Durée pause en minutes
-  type           TimeEntryType @default(CHANTIER)
-  durationMinutes Int?         // Calculé: endTime - startTime - breakMinutes
-  note           String?
+  id              String        @id @default(cuid())
+  organizationId  String
+  technicianId    String
+  chantierId      String? // null si pointage hors-chantier
+  date            DateTime      @db.Date
+  startTime       DateTime // Heure d'arrivée
+  endTime         DateTime? // Heure de départ (null = en cours)
+  breakMinutes    Int           @default(0) // Durée pause en minutes
+  type            TimeEntryType @default(CHANTIER)
+  durationMinutes Int? // Calculé: endTime - startTime - breakMinutes
+  note            String?
 
   // 📍 Géolocalisation anti-fraude
-  clockInLatitude    Float?    // GPS arrivée
-  clockInLongitude   Float?
-  clockInAddress     String?   // Adresse inversée arrivée
-  clockInDistance     Int?     // Distance en mètres par rapport au chantier
-  clockOutLatitude   Float?    // GPS départ
-  clockOutLongitude  Float?
-  clockOutAddress    String?   // Adresse inversée départ
-  clockOutDistance    Int?     // Distance en mètres par rapport au chantier
+  clockInLatitude   Float? // GPS arrivée
+  clockInLongitude  Float?
+  clockInAddress    String? // Adresse inversée arrivée
+  clockInDistance   Int? // Distance en mètres par rapport au chantier
+  clockOutLatitude  Float? // GPS départ
+  clockOutLongitude Float?
+  clockOutAddress   String? // Adresse inversée départ
+  clockOutDistance  Int? // Distance en mètres par rapport au chantier
 
   // 📸 Photos anti-fraude
-  clockInPhotoUrl    String?   // Photo prise à l'arrivée
-  clockOutPhotoUrl   String?   // Photo prise au départ
+  clockInPhotoUrl  String? // Photo prise à l'arrivée
+  clockOutPhotoUrl String? // Photo prise au départ
 
   // 📱 Empreinte appareil
-  deviceInfo         Json?     // { userAgent, platform, screenWidth, screenHeight, deviceId }
-  ipAddress          String?   // IP côté serveur
+  deviceInfo Json? // { userAgent, platform, screenWidth, screenHeight, deviceId }
+  ipAddress  String? // IP côté serveur
 
-  validatedBy    String?       // userId du validateur
-  validatedAt    DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  validatedBy String? // userId du validateur
+  validatedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   Technician   Technician   @relation(fields: [technicianId], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -3591,20 +3622,20 @@ model TechnicianUnavailability {
   note         String?
   createdAt    DateTime           @default(now())
 
-  Technician   Technician         @relation(fields: [technicianId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Technician Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([technicianId])
   @@index([startDate, endDate])
 }
 
 model Team {
-  id             String       @id @default(cuid())
+  id             String   @id @default(cuid())
   organizationId String
   name           String
-  color          String       @default("#1677ff")
+  color          String   @default("#1677ff")
   description    String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   Organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   Members             TeamMember[]
@@ -3637,20 +3668,20 @@ model TeamMember {
 // REVUE TECHNIQUE — Données de validation par le technicien
 // ═══════════════════════════════════════════════════
 model TechnicianFieldReview {
-  id                String    @id @default(cuid())
-  chantierEventId   String
-  nodeId            String    // champ TBL concerné
-  fieldLabel        String    // snapshot du label
-  originalValue     String?   // valeur du commercial (gelée)
-  reviewedValue     String?   // valeur du technicien
-  isModified        Boolean   @default(false)
-  modificationNote  String?   // raison si modifié (obligatoire)
-  reviewType        String    @default("TECHNICAL") // TECHNICAL | RECEPTION
-  reviewedById      String
-  reviewedAt        DateTime  @default(now())
+  id               String   @id @default(cuid())
+  chantierEventId  String
+  nodeId           String // champ TBL concerné
+  fieldLabel       String // snapshot du label
+  originalValue    String? // valeur du commercial (gelée)
+  reviewedValue    String? // valeur du technicien
+  isModified       Boolean  @default(false)
+  modificationNote String? // raison si modifié (obligatoire)
+  reviewType       String   @default("TECHNICAL") // TECHNICAL | RECEPTION
+  reviewedById     String
+  reviewedAt       DateTime @default(now())
 
-  ChantierEvent     ChantierEvent @relation(fields: [chantierEventId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  ReviewedBy        User          @relation("TechnicianReviewer", fields: [reviewedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ChantierEvent ChantierEvent @relation(fields: [chantierEventId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  ReviewedBy    User          @relation("TechnicianReviewer", fields: [reviewedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([chantierEventId, nodeId, reviewType])
   @@index([chantierEventId])
@@ -3661,54 +3692,54 @@ model TechnicianFieldReview {
 // RÉCEPTION CHANTIER — PV de réception client (juridique)
 // ═══════════════════════════════════════════════════
 model ChantierReception {
-  id                    String    @id @default(cuid())
-  chantierId            String    @unique // 1 réception par chantier
-  chantierEventId       String?   // lié à l'événement RECEPTION
+  id              String  @id @default(cuid())
+  chantierId      String  @unique // 1 réception par chantier
+  chantierEventId String? // lié à l'événement RECEPTION
 
   // État du PV
-  status                String    @default("DRAFT")
+  status String @default("DRAFT")
   // DRAFT | PENDING_CLIENT | ACCEPTED | ACCEPTED_WITH_RESERVES | REFUSED
 
   // Données du chantier (snapshot gelé)
-  workSummary           Json?     // résumé des travaux réalisés
-  checklist             Json?     // [{label, checked, note?}] points de contrôle
+  workSummary Json? // résumé des travaux réalisés
+  checklist   Json? // [{label, checked, note?}] points de contrôle
 
   // Satisfaction client (questions)
-  satisfactionRating    Int?      // 1-5 étoiles
-  satisfactionAnswers   Json?     // [{question, answer, rating}]
+  satisfactionRating  Int? // 1-5 étoiles
+  satisfactionAnswers Json? // [{question, answer, rating}]
 
   // Signature client (juridiquement fort)
-  clientName            String?   // nom du signataire
-  clientEmail           String?   // email pour envoi du PV
-  clientPhone           String?   // téléphone
-  clientSignature       String?   // base64 de la signature manuscrite
-  clientSignedAt        DateTime?
-  clientIpAddress       String?   // IP au moment de la signature
-  clientUserAgent       String?   // navigateur utilisé
-  clientAccessToken     String?   @unique // lien sécurisé sans login
-  clientTokenExpiresAt  DateTime? // expiration du lien
+  clientName           String? // nom du signataire
+  clientEmail          String? // email pour envoi du PV
+  clientPhone          String? // téléphone
+  clientSignature      String? // base64 de la signature manuscrite
+  clientSignedAt       DateTime?
+  clientIpAddress      String? // IP au moment de la signature
+  clientUserAgent      String? // navigateur utilisé
+  clientAccessToken    String?   @unique // lien sécurisé sans login
+  clientTokenExpiresAt DateTime? // expiration du lien
 
   // Clause légale acceptée
-  legalText             String?   // texte contractuel affiché au client
-  legalAccepted         Boolean   @default(false)
-  legalAcceptedAt       DateTime?
+  legalText       String? // texte contractuel affiché au client
+  legalAccepted   Boolean   @default(false)
+  legalAcceptedAt DateTime?
 
   // Réserves
-  hasReserves           Boolean   @default(false)
-  reserves              Json?     // [{description, photo?, severity, deadline?}]
-  reservesResolvedAt    DateTime?
-  reservesResolvedById  String?
+  hasReserves          Boolean   @default(false)
+  reserves             Json? // [{description, photo?, severity, deadline?}]
+  reservesResolvedAt   DateTime?
+  reservesResolvedById String?
 
   // Montants
-  totalAmount           Float?    // montant TTC devis
-  subcontractTotal      Float?    // somme sous-traitance
+  totalAmount      Float? // montant TTC devis
+  subcontractTotal Float? // somme sous-traitance
 
   // Traçabilité
-  preparedById          String?   // technicien qui prépare
-  preparedAt            DateTime  @default(now())
-  updatedAt             DateTime
+  preparedById String? // technicien qui prépare
+  preparedAt   DateTime @default(now())
+  updatedAt    DateTime
 
-  Chantier              Chantier  @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Chantier Chantier @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([clientAccessToken])
   @@index([chantierId])
@@ -3721,12 +3752,12 @@ enum ChantierAssignmentRole {
 }
 
 model ChantierAssignment {
-  id           String                  @id @default(cuid())
+  id           String                 @id @default(cuid())
   chantierId   String
   technicianId String
   teamId       String?
-  role         ChantierAssignmentRole  @default(TECHNICIEN)
-  assignedAt   DateTime                @default(now())
+  role         ChantierAssignmentRole @default(TECHNICIEN)
+  assignedAt   DateTime               @default(now())
 
   Chantier   Chantier   @relation(fields: [chantierId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   Technician Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -3742,73 +3773,73 @@ model ChantierAssignment {
 // SIGNATURE ÉLECTRONIQUE AVANCÉE (eIDAS niveau avancé, 100% maison)
 // ═══════════════════════════════════════════════════
 model ElectronicSignature {
-  id                String    @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Contexte du document
-  submissionId      String?   // TBL submission signée
-  documentId        String?   // GeneratedDocument lié
-  leadId            String?   // Lead associé
-  organizationId    String
-  
+  submissionId   String? // TBL submission signée
+  documentId     String? // GeneratedDocument lié
+  leadId         String? // Lead associé
+  organizationId String
+
   // Type de signature
-  signatureType     String    @default("DEVIS")
+  signatureType String @default("DEVIS")
   // DEVIS | RECTIFICATION | CONTRAT | PV_RECEPTION
-  
+
   // Signataires
-  signerRole        String    // CLIENT | COMMERCIAL | TECHNICIEN
-  signerName        String    // Nom complet du signataire
-  signerEmail       String    // Email du signataire
-  signerPhone       String?   // Téléphone (optionnel)
-  
+  signerRole  String // CLIENT | COMMERCIAL | TECHNICIEN
+  signerName  String // Nom complet du signataire
+  signerEmail String // Email du signataire
+  signerPhone String? // Téléphone (optionnel)
+
   // Signature visuelle
-  signatureData     String    // base64 PNG de la signature manuscrite (canvas)
-  signatureHash     String    // SHA-256 du signatureData
-  
+  signatureData String // base64 PNG de la signature manuscrite (canvas)
+  signatureHash String // SHA-256 du signatureData
+
   // Vérification OTP (niveau avancé eIDAS)
-  otpCode           String?   // Code OTP hashé (SHA-256)
-  otpSentAt         DateTime? // Quand l'OTP a été envoyé
-  otpVerifiedAt     DateTime? // Quand l'OTP a été vérifié
-  otpMethod         String?   @default("EMAIL") // EMAIL | SMS
-  otpAttempts       Int       @default(0) // Nombre de tentatives
-  
+  otpCode       String? // Code OTP hashé (SHA-256)
+  otpSentAt     DateTime? // Quand l'OTP a été envoyé
+  otpVerifiedAt DateTime? // Quand l'OTP a été vérifié
+  otpMethod     String?   @default("EMAIL") // EMAIL | SMS
+  otpAttempts   Int       @default(0) // Nombre de tentatives
+
   // Scellement cryptographique du document
-  documentHash      String?   // SHA-256 du PDF au moment de la signature
-  documentSnapshot  Json?     // Données du document gelées au moment de signature
-  
+  documentHash     String? // SHA-256 du PDF au moment de la signature
+  documentSnapshot Json? // Données du document gelées au moment de signature
+
   // Clause légale
-  legalText         String?   // Texte juridique affiché et accepté
-  legalAccepted     Boolean   @default(false)
-  legalAcceptedAt   DateTime?
-  
+  legalText       String? // Texte juridique affiché et accepté
+  legalAccepted   Boolean   @default(false)
+  legalAcceptedAt DateTime?
+
   // Métadonnées juridiques (piste d'audit)
-  ipAddress         String?   // IP au moment de la signature
-  userAgent         String?   // Navigateur/OS
-  geoLocation       String?   // Localisation approximative (optionnel)
-  
+  ipAddress   String? // IP au moment de la signature
+  userAgent   String? // Navigateur/OS
+  geoLocation String? // Localisation approximative (optionnel)
+
   // Token d'accès (pour signature sans login - ex: client)
-  accessToken       String?   @unique
-  tokenExpiresAt    DateTime?
-  
+  accessToken    String?   @unique
+  tokenExpiresAt DateTime?
+
   // État
-  status            String    @default("PENDING")
+  status        String    @default("PENDING")
   // PENDING | OTP_SENT | OTP_VERIFIED | SIGNED | EXPIRED | REVOKED
-  signedAt          DateTime?
-  expiresAt         DateTime? // Date d'expiration de la demande
-  revokedAt         DateTime?
-  revokedReason     String?
-  
+  signedAt      DateTime?
+  expiresAt     DateTime? // Date d'expiration de la demande
+  revokedAt     DateTime?
+  revokedReason String?
+
   // PDF signé final
-  signedPdfUrl      String?   // URL du PDF avec signature intégrée
-  signedPdfHash     String?   // SHA-256 du PDF signé final
-  
+  signedPdfUrl  String? // URL du PDF avec signature intégrée
+  signedPdfHash String? // SHA-256 du PDF signé final
+
   // Traçabilité
-  createdBy         String?   // Qui a initié la demande de signature
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  
+  createdBy String? // Qui a initié la demande de signature
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Audit trail (log détaillé de toutes les actions)
-  auditTrail        Json?     // [{action, timestamp, ip, userAgent, details}]
-  
+  auditTrail Json? // [{action, timestamp, ip, userAgent, details}]
+
   @@index([submissionId])
   @@index([documentId])
   @@index([leadId])
@@ -3825,58 +3856,58 @@ model ElectronicSignature {
 // ═══════════════════════════════════════════════════════════════
 
 model WallPost {
-  id              String    @id @default(uuid())
-  organizationId  String?
-  authorId        String
+  id             String  @id @default(uuid())
+  organizationId String?
+  authorId       String
 
   // Contenu
-  content         String?
-  mediaUrls       Json?               // ["url1.jpg", "video.mp4"]
-  mediaType       String?             // "image", "video", "document", "gallery"
+  content   String?
+  mediaUrls Json? // ["url1.jpg", "video.mp4"]
+  mediaType String? // "image", "video", "document", "gallery"
 
   // Visibilité : OUT (privé), IN (organisation), ALL (toutes orgas), CLIENT (client spécifique)
-  visibility      String              @default("IN")
-  targetLeadId    String?             // Si visibility=CLIENT → quel client voit ce post
+  visibility   String  @default("IN")
+  targetLeadId String? // Si visibility=CLIENT → quel client voit ce post
 
   // Liaison CRM automatique
-  crmEventType    String?             // DEVIS_SIGNE, COMMANDE, RECEPTION_COMMANDE, PLANIFICATION,
-                                      // CHANTIER_EN_COURS, FIN_CHANTIER, RECEPTION, FACTURE,
-                                      // TERMINE, SAV, DOCUMENT, NOUVEAU_LEAD, EMAIL_ENVOYE,
-                                      // RDV_PLANIFIE, APPEL_EFFECTUE
-  crmEntityType   String?             // "Chantier", "Lead", "Quote", "ChantierInvoice"
-  crmEntityId     String?
+  crmEventType  String? // DEVIS_SIGNE, COMMANDE, RECEPTION_COMMANDE, PLANIFICATION,
+  // CHANTIER_EN_COURS, FIN_CHANTIER, RECEPTION, FACTURE,
+  // TERMINE, SAV, DOCUMENT, NOUVEAU_LEAD, EMAIL_ENVOYE,
+  // RDV_PLANIFIE, APPEL_EFFECTUE
+  crmEntityType String? // "Chantier", "Lead", "Quote", "ChantierInvoice"
+  crmEntityId   String?
 
   // Catégorie pour filtrage
-  category        String?             // "projet", "actualite", "chantier_realise", "conseil", "promotion"
+  category String? // "projet", "actualite", "chantier_realise", "conseil", "promotion"
 
   // Publication en tant qu'organisation
-  publishAsOrg    Boolean   @default(false)
+  publishAsOrg Boolean @default(false)
 
   // SpaceFlow
-  tags            String[]  @default([])  // hashtags extraits du contenu
-  isAnonymous     Boolean   @default(false) // mode Spark
-  parentPostId    String?                  // Echo/remix d'un autre post
+  tags         String[] @default([]) // hashtags extraits du contenu
+  isAnonymous  Boolean  @default(false) // mode Spark
+  parentPostId String? // Echo/remix d'un autre post
 
   // Compteurs dénormalisés
-  likesCount      Int       @default(0)
-  commentsCount   Int       @default(0)
-  sharesCount     Int       @default(0)
+  likesCount    Int @default(0)
+  commentsCount Int @default(0)
+  sharesCount   Int @default(0)
 
-  isPinned        Boolean   @default(false)
-  isPublished     Boolean   @default(true)
-  publishedAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  isPinned    Boolean   @default(false)
+  isPublished Boolean   @default(true)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  author          User         @relation("WallPostAuthor", fields: [authorId], references: [id])
-  targetLead      Lead?        @relation("WallPostTargetLead", fields: [targetLeadId], references: [id])
+  organization    Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  author          User             @relation("WallPostAuthor", fields: [authorId], references: [id])
+  targetLead      Lead?            @relation("WallPostTargetLead", fields: [targetLeadId], references: [id])
   reactions       WallReaction[]
   comments        WallComment[]
   shares          WallShare[]
   hashtags        PostHashtag[]
-  parentPost      WallPost?    @relation("PostEcho", fields: [parentPostId], references: [id], onDelete: SetNull)
-  echoes          WallPost[]   @relation("PostEcho")
+  parentPost      WallPost?        @relation("PostEcho", fields: [parentPostId], references: [id], onDelete: SetNull)
+  echoes          WallPost[]       @relation("PostEcho")
   savedBy         SavedReel[]
   hiveLiveMoments HiveLiveMoment[] @relation("HiveLiveLinkedPost")
 
@@ -3892,11 +3923,11 @@ model WallReaction {
   id        String   @id @default(uuid())
   postId    String
   userId    String
-  type      String   @default("LIKE")  // LIKE, LOVE, BRAVO, UTILE, WOW
+  type      String   @default("LIKE") // LIKE, LOVE, BRAVO, UTILE, WOW
   createdAt DateTime @default(now())
 
-  post      WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User     @relation("WallReactionUser", fields: [userId], references: [id])
+  post WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User     @relation("WallReactionUser", fields: [userId], references: [id])
 
   @@unique([postId, userId])
   @@index([postId])
@@ -3904,84 +3935,84 @@ model WallReaction {
 }
 
 model WallComment {
-  id              String    @id @default(uuid())
+  id              String  @id @default(uuid())
   postId          String
   authorId        String
   parentCommentId String?
   organizationId  String?
 
-  content         String
-  mediaUrl        String?
-  publishAsOrg    Boolean   @default(false)
+  content      String
+  mediaUrl     String?
+  publishAsOrg Boolean @default(false)
 
-  isEdited        Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  isEdited  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  post            WallPost     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author          User         @relation("WallCommentAuthor", fields: [authorId], references: [id])
-  organization    Organization? @relation("WallCommentOrg", fields: [organizationId], references: [id], onDelete: Cascade)
-  parentComment   WallComment? @relation("CommentReplies", fields: [parentCommentId], references: [id])
-  replies         WallComment[] @relation("CommentReplies")
-  likes           CommentLike[]
+  post          WallPost      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author        User          @relation("WallCommentAuthor", fields: [authorId], references: [id])
+  organization  Organization? @relation("WallCommentOrg", fields: [organizationId], references: [id], onDelete: Cascade)
+  parentComment WallComment?  @relation("CommentReplies", fields: [parentCommentId], references: [id])
+  replies       WallComment[] @relation("CommentReplies")
+  likes         CommentLike[]
 
   @@index([postId, createdAt])
   @@index([authorId])
 }
 
 model WallShare {
-  id          String   @id @default(uuid())
-  postId      String
-  userId      String
-  targetType  String   // INTERNAL, FACEBOOK, LINKEDIN, WHATSAPP, EMAIL, LINK
-  targetUrl   String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(uuid())
+  postId     String
+  userId     String
+  targetType String // INTERNAL, FACEBOOK, LINKEDIN, WHATSAPP, EMAIL, LINK
+  targetUrl  String?
+  createdAt  DateTime @default(now())
 
-  post        WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user        User     @relation("WallShareUser", fields: [userId], references: [id])
+  post WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User     @relation("WallShareUser", fields: [userId], references: [id])
 
   @@index([postId])
   @@index([userId])
 }
 
 model ClientAccount {
-  id              String    @id @default(uuid())
-  userId          String    @unique
-  leadId          String
-  organizationId  String
+  id             String @id @default(uuid())
+  userId         String @unique
+  leadId         String
+  organizationId String
 
-  isActive        Boolean   @default(true)
-  activatedAt     DateTime  @default(now())
-  lastLoginAt     DateTime?
+  isActive    Boolean   @default(true)
+  activatedAt DateTime  @default(now())
+  lastLoginAt DateTime?
 
-  notifyEmail     Boolean   @default(true)
-  notifyPush      Boolean   @default(true)
-  notifyWhatsApp  Boolean   @default(false)
+  notifyEmail    Boolean @default(true)
+  notifyPush     Boolean @default(true)
+  notifyWhatsApp Boolean @default(false)
 
-  referralCode    String?   @unique
-  referredBy      String?
+  referralCode String? @unique
+  referredBy   String?
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lead            Lead         @relation(fields: [leadId], references: [id])
-  organization    Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lead         Lead         @relation(fields: [leadId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
   @@index([leadId])
 }
 
 model PushSubscription {
-  id              String    @id @default(uuid())
-  userId          String
-  endpoint        String    @unique
-  p256dh          String
-  auth            String
-  isActive        Boolean   @default(true)
-  createdAt       DateTime  @default(now())
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
 
-  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -3993,7 +4024,7 @@ model UserPhoto {
   category  String   @default("other")
   createdAt DateTime @default(now())
 
-  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, category])
 }
@@ -4003,16 +4034,16 @@ model UserPhoto {
 // ═══════════════════════════════════════════════════════
 
 model Friendship {
-  id            String   @id @default(uuid())
-  requesterId   String
-  addresseeId   String
-  status        String   @default("pending") // pending, accepted, blocked
-  source        String   @default("manual")  // manual, organization (auto-added)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(uuid())
+  requesterId String
+  addresseeId String
+  status      String   @default("pending") // pending, accepted, blocked
+  source      String   @default("manual") // manual, organization (auto-added)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  requester     User @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  addressee     User @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  requester User @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
 
   @@unique([requesterId, addresseeId])
   @@index([requesterId, status])
@@ -4024,13 +4055,13 @@ model Friendship {
 // ═══════════════════════════════════════════════════════
 
 model OrgFollow {
-  id             String       @id @default(uuid())
+  id             String   @id @default(uuid())
   userId         String
   organizationId String
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime @default(now())
 
-  user           User         @relation("OrgFollowUser", fields: [userId], references: [id], onDelete: Cascade)
-  organization   Organization @relation("OrgFollowOrg", fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation("OrgFollowUser", fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation("OrgFollowOrg", fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, organizationId])
   @@index([userId])
@@ -4042,14 +4073,14 @@ model OrgFollow {
 // ═══════════════════════════════════════════════════════
 
 model OrgBlock {
-  id             String       @id @default(uuid())
-  userId         String
-  blockedOrgId   String
-  reason         String?
-  createdAt      DateTime     @default(now())
+  id           String   @id @default(uuid())
+  userId       String
+  blockedOrgId String
+  reason       String?
+  createdAt    DateTime @default(now())
 
-  user           User         @relation("OrgBlockUser", fields: [userId], references: [id], onDelete: Cascade)
-  blockedOrg     Organization @relation("OrgBlockOrg", fields: [blockedOrgId], references: [id], onDelete: Cascade)
+  user       User         @relation("OrgBlockUser", fields: [userId], references: [id], onDelete: Cascade)
+  blockedOrg Organization @relation("OrgBlockOrg", fields: [blockedOrgId], references: [id], onDelete: Cascade)
 
   @@unique([userId, blockedOrgId])
   @@index([userId])
@@ -4062,84 +4093,84 @@ model OrgBlock {
 
 model Conversation {
   id            String   @id @default(uuid())
-  name          String?  // null for 1-to-1, set for groups
+  name          String? // null for 1-to-1, set for groups
   isGroup       Boolean  @default(false)
   avatarUrl     String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   lastMessageAt DateTime @default(now())
 
-  participants  ConversationParticipant[]
-  messages      Message[]
-  videoCalls    VideoCall[]
+  participants ConversationParticipant[]
+  messages     Message[]
+  videoCalls   VideoCall[]
 
   @@index([lastMessageAt])
 }
 
 model ConversationParticipant {
-  id              String   @id @default(uuid())
-  conversationId  String
-  userId          String
-  role            String   @default("member") // member, admin
-  lastReadAt      DateTime @default(now())
-  isActive        Boolean  @default(true)
-  joinedAt        DateTime @default(now())
+  id                String    @id @default(uuid())
+  conversationId    String
+  userId            String
+  role              String    @default("member") // member, admin
+  lastReadAt        DateTime  @default(now())
+  isActive          Boolean   @default(true)
+  joinedAt          DateTime  @default(now())
   // ── Granular Permissions (admin can configure per member) ──
-  canPin          Boolean  @default(true)   // Can pin messages
-  canManageMembers Boolean @default(false)  // Can add/remove members
-  canSeeFullHistory Boolean @default(true)  // Can see messages before joinedAt
-  canSendMedia    Boolean  @default(true)   // Can send files/images/voice
-  canCreateTasks  Boolean  @default(true)   // Can create tasks from messages
-  isMuted         Boolean  @default(false)  // Mute notifications for this conversation
-  mutedUntil      DateTime?                 // Mute until date (null = forever if isMuted)
+  canPin            Boolean   @default(true) // Can pin messages
+  canManageMembers  Boolean   @default(false) // Can add/remove members
+  canSeeFullHistory Boolean   @default(true) // Can see messages before joinedAt
+  canSendMedia      Boolean   @default(true) // Can send files/images/voice
+  canCreateTasks    Boolean   @default(true) // Can create tasks from messages
+  isMuted           Boolean   @default(false) // Mute notifications for this conversation
+  mutedUntil        DateTime? // Mute until date (null = forever if isMuted)
 
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
   @@index([userId, isActive])
 }
 
 model Message {
-  id              String   @id @default(uuid())
+  id              String    @id @default(uuid())
   conversationId  String
   senderId        String
   content         String?
-  mediaUrls       Json?    // ["url1", "url2"]
-  mediaType       String?  // image, video, file, voice, signature
+  mediaUrls       Json? // ["url1", "url2"]
+  mediaType       String? // image, video, file, voice, signature
   replyToId       String?
-  isEdited        Boolean  @default(false)
-  isDeleted       Boolean  @default(false)
+  isEdited        Boolean   @default(false)
+  isDeleted       Boolean   @default(false)
   // ── Message Status ──
-  status          String   @default("sent")  // sent | delivered | read
-  deliveredAt     DateTime?                   // When message was delivered to recipient(s)
-  readAt          DateTime?                   // When message was read by recipient(s)
+  status          String    @default("sent") // sent | delivered | read
+  deliveredAt     DateTime? // When message was delivered to recipient(s)
+  readAt          DateTime? // When message was read by recipient(s)
   // ── Pin ──
-  isPinned        Boolean  @default(false)
+  isPinned        Boolean   @default(false)
   pinnedAt        DateTime?
   pinnedById      String?
   // ── Mentions ──
-  mentions        Json?    // ["userId1", "userId2"] — parsed from @mentions in content
+  mentions        Json? // ["userId1", "userId2"] — parsed from @mentions in content
   // ── Voice message ──
-  voiceDuration   Int?     // Duration in seconds (for mediaType='voice')
-  voiceTranscript String?  @db.Text // Auto-transcribed text from voice message
+  voiceDuration   Int? // Duration in seconds (for mediaType='voice')
+  voiceTranscript String?   @db.Text // Auto-transcribed text from voice message
   // ── Wax (ephemeral) ──
-  isEphemeral     Boolean  @default(false)   // Snapchat-style: disappears after read or TTL
-  ephemeralTtl    Int?                        // TTL in seconds (null = 24h default)
-  viewedAt        DateTime?                   // When the recipient opened it (triggers melt timer)
-  isExpired       Boolean  @default(false)    // Set true after melt/expiry
+  isEphemeral     Boolean   @default(false) // Snapchat-style: disappears after read or TTL
+  ephemeralTtl    Int? // TTL in seconds (null = 24h default)
+  viewedAt        DateTime? // When the recipient opened it (triggers melt timer)
+  isExpired       Boolean   @default(false) // Set true after melt/expiry
   // ── Wax Pin (geo) ──
   waxPin          WaxPin?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender          User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  replyTo         Message?     @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies         Message[]    @relation("MessageReply")
-  reactions       MessageReaction[]
-  tasks           MessageTask[]
-  pinnedBy        User?        @relation("MessagePinner", fields: [pinnedById], references: [id], onDelete: SetNull)
+  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User              @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo      Message?          @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies      Message[]         @relation("MessageReply")
+  reactions    MessageReaction[]
+  tasks        MessageTask[]
+  pinnedBy     User?             @relation("MessagePinner", fields: [pinnedById], references: [id], onDelete: SetNull)
 
   @@index([conversationId, createdAt])
   @@index([senderId])
@@ -4149,14 +4180,14 @@ model Message {
 
 /// Réactions emoji sur les messages (✅ ⚠️ 🔨 👍 ❤️ 😂 etc.)
 model MessageReaction {
-  id            String   @id @default(uuid())
-  messageId     String
-  userId        String
-  emoji         String   // The emoji character(s): "👍", "✅", "⚠️", "🔨", "❤️", "😂", "🎉", "😢"
-  createdAt     DateTime @default(now())
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String // The emoji character(s): "👍", "✅", "⚠️", "🔨", "❤️", "😂", "🎉", "😢"
+  createdAt DateTime @default(now())
 
-  message       Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user          User     @relation("MessageReactionUser", fields: [userId], references: [id], onDelete: Cascade)
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation("MessageReactionUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, userId, emoji]) // One reaction per emoji per user per message
   @@index([messageId])
@@ -4165,23 +4196,23 @@ model MessageReaction {
 
 /// Tâche créée directement depuis un message Messenger
 model MessageTask {
-  id            String    @id @default(uuid())
-  messageId     String
+  id             String    @id @default(uuid())
+  messageId      String
   conversationId String
-  title         String    // Task title (auto-filled from message content)
-  description   String?   @db.Text
-  assigneeId    String    // Responsible user
-  createdById   String    // Who created the task
-  deadline      DateTime?
-  priority      String    @default("medium") // low | medium | high | urgent
-  status        String    @default("todo")   // todo | in_progress | done | cancelled
-  completedAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  title          String // Task title (auto-filled from message content)
+  description    String?   @db.Text
+  assigneeId     String // Responsible user
+  createdById    String // Who created the task
+  deadline       DateTime?
+  priority       String    @default("medium") // low | medium | high | urgent
+  status         String    @default("todo") // todo | in_progress | done | cancelled
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  message       Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  assignee      User      @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Cascade)
-  createdBy     User      @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  assignee  User    @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Cascade)
+  createdBy User    @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
   @@index([assigneeId, status])
@@ -4190,19 +4221,19 @@ model MessageTask {
 
 /// Modèles de messages rapides (par utilisateur ou par organisation)
 model QuickReplyTemplate {
-  id              String   @id @default(uuid())
-  userId          String?  // null = shared org template
-  organizationId  String?  // null = personal template
-  title           String   // Short label shown in picker
-  content         String   @db.Text // Template content
-  shortcut        String?  // Keyboard shortcut like "/meeting" or "/devis"
-  category        String?  // "greeting" | "closing" | "meeting" | "invoice" | custom
-  sortOrder       Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(uuid())
+  userId         String? // null = shared org template
+  organizationId String? // null = personal template
+  title          String // Short label shown in picker
+  content        String   @db.Text // Template content
+  shortcut       String? // Keyboard shortcut like "/meeting" or "/devis"
+  category       String? // "greeting" | "closing" | "meeting" | "invoice" | custom
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  user            User?         @relation("QuickReplyUser", fields: [userId], references: [id], onDelete: Cascade)
-  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?         @relation("QuickReplyUser", fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([organizationId])
@@ -4214,40 +4245,41 @@ model QuickReplyTemplate {
 
 /// Position temps-réel d'un utilisateur sur la carte Wax
 model UserLocation {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  latitude    Float
-  longitude   Float
-  accuracy    Float?   // GPS accuracy in meters
-  heading     Float?   // Direction 0-360
-  ghostMode   String   @default("visible") // visible | approximate | ghost
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  latitude  Float
+  longitude Float
+  accuracy  Float? // GPS accuracy in meters
+  heading   Float? // Direction 0-360
+  ghostMode String   @default("visible") // visible | approximate | ghost
+  updatedAt DateTime @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([updatedAt])
 }
 
 /// Pin éphémère sur la carte Wax (lié à un message géolocalisé)
 model WaxPin {
-  id              String    @id @default(uuid())
-  messageId       String?   @unique  // Linked messenger message (nullable for standalone pins)
-  userId          String               // Who posted it
-  organizationId  String?              // Colony context (null = Free Bee)
-  latitude        Float
-  longitude       Float
-  pinType         String    @default("whisper") // whisper | event | comb | announcement
-  title           String?
-  previewUrl      String?              // Thumbnail for media pins
-  expiresAt       DateTime             // Auto-delete after this time
-  viewCount       Int       @default(0)
-  createdAt       DateTime  @default(now())
+  id             String   @id @default(uuid())
+  messageId      String?  @unique // Linked messenger message (nullable for standalone pins)
+  userId         String // Who posted it
+  organizationId String? // Colony context (null = Free Bee)
+  latitude       Float
+  longitude      Float
+  pinType        String   @default("whisper") // whisper | event | comb | announcement
+  title          String?
+  previewUrl     String? // Thumbnail for media pins
+  expiresAt      DateTime // Auto-delete after this time
+  viewCount      Int      @default(0)
+  createdAt      DateTime @default(now())
 
-  message         Message?  @relation(fields: [messageId], references: [id], onDelete: SetNull)
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  message      Message?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
   @@index([expiresAt])
+  @@index([expiresAt, userId])
   @@index([latitude, longitude])
   @@index([userId])
 }
@@ -4257,24 +4289,24 @@ model WaxPin {
 // ═══════════════════════════════════════════════════════
 
 model VideoCall {
-  id              String   @id @default(uuid())
-  conversationId  String?
-  initiatorId     String
-  title           String?
-  status          String   @default("ringing") // ringing, active, ended, missed
-  callType        String   @default("video")   // video, audio
-  startedAt       DateTime?
-  endedAt         DateTime?
-  duration        Int?     // seconds
-  recordingUrl    String?
-  transcription   String?  @db.Text
-  meetingSummary  String?  @db.Text
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(uuid())
+  conversationId String?
+  initiatorId    String
+  title          String?
+  status         String    @default("ringing") // ringing, active, ended, missed
+  callType       String    @default("video") // video, audio
+  startedAt      DateTime?
+  endedAt        DateTime?
+  duration       Int? // seconds
+  recordingUrl   String?
+  transcription  String?   @db.Text
+  meetingSummary String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  conversation    Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  initiator       User          @relation("VideoCallInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
-  participants    CallParticipant[]
+  conversation Conversation?     @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  initiator    User              @relation("VideoCallInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+  participants CallParticipant[]
 
   @@index([conversationId])
   @@index([initiatorId])
@@ -4282,17 +4314,17 @@ model VideoCall {
 }
 
 model CallParticipant {
-  id          String   @id @default(uuid())
-  callId      String
-  userId      String
-  status      String   @default("invited") // invited, joined, left, rejected
-  joinedAt    DateTime?
-  leftAt      DateTime?
-  isMuted     Boolean  @default(false)
-  isVideoOff  Boolean  @default(false)
+  id         String    @id @default(uuid())
+  callId     String
+  userId     String
+  status     String    @default("invited") // invited, joined, left, rejected
+  joinedAt   DateTime?
+  leftAt     DateTime?
+  isMuted    Boolean   @default(false)
+  isVideoOff Boolean   @default(false)
 
-  call        VideoCall @relation(fields: [callId], references: [id], onDelete: Cascade)
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  call VideoCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([callId, userId])
   @@index([userId, status])
@@ -4310,8 +4342,8 @@ model Follow {
   followingId String
   createdAt   DateTime @default(now())
 
-  follower    User @relation("UserFollowers", fields: [followerId], references: [id], onDelete: Cascade)
-  following   User @relation("UserFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+  follower  User @relation("UserFollowers", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowing", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
   @@index([followerId])
@@ -4321,27 +4353,28 @@ model Follow {
 // ── STORIES (contenu éphémère 24h) ──
 
 model Story {
-  id             String    @id @default(uuid())
+  id             String   @id @default(uuid())
   authorId       String
   organizationId String?
-  mediaUrl       String                    // URL image/vidéo
-  mediaType      String    @default("image") // image, video
+  mediaUrl       String // URL image/vidéo
+  mediaType      String   @default("image") // image, video
   caption        String?
   musicUrl       String?
-  duration       Int       @default(5)     // secondes d'affichage
-  visibility     String    @default("ALL") // ALL, IN, OUT
-  publishAsOrg   Boolean   @default(false)
-  isHighlight    Boolean   @default(false) // garder en "à la une"
-  highlightName  String?                   // nom du highlight
-  expiresAt      DateTime                  // maintenant + 24h
-  createdAt      DateTime  @default(now())
+  duration       Int      @default(5) // secondes d'affichage
+  visibility     String   @default("ALL") // ALL, IN, OUT
+  publishAsOrg   Boolean  @default(false)
+  isHighlight    Boolean  @default(false) // garder en "à la une"
+  highlightName  String? // nom du highlight
+  expiresAt      DateTime // maintenant + 24h
+  createdAt      DateTime @default(now())
 
-  author         User       @relation("StoryAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  views          StoryView[]
+  author       User          @relation("StoryAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  views        StoryView[]
 
   @@index([authorId, createdAt])
   @@index([expiresAt])
+  @@index([expiresAt, isHighlight])
   @@index([organizationId])
 }
 
@@ -4351,8 +4384,8 @@ model StoryView {
   viewerId  String
   createdAt DateTime @default(now())
 
-  story     Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  viewer    User  @relation("StoryViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  story  Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  viewer User  @relation("StoryViewer", fields: [viewerId], references: [id], onDelete: Cascade)
 
   @@unique([storyId, viewerId])
   @@index([storyId])
@@ -4362,12 +4395,12 @@ model StoryView {
 // ── HASHTAGS ──
 
 model Hashtag {
-  id         String   @id @default(uuid())
-  name       String   @unique  // stocké en minuscule sans #
-  postCount  Int      @default(0)
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  name      String   @unique // stocké en minuscule sans #
+  postCount Int      @default(0)
+  createdAt DateTime @default(now())
 
-  posts      PostHashtag[]
+  posts PostHashtag[]
 
   @@index([postCount])
 }
@@ -4378,8 +4411,8 @@ model PostHashtag {
   hashtagId String
   createdAt DateTime @default(now())
 
-  post      WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  hashtag   Hashtag  @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
+  post    WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  hashtag Hashtag  @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
 
   @@unique([postId, hashtagId])
   @@index([hashtagId])
@@ -4388,24 +4421,24 @@ model PostHashtag {
 // ── SPARK (posts anonymes avec révélation) ──
 
 model Spark {
-  id             String    @id @default(uuid())
-  authorId       String
-  organizationId String?
-  content        String?
-  mediaUrl       String?
-  mediaType      String?             // image, video
-  sparkCount     Int       @default(0) // votes "spark"
-  revealThreshold Int      @default(100)
-  isRevealed     Boolean   @default(false)
-  visibility     String    @default("ALL") // ALL, IN, OUT
-  publishAsOrg   Boolean   @default(false)
-  revealedAt     DateTime?
-  createdAt      DateTime  @default(now())
+  id              String    @id @default(uuid())
+  authorId        String
+  organizationId  String?
+  content         String?
+  mediaUrl        String?
+  mediaType       String? // image, video
+  sparkCount      Int       @default(0) // votes "spark"
+  revealThreshold Int       @default(100)
+  isRevealed      Boolean   @default(false)
+  visibility      String    @default("ALL") // ALL, IN, OUT
+  publishAsOrg    Boolean   @default(false)
+  revealedAt      DateTime?
+  createdAt       DateTime  @default(now())
 
-  author         User         @relation("SparkAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  votes          SparkVote[]
-  dismissals     SparkDismiss[]
+  author       User           @relation("SparkAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  votes        SparkVote[]
+  dismissals   SparkDismiss[]
 
   @@index([isRevealed, sparkCount])
   @@index([createdAt])
@@ -4418,8 +4451,8 @@ model SparkVote {
   voterId   String
   createdAt DateTime @default(now())
 
-  spark     Spark @relation(fields: [sparkId], references: [id], onDelete: Cascade)
-  voter     User  @relation("SparkVoter", fields: [voterId], references: [id], onDelete: Cascade)
+  spark Spark @relation(fields: [sparkId], references: [id], onDelete: Cascade)
+  voter User  @relation("SparkVoter", fields: [voterId], references: [id], onDelete: Cascade)
 
   @@unique([sparkId, voterId])
   @@index([sparkId])
@@ -4428,24 +4461,24 @@ model SparkVote {
 // ── BATTLES (duels créatifs) ──
 
 model Battle {
-  id             String    @id @default(uuid())
+  id             String   @id @default(uuid())
   organizationId String?
-  title          String                   // "Meilleure photo du jour"
+  title          String // "Meilleure photo du jour"
   description    String?
   challengerId   String
-  opponentId     String?                  // null = ouvert à tous
-  status         String    @default("open") // open, active, voting, ended
-  publishAsOrg   Boolean   @default(false)
-  startsAt       DateTime  @default(now())
-  endsAt         DateTime                 // deadline
+  opponentId     String? // null = ouvert à tous
+  status         String   @default("open") // open, active, voting, ended
+  publishAsOrg   Boolean  @default(false)
+  startsAt       DateTime @default(now())
+  endsAt         DateTime // deadline
   winnerId       String?
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime @default(now())
 
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  challenger     User          @relation("BattleChallenger", fields: [challengerId], references: [id], onDelete: Cascade)
-  opponent       User?         @relation("BattleOpponent", fields: [opponentId], references: [id], onDelete: Cascade)
-  winner         User?         @relation("BattleWinner", fields: [winnerId], references: [id], onDelete: Cascade)
-  entries        BattleEntry[]
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  challenger   User          @relation("BattleChallenger", fields: [challengerId], references: [id], onDelete: Cascade)
+  opponent     User?         @relation("BattleOpponent", fields: [opponentId], references: [id], onDelete: Cascade)
+  winner       User?         @relation("BattleWinner", fields: [winnerId], references: [id], onDelete: Cascade)
+  entries      BattleEntry[]
 
   @@index([status, endsAt])
   @@index([createdAt])
@@ -4461,8 +4494,8 @@ model BattleEntry {
   votes     Int      @default(0)
   createdAt DateTime @default(now())
 
-  battle    Battle @relation(fields: [battleId], references: [id], onDelete: Cascade)
-  user      User   @relation("BattleEntryUser", fields: [userId], references: [id], onDelete: Cascade)
+  battle Battle @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  user   User   @relation("BattleEntryUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([battleId, userId])
   @@index([battleId, votes])
@@ -4471,21 +4504,21 @@ model BattleEntry {
 // ── TIME CAPSULES ──
 
 model TimeCapsule {
-  id             String    @id @default(uuid())
+  id             String   @id @default(uuid())
   authorId       String
   organizationId String?
   content        String?
   mediaUrl       String?
   mediaType      String?
-  publishAsOrg   Boolean   @default(false)
-  unlocksAt      DateTime         // date d'ouverture
-  isOpened       Boolean   @default(false)
-  recipientId    String?          // null = public, sinon destinataire
-  createdAt      DateTime  @default(now())
+  publishAsOrg   Boolean  @default(false)
+  unlocksAt      DateTime // date d'ouverture
+  isOpened       Boolean  @default(false)
+  recipientId    String? // null = public, sinon destinataire
+  createdAt      DateTime @default(now())
 
-  author         User          @relation("CapsuleAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  recipient      User?         @relation("CapsuleRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  author       User          @relation("CapsuleAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  recipient    User?         @relation("CapsuleRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([unlocksAt, isOpened])
   @@index([authorId])
@@ -4496,23 +4529,23 @@ model TimeCapsule {
 
 model Quest {
   id             String    @id @default(uuid())
-  organizationId String?            // null = quests globales SpaceFlow
-  sponsorId      String?            // entreprise qui sponsorise
+  organizationId String? // null = quests globales SpaceFlow
+  sponsorId      String? // entreprise qui sponsorise
   title          String
   description    String?
   icon           String    @default("🎯")
   questType      String    @default("daily") // daily, weekly, monthly, special
-  actionType     String                     // post_photo, comment, react, visit, share
-  targetCount    Int       @default(1)      // combien de fois
+  actionType     String // post_photo, comment, react, visit, share
+  targetCount    Int       @default(1) // combien de fois
   rewardPoints   Int       @default(10)
   isActive       Boolean   @default(true)
   startsAt       DateTime  @default(now())
   endsAt         DateTime?
   createdAt      DateTime  @default(now())
 
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sponsor        User?         @relation("QuestSponsor", fields: [sponsorId], references: [id])
-  progress       QuestProgress[]
+  organization Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sponsor      User?           @relation("QuestSponsor", fields: [sponsorId], references: [id])
+  progress     QuestProgress[]
 
   @@index([isActive, questType])
   @@index([organizationId])
@@ -4528,8 +4561,8 @@ model QuestProgress {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  quest        Quest @relation(fields: [questId], references: [id], onDelete: Cascade)
-  user         User  @relation("QuestProgressUser", fields: [userId], references: [id], onDelete: Cascade)
+  quest Quest @relation(fields: [questId], references: [id], onDelete: Cascade)
+  user  User  @relation("QuestProgressUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([questId, userId])
   @@index([userId, isCompleted])
@@ -4543,8 +4576,8 @@ model SparkDismiss {
   userId    String
   createdAt DateTime @default(now())
 
-  spark     Spark @relation(fields: [sparkId], references: [id], onDelete: Cascade)
-  user      User  @relation("SparkDismissUser", fields: [userId], references: [id], onDelete: Cascade)
+  spark Spark @relation(fields: [sparkId], references: [id], onDelete: Cascade)
+  user  User  @relation("SparkDismissUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([sparkId, userId])
   @@index([userId])
@@ -4558,8 +4591,8 @@ model SavedReel {
   userId    String
   createdAt DateTime @default(now())
 
-  post      WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User     @relation("SavedReelUser", fields: [userId], references: [id], onDelete: Cascade)
+  post WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User     @relation("SavedReelUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([postId, userId])
   @@index([userId, createdAt])
@@ -4573,8 +4606,8 @@ model CommentLike {
   userId    String
   createdAt DateTime @default(now())
 
-  comment   WallComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  user      User        @relation("CommentLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+  comment WallComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User        @relation("CommentLikeUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([commentId, userId])
   @@index([commentId])
@@ -4587,62 +4620,62 @@ model BadgeDefinition {
   id          String   @id @default(uuid())
   name        String   @unique
   description String?
-  icon        String                  // emoji ou URL
+  icon        String // emoji ou URL
   category    String   @default("social") // social, creator, pro, loyalty
-  criteria    String                  // ex: "posts_count >= 10"
+  criteria    String // ex: "posts_count >= 10"
   threshold   Int      @default(1)
   createdAt   DateTime @default(now())
 
-  userBadges  UserBadge[]
+  userBadges UserBadge[]
 }
 
 model UserBadge {
-  id        String   @id @default(uuid())
-  userId    String
-  badgeId   String
-  earnedAt  DateTime @default(now())
+  id       String   @id @default(uuid())
+  userId   String
+  badgeId  String
+  earnedAt DateTime @default(now())
 
-  user      User            @relation("UserBadges", fields: [userId], references: [id], onDelete: Cascade)
-  badge     BadgeDefinition @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  user  User            @relation("UserBadges", fields: [userId], references: [id], onDelete: Cascade)
+  badge BadgeDefinition @relation(fields: [badgeId], references: [id], onDelete: Cascade)
 
   @@unique([userId, badgeId])
   @@index([userId])
 }
 
 model UserStreak {
-  id               String    @id @default(uuid())
-  userId           String    @unique
-  currentStreak    Int       @default(0)
-  longestStreak    Int       @default(0)
-  lastActiveAt     DateTime  @default(now())
-  totalPoints      Int       @default(0)
-  level            Int       @default(1)
+  id                    String    @id @default(uuid())
+  userId                String    @unique
+  currentStreak         Int       @default(0)
+  longestStreak         Int       @default(0)
+  lastActiveAt          DateTime  @default(now())
+  totalPoints           Int       @default(0)
+  level                 Int       @default(1)
   // ── Custom Status ("sur chantier", "en déplacement", etc.) ──
-  customStatus     String?              // Free text status
-  customStatusEmoji String?             // Emoji icon for status
-  customStatusExpiresAt DateTime?       // Auto-clear status after this time
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  customStatus          String? // Free text status
+  customStatusEmoji     String? // Emoji icon for status
+  customStatusExpiresAt DateTime? // Auto-clear status after this time
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  user             User @relation("UserStreakData", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("UserStreakData", fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ── CONTENT MODERATION ──
 
 model ContentReport {
-  id             String    @id @default(uuid())
-  reporterId     String
-  targetType     String              // post, comment, spark, reel, user
-  targetId       String
-  reason         String              // spam, harassment, nudity, violence, other
-  description    String?
-  status         String    @default("pending") // pending, reviewed, resolved, dismissed
-  reviewedBy     String?
-  reviewedAt     DateTime?
-  createdAt      DateTime  @default(now())
+  id          String    @id @default(uuid())
+  reporterId  String
+  targetType  String // post, comment, spark, reel, user
+  targetId    String
+  reason      String // spam, harassment, nudity, violence, other
+  description String?
+  status      String    @default("pending") // pending, reviewed, resolved, dismissed
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
 
-  reporter       User  @relation("ContentReporter", fields: [reporterId], references: [id], onDelete: Cascade)
-  reviewer       User? @relation("ContentReviewer", fields: [reviewedBy], references: [id])
+  reporter User  @relation("ContentReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reviewer User? @relation("ContentReviewer", fields: [reviewedBy], references: [id])
 
   @@index([status, createdAt])
   @@index([targetType, targetId])
@@ -4671,9 +4704,9 @@ model SocialEvent {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  creator        User          @relation("EventCreator", fields: [creatorId], references: [id], onDelete: Cascade)
-  attendees      EventAttendee[]
+  organization Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      User            @relation("EventCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  attendees    EventAttendee[]
 
   @@index([startsAt])
   @@index([organizationId])
@@ -4687,8 +4720,8 @@ model EventAttendee {
   status    String   @default("going") // going, interested, declined
   createdAt DateTime @default(now())
 
-  event     SocialEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user      User        @relation("EventAttendees", fields: [userId], references: [id], onDelete: Cascade)
+  event SocialEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User        @relation("EventAttendees", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, userId])
   @@index([userId])
@@ -4699,32 +4732,32 @@ model EventAttendee {
 // ═══════════════════════════════════════════════════════════════
 
 model HiveLiveMoment {
-  id             String    @id @default(uuid())
+  id             String  @id @default(uuid())
   userId         String
   organizationId String?
 
   // Content
-  title          String
-  description    String?
-  momentDate     DateTime
-  coverUrl       String?
+  title       String
+  description String?
+  momentDate  DateTime
+  coverUrl    String?
 
   // Linked wall post (bidirectional: favorite from Wall → Hive Live)
-  linkedPostId   String?
+  linkedPostId String?
 
   // Visibility: public, crew, private
-  visibility     String   @default("public")
+  visibility String @default("public")
 
   // Ordering within same date range
-  sortOrder      Int      @default(0)
+  sortOrder Int @default(0)
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  author         User          @relation("HiveLiveMoments", fields: [userId], references: [id], onDelete: Cascade)
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  linkedPost     WallPost?     @relation("HiveLiveLinkedPost", fields: [linkedPostId], references: [id], onDelete: SetNull)
-  media          HiveLiveMomentMedia[]
+  author       User                  @relation("HiveLiveMoments", fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization?         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  linkedPost   WallPost?             @relation("HiveLiveLinkedPost", fields: [linkedPostId], references: [id], onDelete: SetNull)
+  media        HiveLiveMomentMedia[]
 
   @@index([userId, momentDate])
   @@index([organizationId, momentDate])
@@ -4735,12 +4768,12 @@ model HiveLiveMomentMedia {
   id        String   @id @default(uuid())
   momentId  String
   url       String
-  type      String   @default("image")  // image, video
+  type      String   @default("image") // image, video
   caption   String?
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
 
-  moment    HiveLiveMoment @relation(fields: [momentId], references: [id], onDelete: Cascade)
+  moment HiveLiveMoment @relation(fields: [momentId], references: [id], onDelete: Cascade)
 
   @@index([momentId])
 }
@@ -4750,64 +4783,64 @@ model HiveLiveMomentMedia {
 // ═══════════════════════════════════════════════════════
 
 model SocialSettings {
-  id             String       @id @default(uuid())
-  organizationId String       @unique
-  
+  id             String @id @default(uuid())
+  organizationId String @unique
+
   // ── Feed Visibility ──
-  wallEnabled           Boolean @default(true)
-  storiesEnabled        Boolean @default(true)
-  reelsEnabled          Boolean @default(true)
-  sparksEnabled         Boolean @default(true)
-  battlesEnabled        Boolean @default(true)
-  exploreEnabled        Boolean @default(true)
-  hiveLiveEnabled       Boolean @default(true)
-  messengerEnabled      Boolean @default(true)
-  callsEnabled          Boolean @default(true)
-  
+  wallEnabled      Boolean @default(true)
+  storiesEnabled   Boolean @default(true)
+  reelsEnabled     Boolean @default(true)
+  sparksEnabled    Boolean @default(true)
+  battlesEnabled   Boolean @default(true)
+  exploreEnabled   Boolean @default(true)
+  hiveLiveEnabled  Boolean @default(true)
+  messengerEnabled Boolean @default(true)
+  callsEnabled     Boolean @default(true)
+
   // ── Default Visibility for new posts ──
-  defaultPostVisibility String  @default("IN")  // OUT, IN, ALL
-  
+  defaultPostVisibility String @default("IN") // OUT, IN, ALL
+
   // ── Colony Feed Behavior ──
-  allowMembersPost      Boolean @default(true)    // members can post in Colony wall
-  allowMembersStory     Boolean @default(true)    // members can create stories for Colony
-  allowMembersReel      Boolean @default(true)    // members can create reels for Colony
-  allowMembersSpark     Boolean @default(false)   // members can create sparks for Colony
-  requirePostApproval   Boolean @default(false)   // posts need Keeper approval
-  
+  allowMembersPost    Boolean @default(true) // members can post in Colony wall
+  allowMembersStory   Boolean @default(true) // members can create stories for Colony
+  allowMembersReel    Boolean @default(true) // members can create reels for Colony
+  allowMembersSpark   Boolean @default(false) // members can create sparks for Colony
+  requirePostApproval Boolean @default(false) // posts need Keeper approval
+
   // ── Inter-Colony Visibility ──
-  showPublicPostsInFeed Boolean @default(true)    // show ALL-vis posts from other Colonies
-  showFriendsPostsInFeed Boolean @default(true)   // show friends' posts in personal feed
+  showPublicPostsInFeed      Boolean @default(true) // show ALL-vis posts from other Colonies
+  showFriendsPostsInFeed     Boolean @default(true) // show friends' posts in personal feed
   showFollowedColoniesInFeed Boolean @default(true) // show followed Colonies' posts
-  
+
   // ── Content Moderation ──
-  maxPostLength         Int     @default(5000)
-  maxCommentLength      Int     @default(2000)
-  maxMediaPerPost       Int     @default(10)
-  maxVideoSizeMB        Int     @default(100)
-  maxImageSizeMB        Int     @default(10)
-  allowGifs             Boolean @default(true)
-  allowLinks            Boolean @default(true)
-  allowHashtags         Boolean @default(true)
+  maxPostLength          Int     @default(5000)
+  maxCommentLength       Int     @default(2000)
+  maxMediaPerPost        Int     @default(10)
+  maxVideoSizeMB         Int     @default(100)
+  maxImageSizeMB         Int     @default(10)
+  allowGifs              Boolean @default(true)
+  allowLinks             Boolean @default(true)
+  allowHashtags          Boolean @default(true)
   profanityFilterEnabled Boolean @default(false)
-  
+
   // ── Reactions & Comments ──
-  reactionsEnabled      Boolean @default(true)
-  commentsEnabled       Boolean @default(true)
-  sharesEnabled         Boolean @default(true)
-  commentDepthLimit     Int     @default(3)       // nested reply depth
-  
+  reactionsEnabled  Boolean @default(true)
+  commentsEnabled   Boolean @default(true)
+  sharesEnabled     Boolean @default(true)
+  commentDepthLimit Int     @default(3) // nested reply depth
+
   // ── Follow & Friends ──
-  allowFollowColony     Boolean @default(true)    // users can follow this Colony
-  autoFollowOnJoin      Boolean @default(true)    // auto-follow Colony when user joins
+  allowFollowColony     Boolean @default(true) // users can follow this Colony
+  autoFollowOnJoin      Boolean @default(true) // auto-follow Colony when user joins
   friendRequestsEnabled Boolean @default(true)
   maxFriendsPerUser     Int     @default(5000)
-  
+
   // ── Privacy & Blocking ──
-  allowBlockColony      Boolean @default(true)
-  showMemberList        Boolean @default(true)    // public member list
-  showMemberCount       Boolean @default(true)    // public member count
-  profileVisibility     String  @default("public") // public, members_only, private
-  
+  allowBlockColony  Boolean @default(true)
+  showMemberList    Boolean @default(true) // public member list
+  showMemberCount   Boolean @default(true) // public member count
+  profileVisibility String  @default("public") // public, members_only, private
+
   // ── Notifications ──
   notifyOnNewPost       Boolean @default(true)
   notifyOnComment       Boolean @default(true)
@@ -4815,52 +4848,52 @@ model SocialSettings {
   notifyOnNewFollower   Boolean @default(true)
   notifyOnFriendRequest Boolean @default(true)
   notifyOnMention       Boolean @default(true)
-  
-  // ── Analytics & Stats ──
-  showPostAnalytics     Boolean @default(false)   // show view count, engagement
-  showProfileViews      Boolean @default(false)
-  
-  // ── Wax (Map) ──
-  waxEnabled            Boolean @default(true)
-  waxAlertsEnabled      Boolean @default(true)    // push alerts when WaxPin near user
-  waxDefaultRadiusKm    Int     @default(10)      // rayon de surveillance par défaut (km)
-  waxGhostModeAllowed   Boolean @default(true)    // users can go invisible on map
-  
-  // ── Nectar Sub-Apps ──
-  questsEnabled         Boolean @default(true)
-  eventsEnabled         Boolean @default(true)
-  capsulesEnabled       Boolean @default(true)
-  orbitEnabled          Boolean @default(true)
-  pulseEnabled          Boolean @default(true)
-  
-  // ── Modération IA ──
-  moderationMode        String  @default("ai_auto") // manual | ai_review | ai_auto
-  aiBannedCategories    String[] @default([])       // categories to auto-reject (e.g. "violence", "nsfw")
-  
-  // ── Business → Social Auto-Posts ──
-  autoPostOnDevisSigned      Boolean @default(true)
-  autoPostOnInvoicePaid      Boolean @default(false)
-  autoPostOnChantierCreated  Boolean @default(true)
-  autoPostOnChantierCompleted Boolean @default(true)
-  autoPostOnNewClient        Boolean @default(false)
-  autoPostOnCalendarEvent    Boolean @default(false)
-  autoPostOnTaskCompleted    Boolean @default(false)
-  autoPostDefaultVisibility  String  @default("IN")  // default visibility for auto-posts
-  
-  // ── RGPD / Privacy ──
-  gdprDataExportEnabled Boolean @default(true)       // allow users to export their data
-  gdprRetentionDays     Int     @default(0)          // 0 = keep forever, >0 = auto-purge after N days
-  
-  // ── Advanced ──
-  customReactions       Json?     // custom reaction types [{key, emoji, label}]
-  bannedWords           String[]  @default([])    // words to auto-filter
-  pinnedPostsLimit      Int       @default(3)
-  autoArchiveDays       Int       @default(0)     // 0 = never auto-archive
-  
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
 
-  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // ── Analytics & Stats ──
+  showPostAnalytics Boolean @default(false) // show view count, engagement
+  showProfileViews  Boolean @default(false)
+
+  // ── Wax (Map) ──
+  waxEnabled          Boolean @default(true)
+  waxAlertsEnabled    Boolean @default(true) // push alerts when WaxPin near user
+  waxDefaultRadiusKm  Int     @default(10) // rayon de surveillance par défaut (km)
+  waxGhostModeAllowed Boolean @default(true) // users can go invisible on map
+
+  // ── Nectar Sub-Apps ──
+  questsEnabled   Boolean @default(true)
+  eventsEnabled   Boolean @default(true)
+  capsulesEnabled Boolean @default(true)
+  orbitEnabled    Boolean @default(true)
+  pulseEnabled    Boolean @default(true)
+
+  // ── Modération IA ──
+  moderationMode     String   @default("ai_auto") // manual | ai_review | ai_auto
+  aiBannedCategories String[] @default([]) // categories to auto-reject (e.g. "violence", "nsfw")
+
+  // ── Business → Social Auto-Posts ──
+  autoPostOnDevisSigned       Boolean @default(true)
+  autoPostOnInvoicePaid       Boolean @default(false)
+  autoPostOnChantierCreated   Boolean @default(true)
+  autoPostOnChantierCompleted Boolean @default(true)
+  autoPostOnNewClient         Boolean @default(false)
+  autoPostOnCalendarEvent     Boolean @default(false)
+  autoPostOnTaskCompleted     Boolean @default(false)
+  autoPostDefaultVisibility   String  @default("IN") // default visibility for auto-posts
+
+  // ── RGPD / Privacy ──
+  gdprDataExportEnabled Boolean @default(true) // allow users to export their data
+  gdprRetentionDays     Int     @default(0) // 0 = keep forever, >0 = auto-purge after N days
+
+  // ── Advanced ──
+  customReactions  Json? // custom reaction types [{key, emoji, label}]
+  bannedWords      String[] @default([]) // words to auto-filter
+  pinnedPostsLimit Int      @default(3)
+  autoArchiveDays  Int      @default(0) // 0 = never auto-archive
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 // ═══════════════════════════════════════════════════════
@@ -4876,7 +4909,7 @@ model UserPreference {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, key])
   @@index([userId])
@@ -4887,9 +4920,9 @@ model UserPreference {
 // ═══════════════════════════════════════════════════════
 
 model UserNotificationPreference {
-  id          String   @id @default(uuid())
-  userId      String
-  
+  id     String @id @default(uuid())
+  userId String
+
   // ── Push (Web Push / SW) ──
   pushNewPost          Boolean @default(true)
   pushComment          Boolean @default(true)
@@ -4897,48 +4930,48 @@ model UserNotificationPreference {
   pushNewFollower      Boolean @default(true)
   pushFriendRequest    Boolean @default(true)
   pushMention          Boolean @default(true)
-  pushWhisper          Boolean @default(true)   // Whisper (messenger) messages
-  pushWaxAlert         Boolean @default(true)   // Wax proximity alerts
-  pushBusinessEvent    Boolean @default(true)   // Auto-post business events
+  pushWhisper          Boolean @default(true) // Whisper (messenger) messages
+  pushWaxAlert         Boolean @default(true) // Wax proximity alerts
+  pushBusinessEvent    Boolean @default(true) // Auto-post business events
   pushCalendarReminder Boolean @default(true)
-  
+
   // ── Email ──
-  emailNewPost         Boolean @default(false)
-  emailComment         Boolean @default(true)
-  emailReaction        Boolean @default(false)
-  emailNewFollower     Boolean @default(false)
-  emailFriendRequest   Boolean @default(true)
-  emailMention         Boolean @default(true)
-  emailWhisper         Boolean @default(false)
-  emailWaxAlert        Boolean @default(false)
-  emailBusinessEvent   Boolean @default(true)
+  emailNewPost          Boolean @default(false)
+  emailComment          Boolean @default(true)
+  emailReaction         Boolean @default(false)
+  emailNewFollower      Boolean @default(false)
+  emailFriendRequest    Boolean @default(true)
+  emailMention          Boolean @default(true)
+  emailWhisper          Boolean @default(false)
+  emailWaxAlert         Boolean @default(false)
+  emailBusinessEvent    Boolean @default(true)
   emailCalendarReminder Boolean @default(true)
-  emailDigestFrequency String  @default("daily") // none | instant | daily | weekly
-  
+  emailDigestFrequency  String  @default("daily") // none | instant | daily | weekly
+
   // ── In-App ──
-  inAppNewPost         Boolean @default(true)
-  inAppComment         Boolean @default(true)
-  inAppReaction        Boolean @default(true)
-  inAppNewFollower     Boolean @default(true)
-  inAppFriendRequest   Boolean @default(true)
-  inAppMention         Boolean @default(true)
-  inAppWhisper         Boolean @default(true)
-  inAppWaxAlert        Boolean @default(true)
-  inAppBusinessEvent   Boolean @default(true)
+  inAppNewPost          Boolean @default(true)
+  inAppComment          Boolean @default(true)
+  inAppReaction         Boolean @default(true)
+  inAppNewFollower      Boolean @default(true)
+  inAppFriendRequest    Boolean @default(true)
+  inAppMention          Boolean @default(true)
+  inAppWhisper          Boolean @default(true)
+  inAppWaxAlert         Boolean @default(true)
+  inAppBusinessEvent    Boolean @default(true)
   inAppCalendarReminder Boolean @default(true)
-  
+
   // ── Global ──
-  doNotDisturb         Boolean  @default(false)
-  doNotDisturbStart    String?  // HH:mm format (e.g. "22:00")
-  doNotDisturbEnd      String?  // HH:mm format (e.g. "07:00")
-  mutedColonyIds       String[] @default([])  // Colonies to mute
-  mutedUserIds         String[] @default([])  // Users to mute
-  
+  doNotDisturb      Boolean  @default(false)
+  doNotDisturbStart String? // HH:mm format (e.g. "22:00")
+  doNotDisturbEnd   String? // HH:mm format (e.g. "07:00")
+  mutedColonyIds    String[] @default([]) // Colonies to mute
+  mutedUserIds      String[] @default([]) // Users to mute
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@unique([userId])
   @@index([userId])
 }
@@ -4949,55 +4982,55 @@ model UserNotificationPreference {
 
 // Configuration Peppol par organisation (1 par Colony)
 model PeppolConfig {
-  id                  String    @id @default(uuid())
-  organizationId      String    @unique
-  enabled             Boolean   @default(false)
-  peppolEas           String    @default("0208") // Electronic Address Scheme (0208 = Belgium BCE)
-  peppolEndpoint      String?   // Numéro d'entreprise BCE (ex: 0123456789)
-  registrationStatus  String    @default("NOT_REGISTERED") // NOT_REGISTERED | PENDING | ACTIVE | REJECTED | DEREGISTERED
-  odooCompanyId       Int?      // ID de la company dans Odoo headless
-  odooProxyUserId     Int?      // ID du proxy user dans Odoo
-  contactEmail        String?   // Email de contact pour Peppol
-  contactPhone        String?   // Téléphone (avec code pays, ex: +32...)
-  migrationKey        String?   // Clé de migration si changement d'AP
-  previousAccessPoint String?   // Ancien Access Point détecté (ex: "Accountable", "Billit")
+  id                   String    @id @default(uuid())
+  organizationId       String    @unique
+  enabled              Boolean   @default(false)
+  peppolEas            String    @default("0208") // Electronic Address Scheme (0208 = Belgium BCE)
+  peppolEndpoint       String? // Numéro d'entreprise BCE (ex: 0123456789)
+  registrationStatus   String    @default("NOT_REGISTERED") // NOT_REGISTERED | PENDING | ACTIVE | REJECTED | DEREGISTERED
+  odooCompanyId        Int? // ID de la company dans Odoo headless
+  odooProxyUserId      Int? // ID du proxy user dans Odoo
+  contactEmail         String? // Email de contact pour Peppol
+  contactPhone         String? // Téléphone (avec code pays, ex: +32...)
+  migrationKey         String? // Clé de migration si changement d'AP
+  previousAccessPoint  String? // Ancien Access Point détecté (ex: "Accountable", "Billit")
   previousApDetectedAt DateTime? // Date de détection de l'ancien AP
-  lastCheckedAt       DateTime? // Dernière vérification automatique du statut
-  autoSendEnabled     Boolean   @default(false) // Envoi automatique via Peppol
-  autoReceiveEnabled  Boolean   @default(true)  // Réception automatique
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  lastCheckedAt        DateTime? // Dernière vérification automatique du statut
+  autoSendEnabled      Boolean   @default(false) // Envoi automatique via Peppol
+  autoReceiveEnabled   Boolean   @default(true) // Réception automatique
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  Organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 // Factures entrantes reçues via Peppol
 model PeppolIncomingInvoice {
-  id                String    @id @default(uuid())
-  organizationId    String
-  peppolMessageId   String    @unique // ID unique du message Peppol
-  senderEas         String    // EAS de l'expéditeur
-  senderEndpoint    String    // Endpoint de l'expéditeur
-  senderName        String?   // Nom de l'expéditeur (extrait du XML)
-  senderVat         String?   // TVA de l'expéditeur
-  invoiceNumber     String?   // Numéro de facture du fournisseur
-  invoiceDate       DateTime? // Date de la facture
-  dueDate           DateTime? // Date d'échéance
-  totalAmount       Float?    // Montant total TTC
-  taxAmount         Float?    // Montant TVA
-  currency          String    @default("EUR")
-  xmlContent        String?   // Contenu UBL XML brut (stocké pour audit)
-  xmlUrl            String?   // URL vers le fichier XML dans le storage
-  pdfUrl            String?   // URL vers le PDF rendu
-  status            String    @default("RECEIVED") // RECEIVED | REVIEWED | ACCEPTED | REJECTED | ARCHIVED
-  reviewedBy        String?   // userId qui a traité la facture
-  reviewedAt        DateTime?
-  notes             String?
-  metadata          Json?     // Données supplémentaires extraites du XML
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  organizationId  String
+  peppolMessageId String    @unique // ID unique du message Peppol
+  senderEas       String // EAS de l'expéditeur
+  senderEndpoint  String // Endpoint de l'expéditeur
+  senderName      String? // Nom de l'expéditeur (extrait du XML)
+  senderVat       String? // TVA de l'expéditeur
+  invoiceNumber   String? // Numéro de facture du fournisseur
+  invoiceDate     DateTime? // Date de la facture
+  dueDate         DateTime? // Date d'échéance
+  totalAmount     Float? // Montant total TTC
+  taxAmount       Float? // Montant TVA
+  currency        String    @default("EUR")
+  xmlContent      String? // Contenu UBL XML brut (stocké pour audit)
+  xmlUrl          String? // URL vers le fichier XML dans le storage
+  pdfUrl          String? // URL vers le PDF rendu
+  status          String    @default("RECEIVED") // RECEIVED | REVIEWED | ACCEPTED | REJECTED | ARCHIVED
+  reviewedBy      String? // userId qui a traité la facture
+  reviewedAt      DateTime?
+  notes           String?
+  metadata        Json? // Données supplémentaires extraites du XML
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  Organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -5010,43 +5043,43 @@ model PeppolIncomingInvoice {
 // ═══════════════════════════════════════════════════════════
 
 model StandaloneInvoice {
-  id                String    @id @default(uuid())
-  organizationId    String
-  invoiceNumber     String    // Numéro de facture (ex: FAC-2026-001)
-  type              String    @default("OUTGOING") // OUTGOING (émise) | CREDIT_NOTE (note de crédit)
-  clientName        String    // Nom du client/entreprise
-  clientVat         String?   // Numéro TVA du client
-  clientEmail       String?   // Email du client
-  clientPhone       String?   // Téléphone du client
-  clientAddress     String?   // Adresse du client
-  description       String?   // Description / objet de la facture
-  status            String    @default("DRAFT") // DRAFT | SENT | PAID | OVERDUE | CANCELLED
-  issueDate         DateTime  @default(now()) // Date d'émission
-  dueDate           DateTime? // Date d'échéance
-  paidAt            DateTime? // Date de paiement
-  subtotal          Float     @default(0) // Montant HT
-  taxRate           Float     @default(21) // Taux TVA (%)
-  taxAmount         Float     @default(0) // Montant TVA
-  totalAmount       Float     @default(0) // Montant TTC
-  currency          String    @default("EUR")
-  notes             String?   // Notes internes
-  paymentTerms      String?   // Conditions de paiement
-  documentUrl       String?   // Lien vers le PDF généré
-  createdById       String?   // Utilisateur qui a créé
-  lines             Json?     // Lignes de facture [{description, quantity, unitPrice, taxRate, total}]
+  id             String    @id @default(uuid())
+  organizationId String
+  invoiceNumber  String // Numéro de facture (ex: FAC-2026-001)
+  type           String    @default("OUTGOING") // OUTGOING (émise) | CREDIT_NOTE (note de crédit)
+  clientName     String // Nom du client/entreprise
+  clientVat      String? // Numéro TVA du client
+  clientEmail    String? // Email du client
+  clientPhone    String? // Téléphone du client
+  clientAddress  String? // Adresse du client
+  description    String? // Description / objet de la facture
+  status         String    @default("DRAFT") // DRAFT | SENT | PAID | OVERDUE | CANCELLED
+  issueDate      DateTime  @default(now()) // Date d'émission
+  dueDate        DateTime? // Date d'échéance
+  paidAt         DateTime? // Date de paiement
+  subtotal       Float     @default(0) // Montant HT
+  taxRate        Float     @default(21) // Taux TVA (%)
+  taxAmount      Float     @default(0) // Montant TVA
+  totalAmount    Float     @default(0) // Montant TTC
+  currency       String    @default("EUR")
+  notes          String? // Notes internes
+  paymentTerms   String? // Conditions de paiement
+  documentUrl    String? // Lien vers le PDF généré
+  createdById    String? // Utilisateur qui a créé
+  lines          Json? // Lignes de facture [{description, quantity, unitPrice, taxRate, total}]
 
   // Peppol
-  peppolStatus      String?   // PENDING | PROCESSING | SENT | ERROR
-  peppolMessageId   String?
-  peppolError       String?
-  peppolSentAt      DateTime?
-  peppolRetryCount  Int       @default(0) // Nombre de tentatives d'envoi Peppol
-  peppolOdooInvoiceId Int?    // ID de la facture dans Odoo (pour retry)
+  peppolStatus        String? // PENDING | PROCESSING | SENT | ERROR
+  peppolMessageId     String?
+  peppolError         String?
+  peppolSentAt        DateTime?
+  peppolRetryCount    Int       @default(0) // Nombre de tentatives d'envoi Peppol
+  peppolOdooInvoiceId Int? // ID de la facture dans Odoo (pour retry)
 
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  Organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -5059,20 +5092,20 @@ model StandaloneInvoice {
 // ═══════════════════════════════════════════════════════════
 
 model InvoiceClient {
-  id                String    @id @default(uuid())
-  organizationId    String
-  name              String    // Nom du client/entreprise
-  vatNumber         String?   // Numéro TVA
-  email             String?   // Email
-  address           String?   // Adresse complète
-  phone             String?   // Téléphone
-  invoiceCount      Int       @default(1) // Nombre de factures créées
-  totalInvoiced     Float     @default(0) // Montant total facturé
+  id             String  @id @default(uuid())
+  organizationId String
+  name           String // Nom du client/entreprise
+  vatNumber      String? // Numéro TVA
+  email          String? // Email
+  address        String? // Adresse complète
+  phone          String? // Téléphone
+  invoiceCount   Int     @default(1) // Nombre de factures créées
+  totalInvoiced  Float   @default(0) // Montant total facturé
 
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  Organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, vatNumber])
   @@index([organizationId])
@@ -5084,52 +5117,52 @@ model InvoiceClient {
 // ═══════════════════════════════════════════════════════════
 
 model Expense {
-  id                String    @id @default(uuid())
-  organizationId    String
-  createdById       String?   // Utilisateur qui a enregistré la dépense
+  id             String  @id @default(uuid())
+  organizationId String
+  createdById    String? // Utilisateur qui a enregistré la dépense
 
   // Fournisseur
-  supplierName      String    // Nom du fournisseur/magasin
-  supplierVat       String?   // TVA du fournisseur
-  supplierAddress   String?   // Adresse du fournisseur
+  supplierName    String // Nom du fournisseur/magasin
+  supplierVat     String? // TVA du fournisseur
+  supplierAddress String? // Adresse du fournisseur
 
   // Montants
-  subtotal          Float     @default(0) // Montant HT
-  taxRate           Float     @default(21) // Taux TVA (%)
-  taxAmount         Float     @default(0) // Montant TVA
-  totalAmount       Float     @default(0) // Montant TTC
-  currency          String    @default("EUR")
+  subtotal    Float  @default(0) // Montant HT
+  taxRate     Float  @default(21) // Taux TVA (%)
+  taxAmount   Float  @default(0) // Montant TVA
+  totalAmount Float  @default(0) // Montant TTC
+  currency    String @default("EUR")
 
   // Catégorisation
-  category          String    @default("other") // fuel | material | tools | food | transport | office | telecom | insurance | other
-  description       String?   // Description / objet
-  reference         String?   // Numéro de ticket/facture fournisseur
+  category    String  @default("other") // fuel | material | tools | food | transport | office | telecom | insurance | other
+  description String? // Description / objet
+  reference   String? // Numéro de ticket/facture fournisseur
 
   // Dates
-  expenseDate       DateTime  @default(now()) // Date de la dépense
-  paidAt            DateTime? // Date de paiement effectif
+  expenseDate DateTime  @default(now()) // Date de la dépense
+  paidAt      DateTime? // Date de paiement effectif
 
   // Paiement
-  paymentMethod     String?   // cash | card | transfer | domiciliation
-  status            String    @default("PENDING") // PENDING | PAID | CANCELLED
+  paymentMethod String? // cash | card | transfer | domiciliation
+  status        String  @default("PENDING") // PENDING | PAID | CANCELLED
 
   // Pièce jointe (photo ticket)
-  receiptUrl        String?   // URL de l'image du ticket/reçu
-  receiptMimeType   String?   // Type MIME de l'image
+  receiptUrl      String? // URL de l'image du ticket/reçu
+  receiptMimeType String? // Type MIME de l'image
 
   // Données extraites par Gemini AI
-  aiExtracted       Boolean   @default(false) // true si les données ont été extraites par l'IA
-  aiConfidence      Float?    // Score de confiance IA (0-1)
-  aiRawResponse     String?   // Réponse brute de Gemini (pour debug)
+  aiExtracted   Boolean @default(false) // true si les données ont été extraites par l'IA
+  aiConfidence  Float? // Score de confiance IA (0-1)
+  aiRawResponse String? // Réponse brute de Gemini (pour debug)
 
   // Lien optionnel vers un chantier
-  chantierId        String?
-  notes             String?
+  chantierId String?
+  notes      String?
 
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  Organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([organizationId, category])
@@ -5152,20 +5185,20 @@ enum ArenaTournamentStatus {
 }
 
 enum ArenaTournamentFormat {
-  RANDOM_DRAW       // Mêlée / tirage aléatoire (pétanque conviviale)
-  ROUND_ROBIN       // Poules (chaque équipe joue contre toutes les autres)
+  RANDOM_DRAW // Mêlée / tirage aléatoire (pétanque conviviale)
+  ROUND_ROBIN // Poules (chaque équipe joue contre toutes les autres)
   SINGLE_ELIMINATION // Élimination directe
   DOUBLE_ELIMINATION // Double élimination (2 chances)
-  SWISS             // Système suisse (appariement par niveau)
-  CHAMPIONSHIP      // Championnat / saison complète
+  SWISS // Système suisse (appariement par niveau)
+  CHAMPIONSHIP // Championnat / saison complète
 }
 
 enum ArenaTeamType {
-  SOLO         // 1v1
-  DOUBLETTE    // 2v2
-  TRIPLETTE    // 3v3
-  QUADRETTE    // 4v4
-  CUSTOM       // Taille personnalisée
+  SOLO // 1v1
+  DOUBLETTE // 2v2
+  TRIPLETTE // 3v3
+  QUADRETTE // 4v4
+  CUSTOM // Taille personnalisée
 }
 
 enum ArenaMatchStatus {
@@ -5184,41 +5217,41 @@ enum ArenaEntryStatus {
 }
 
 model ArenaTournament {
-  id               String                  @id @default(cuid())
-  organizationId   String
-  creatorId        String
-  name             String
-  description      String?
-  sport            String                  @default("petanque") // petanque, football, volleyball, tennis, custom...
-  format           ArenaTournamentFormat   @default(RANDOM_DRAW)
-  status           ArenaTournamentStatus   @default(DRAFT)
-  teamType         ArenaTeamType           @default(DOUBLETTE)
-  playersPerTeam   Int                     @default(2)
-  maxTeams         Int?
-  maxPlayers       Int?
-  pointsToWin      Int                     @default(13) // ex: 13 points en pétanque
-  nbRounds         Int                     @default(5)
-  allowMixedTeams  Boolean                 @default(true)  // Doublettes + triplettes dans le même tournoi
-  withCourts       Boolean                 @default(true)   // Assignation de terrains
-  courtsCount      Int?                    // Nombre de terrains disponibles
-  location         String?
-  startsAt         DateTime?
-  endsAt           DateTime?
-  rules            String?                 // Règles spécifiques en texte libre
-  currentRound     Int                     @default(0)
-  isPublic         Boolean                 @default(true)   // Visible par tous ou seulement les membres
-  settings         Json?                   // Config sport-specific (ex: { "allowDraws": true, "tiebreaker": "goal_difference" })
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
+  id              String                @id @default(cuid())
+  organizationId  String
+  creatorId       String
+  name            String
+  description     String?
+  sport           String                @default("petanque") // petanque, football, volleyball, tennis, custom...
+  format          ArenaTournamentFormat @default(RANDOM_DRAW)
+  status          ArenaTournamentStatus @default(DRAFT)
+  teamType        ArenaTeamType         @default(DOUBLETTE)
+  playersPerTeam  Int                   @default(2)
+  maxTeams        Int?
+  maxPlayers      Int?
+  pointsToWin     Int                   @default(13) // ex: 13 points en pétanque
+  nbRounds        Int                   @default(5)
+  allowMixedTeams Boolean               @default(true) // Doublettes + triplettes dans le même tournoi
+  withCourts      Boolean               @default(true) // Assignation de terrains
+  courtsCount     Int? // Nombre de terrains disponibles
+  location        String?
+  startsAt        DateTime?
+  endsAt          DateTime?
+  rules           String? // Règles spécifiques en texte libre
+  currentRound    Int                   @default(0)
+  isPublic        Boolean               @default(true) // Visible par tous ou seulement les membres
+  settings        Json? // Config sport-specific (ex: { "allowDraws": true, "tiebreaker": "goal_difference" })
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 
-  Organization     Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  Creator          User                    @relation("ArenaTournamentCreator", fields: [creatorId], references: [id], onDelete: Cascade)
-  Rounds           ArenaRound[]
-  Matches          ArenaMatch[]
-  TeamEntries      ArenaTeamEntry[]
-  PlayerEntries    ArenaPlayerEntry[]
-  Courts           ArenaCourt[]
-  Standings        ArenaStanding[]
+  Organization  Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  Creator       User               @relation("ArenaTournamentCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  Rounds        ArenaRound[]
+  Matches       ArenaMatch[]
+  TeamEntries   ArenaTeamEntry[]
+  PlayerEntries ArenaPlayerEntry[]
+  Courts        ArenaCourt[]
+  Standings     ArenaStanding[]
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -5227,48 +5260,48 @@ model ArenaTournament {
 }
 
 model ArenaRound {
-  id             String          @id @default(cuid())
-  tournamentId   String
-  roundNumber    Int
-  name           String?         // "Tour 1", "Quart de finale", "Demi-finale", "Finale"
-  status         ArenaMatchStatus @default(SCHEDULED)
-  startsAt       DateTime?
-  completedAt    DateTime?
-  createdAt      DateTime        @default(now())
+  id           String           @id @default(cuid())
+  tournamentId String
+  roundNumber  Int
+  name         String? // "Tour 1", "Quart de finale", "Demi-finale", "Finale"
+  status       ArenaMatchStatus @default(SCHEDULED)
+  startsAt     DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime         @default(now())
 
-  Tournament     ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  Matches        ArenaMatch[]
+  Tournament ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  Matches    ArenaMatch[]
 
   @@unique([tournamentId, roundNumber])
   @@index([tournamentId])
 }
 
 model ArenaMatch {
-  id             String          @id @default(cuid())
-  tournamentId   String
-  roundId        String
-  courtId        String?
-  matchNumber    Int             // Numéro du match dans le tour
-  team1Id        String?         // Peut être null si TBD (bracket)
-  team2Id        String?
-  score1         Int?
-  score2         Int?
-  winnerId       String?         // ID de l'équipe gagnante
-  status         ArenaMatchStatus @default(SCHEDULED)
-  scheduledAt    DateTime?
-  startedAt      DateTime?
-  completedAt    DateTime?
-  notes          String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id           String           @id @default(cuid())
+  tournamentId String
+  roundId      String
+  courtId      String?
+  matchNumber  Int // Numéro du match dans le tour
+  team1Id      String? // Peut être null si TBD (bracket)
+  team2Id      String?
+  score1       Int?
+  score2       Int?
+  winnerId     String? // ID de l'équipe gagnante
+  status       ArenaMatchStatus @default(SCHEDULED)
+  scheduledAt  DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  notes        String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
-  Tournament     ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  Round          ArenaRound      @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  Court          ArenaCourt?     @relation(fields: [courtId], references: [id], onDelete: SetNull)
-  Team1          ArenaTeamEntry? @relation("ArenaMatchTeam1", fields: [team1Id], references: [id], onDelete: SetNull)
-  Team2          ArenaTeamEntry? @relation("ArenaMatchTeam2", fields: [team2Id], references: [id], onDelete: SetNull)
-  Winner         ArenaTeamEntry? @relation("ArenaMatchWinner", fields: [winnerId], references: [id], onDelete: SetNull)
-  Scores         ArenaMatchScore[]
+  Tournament ArenaTournament   @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  Round      ArenaRound        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  Court      ArenaCourt?       @relation(fields: [courtId], references: [id], onDelete: SetNull)
+  Team1      ArenaTeamEntry?   @relation("ArenaMatchTeam1", fields: [team1Id], references: [id], onDelete: SetNull)
+  Team2      ArenaTeamEntry?   @relation("ArenaMatchTeam2", fields: [team2Id], references: [id], onDelete: SetNull)
+  Winner     ArenaTeamEntry?   @relation("ArenaMatchWinner", fields: [winnerId], references: [id], onDelete: SetNull)
+  Scores     ArenaMatchScore[]
 
   @@index([tournamentId])
   @@index([roundId])
@@ -5278,35 +5311,35 @@ model ArenaMatch {
 }
 
 model ArenaMatchScore {
-  id           String   @id @default(cuid())
-  matchId      String
-  submitterId  String   // Qui a soumis le score
-  score1       Int
-  score2       Int
-  isValidated  Boolean  @default(false) // Validé par l'organisateur
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  matchId     String
+  submitterId String // Qui a soumis le score
+  score1      Int
+  score2      Int
+  isValidated Boolean  @default(false) // Validé par l'organisateur
+  createdAt   DateTime @default(now())
 
-  Match        ArenaMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  Submitter    User       @relation("ArenaScoreSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
+  Match     ArenaMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  Submitter User       @relation("ArenaScoreSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
 
   @@index([matchId])
 }
 
 model ArenaTeamEntry {
-  id             String          @id @default(cuid())
-  tournamentId   String
-  name           String
-  captainId      String?         // Référence vers ArenaTeamMember
-  status         ArenaEntryStatus @default(PENDING)
-  seed           Int?            // Position de tête de série
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id           String           @id @default(cuid())
+  tournamentId String
+  name         String
+  captainId    String? // Référence vers ArenaTeamMember
+  status       ArenaEntryStatus @default(PENDING)
+  seed         Int? // Position de tête de série
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
-  Tournament     ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  Tournament     ArenaTournament   @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   Members        ArenaTeamMember[]
-  MatchesAsTeam1 ArenaMatch[]    @relation("ArenaMatchTeam1")
-  MatchesAsTeam2 ArenaMatch[]    @relation("ArenaMatchTeam2")
-  MatchesWon     ArenaMatch[]    @relation("ArenaMatchWinner")
+  MatchesAsTeam1 ArenaMatch[]      @relation("ArenaMatchTeam1")
+  MatchesAsTeam2 ArenaMatch[]      @relation("ArenaMatchTeam2")
+  MatchesWon     ArenaMatch[]      @relation("ArenaMatchWinner")
   Standing       ArenaStanding?
 
   @@index([tournamentId])
@@ -5314,66 +5347,66 @@ model ArenaTeamEntry {
 }
 
 model ArenaTeamMember {
-  id          String         @id @default(cuid())
+  id          String   @id @default(cuid())
   teamEntryId String
   userId      String
-  isCaptain   Boolean        @default(false)
-  createdAt   DateTime       @default(now())
+  isCaptain   Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
-  TeamEntry   ArenaTeamEntry @relation(fields: [teamEntryId], references: [id], onDelete: Cascade)
-  User        User           @relation("ArenaTeamMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  TeamEntry ArenaTeamEntry @relation(fields: [teamEntryId], references: [id], onDelete: Cascade)
+  User      User           @relation("ArenaTeamMemberUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamEntryId, userId])
   @@index([userId])
 }
 
 model ArenaPlayerEntry {
-  id             String          @id @default(cuid())
-  tournamentId   String
-  userId         String
-  status         ArenaEntryStatus @default(PENDING)
-  createdAt      DateTime        @default(now())
+  id           String           @id @default(cuid())
+  tournamentId String
+  userId       String
+  status       ArenaEntryStatus @default(PENDING)
+  createdAt    DateTime         @default(now())
 
-  Tournament     ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  User           User            @relation("ArenaPlayerEntryUser", fields: [userId], references: [id], onDelete: Cascade)
+  Tournament ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  User       User            @relation("ArenaPlayerEntryUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([tournamentId, userId])
   @@index([tournamentId])
 }
 
 model ArenaCourt {
-  id           String          @id @default(cuid())
+  id           String   @id @default(cuid())
   tournamentId String
-  name         String          // "Terrain 1", "Terrain A"...
-  teamType     String          @default("DOUBLETTE") // DOUBLETTE (2v2) ou TRIPLETTE (3v3)
+  name         String // "Terrain 1", "Terrain A"...
+  teamType     String   @default("DOUBLETTE") // DOUBLETTE (2v2) ou TRIPLETTE (3v3)
   location     String?
-  isAvailable  Boolean         @default(true)
-  createdAt    DateTime        @default(now())
+  isAvailable  Boolean  @default(true)
+  createdAt    DateTime @default(now())
 
-  Tournament   ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  Matches      ArenaMatch[]
+  Tournament ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  Matches    ArenaMatch[]
 
   @@unique([tournamentId, name])
   @@index([tournamentId])
 }
 
 model ArenaStanding {
-  id             String          @id @default(cuid())
-  tournamentId   String
-  teamEntryId    String          @unique  // 1 standing par équipe
-  rank           Int             @default(0)
-  played         Int             @default(0)
-  won            Int             @default(0)
-  drawn          Int             @default(0)
-  lost           Int             @default(0)
-  pointsFor      Int             @default(0)
-  pointsAgainst  Int             @default(0)
-  bonusPoints    Int             @default(0)
-  totalPoints    Int             @default(0) // Calculé: won * pointsPerWin + drawn * pointsPerDraw + bonus
-  updatedAt      DateTime        @updatedAt
+  id            String   @id @default(cuid())
+  tournamentId  String
+  teamEntryId   String   @unique // 1 standing par équipe
+  rank          Int      @default(0)
+  played        Int      @default(0)
+  won           Int      @default(0)
+  drawn         Int      @default(0)
+  lost          Int      @default(0)
+  pointsFor     Int      @default(0)
+  pointsAgainst Int      @default(0)
+  bonusPoints   Int      @default(0)
+  totalPoints   Int      @default(0) // Calculé: won * pointsPerWin + drawn * pointsPerDraw + bonus
+  updatedAt     DateTime @updatedAt
 
-  Tournament     ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  TeamEntry      ArenaTeamEntry  @relation(fields: [teamEntryId], references: [id], onDelete: Cascade)
+  Tournament ArenaTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  TeamEntry  ArenaTeamEntry  @relation(fields: [teamEntryId], references: [id], onDelete: Cascade)
 
   @@index([tournamentId])
   @@index([tournamentId, totalPoints(sort: Desc)])

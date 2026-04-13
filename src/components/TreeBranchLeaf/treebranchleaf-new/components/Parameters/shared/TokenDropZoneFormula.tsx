@@ -37,7 +37,7 @@ const TokenDropZone: React.FC<TokenDropZoneProps> = ({
       
       return (
         <Tag 
-          key={index}
+          key={`item-${index}`}
           color="blue"
           closable={!disabled}
           onClose={removeToken}
@@ -52,7 +52,7 @@ const TokenDropZone: React.FC<TokenDropZoneProps> = ({
     if (token.startsWith('#marker.')) {
       return (
         <Tag 
-          key={index}
+          key={`item-${index}`}
           color="orange"
           closable={!disabled}
           onClose={removeToken}
@@ -72,7 +72,7 @@ const TokenDropZone: React.FC<TokenDropZoneProps> = ({
 
     return (
       <Tag 
-        key={index}
+        key={`item-${index}`}
         color={getTokenColor(token)}
         closable={!disabled}
         onClose={removeToken}

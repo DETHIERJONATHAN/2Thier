@@ -295,7 +295,7 @@ export const HeaderEditor: React.FC<HeaderEditorProps> = ({ section, onSave, onC
               Liens de navigation
             </label>
             {menuItems.map((item, index) => (
-              <Space key={index} style={{ display: 'flex', marginBottom: 8, width: '100%' }} align="start" direction="vertical">
+              <Space key={`item-${index}`} style={{ display: 'flex', marginBottom: 8, width: '100%' }} align="start" direction="vertical">
                 <Space style={{ width: '100%' }}>
                   <Input
                     placeholder="Label"

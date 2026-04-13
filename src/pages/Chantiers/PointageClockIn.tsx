@@ -523,7 +523,7 @@ const PointageClockIn: React.FC<PointageClockInProps> = ({
 
               {/* Photo preview */}
               <div style={{ borderRadius: 12, overflow: 'hidden', marginBottom: 16, border: '2px solid #d9d9d9' }}>
-                <img src={photo} alt="Photo pointage" style={{ width: '100%', display: 'block' }} />
+                <img loading="lazy" src={photo} alt="Photo pointage" style={{ width: '100%', display: 'block' }} />
               </div>
 
               {/* Data summary */}

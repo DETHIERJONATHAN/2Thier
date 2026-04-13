@@ -277,7 +277,7 @@ export const FooterEditor: React.FC<FooterEditorProps> = ({ section, onSave, onC
           Réseaux sociaux
         </label>
         {socialLinks.map((social, index) => (
-          <Space key={index} style={{ display: 'flex', marginBottom: 8 }}>
+          <Space key={`item-${index}`} style={{ display: 'flex', marginBottom: 8 }}>
             <Input
               placeholder="Plateforme"
               value={social.platform}

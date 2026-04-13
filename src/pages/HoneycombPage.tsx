@@ -92,8 +92,7 @@ const FeedCard: React.FC<{
         }}
       >
         {feed.favicon ? (
-          <img
-            src={feed.favicon}
+          <img loading="lazy" src={feed.favicon}
             alt=""
             style={{ width: 20, height: 20, borderRadius: 4, flexShrink: 0 }}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -145,8 +144,7 @@ const FeedCard: React.FC<{
             {/* Show bookmark image as banner if available */}
             {feed.imageUrl && (
               <div style={{ width: '100%', height: 140, overflow: 'hidden', background: SF.bg }}>
-                <img
-                  src={feed.imageUrl}
+                <img loading="lazy" src={feed.imageUrl}
                   alt=""
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }}
@@ -207,8 +205,7 @@ const FeedCard: React.FC<{
                       background: SF.bg,
                     }}
                   >
-                    <img
-                      src={item.imageUrl}
+                    <img loading="lazy" src={item.imageUrl}
                       alt=""
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       onError={(e) => {
@@ -285,8 +282,7 @@ const FeedCard: React.FC<{
                     background: SF.bg,
                   }}
                 >
-                  <img
-                    src={item.imageUrl}
+                  <img loading="lazy" src={item.imageUrl}
                     alt=""
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     onError={(e) => {

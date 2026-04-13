@@ -151,7 +151,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       case 'description':
         return (
           <Card
-            key={index}
+            key={`item-${index}`}
             size="small"
             hoverable
             style={{ marginBottom: 12 }}
@@ -180,7 +180,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       case 'fullSection':
         return (
           <Card
-            key={index}
+            key={`item-${index}`}
             title={`💡 Proposition ${index + 1}`}
             size="small"
             style={{ marginBottom: 16 }}
@@ -229,7 +229,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       case 'layout':
         return (
           <Card
-            key={index}
+            key={`item-${index}`}
             size="small"
             hoverable
             style={{ marginBottom: 12 }}
@@ -270,7 +270,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       case 'colors':
         return (
           <Card
-            key={index}
+            key={`item-${index}`}
             size="small"
             hoverable
             style={{ marginBottom: 12 }}
@@ -303,7 +303,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       default:
         return (
           <Card
-            key={index}
+            key={`item-${index}`}
             size="small"
             hoverable
             style={{ marginBottom: 12 }}

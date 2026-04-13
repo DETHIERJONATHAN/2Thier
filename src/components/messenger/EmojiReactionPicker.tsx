@@ -260,7 +260,8 @@ export const EmojiReactionPicker: React.FC<EmojiReactionPickerProps> = ({
               title={cat.label}
               className="cursor-pointer transition-colors"
               style={{
-                fontSize: 18, padding: '4px 6px', borderRadius: 8, flexShrink: 0,
+                fontSize: 18, padding: '6px 8px', borderRadius: 8, flexShrink: 0,
+                minWidth: 40, minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: !search && activeCategory === key ? '#e7f3ff' : 'transparent',
                 border: !search && activeCategory === key ? '1px solid ${FB.blue}' : '1px solid transparent',
               }}
@@ -282,7 +283,7 @@ export const EmojiReactionPicker: React.FC<EmojiReactionPickerProps> = ({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(9, 1fr)',
+          gridTemplateColumns: 'repeat(8, 1fr)',
           maxHeight: 250, overflowY: 'auto', gap: 0,
         }}
       >
@@ -291,7 +292,7 @@ export const EmojiReactionPicker: React.FC<EmojiReactionPickerProps> = ({
             key={`${emoji}-${i}`}
             onClick={() => handleSelect(emoji)}
             className="hover:scale-110 transition-transform hover:bg-gray-100 cursor-pointer"
-            style={{ fontSize: 24, lineHeight: 1, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', borderRadius: 6, padding: 0 }}
+            style={{ fontSize: 24, lineHeight: 1, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', borderRadius: 6, padding: 0 }}
           >
             <EmojiChar emoji={emoji} size={24} />
           </button>

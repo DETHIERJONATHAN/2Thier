@@ -842,26 +842,30 @@ router.post('/submit', submissionRateLimit, async (req, res) => {
     // Extraire le commercial référent depuis le paramètre 'ref'
     const referredBy = ref || null;
 
-    const submission = await prisma.publicFormSubmission.create({
-      data: {
-        formId: form.id,
-        organizationId: form.organizationId,
-        data: payload,
-        status: 'new',
-        ipAddress,
-        userAgent,
-        privacyConsent,
-        marketingConsent,
-        referredBy
-      }
-    });
+    const submission = await prisma.$transaction(async (tx) => {
+      const sub = await tx.publicFormSubmission.create({
+        data: {
+          formId: form.id,
+          organizationId: form.organizationId,
+          data: payload,
+          status: 'new',
+          ipAddress,
+          userAgent,
+          privacyConsent,
+          marketingConsent,
+          referredBy
+        }
+      });
 
-    await prisma.publicForm.update({
-      where: { id: form.id },
-      data: {
-        submissionCount: { increment: 1 },
-        lastSubmissionAt: new Date()
-      }
+      await tx.publicForm.update({
+        where: { id: form.id },
+        data: {
+          submissionCount: { increment: 1 },
+          lastSubmissionAt: new Date()
+        }
+      });
+
+      return sub;
     });
 
     // 🎯 Si autoPublishLeads est activé, créer automatiquement un lead

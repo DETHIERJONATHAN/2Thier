@@ -283,7 +283,7 @@ const SiteVitrine2Thier: React.FC = () => {
         <div style={{ background: '#f9fafb', padding: '60px 24px' }}>
           <Row gutter={[24, 24]} justify="center">
             {statsData.map((stat, index) => (
-              <Col xs={12} sm={12} md={6} key={index}>
+              <Col xs={12} sm={12} md={6} key={`item-${index}`}>
                 <Card 
                   bordered={false}
                   style={{ 
@@ -377,7 +377,7 @@ const SiteVitrine2Thier: React.FC = () => {
 
             <Row gutter={[32, 32]}>
               {values.map((value, index) => (
-                <Col xs={24} sm={12} md={6} key={index}>
+                <Col xs={24} sm={12} md={6} key={`item-${index}`}>
                   <Card bordered={false} style={{ textAlign: 'center', height: '100%' }}>
                     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                       <div>{value.icon}</div>
@@ -407,7 +407,7 @@ const SiteVitrine2Thier: React.FC = () => {
               <Col xs={24} sm={12} md={6} key={project.id}>
                 <Card
                   hoverable
-                  cover={<img alt={project.title} src={project.image} style={{ height: '200px', objectFit: 'cover' }} />}
+                  cover={<img loading="lazy" alt={project.title} src={project.image} style={{ height: '200px', objectFit: 'cover' }} />}
                   style={{ borderRadius: '12px', overflow: 'hidden' }}
                 >
                   <Space direction="vertical" size="small" style={{ width: '100%' }}>

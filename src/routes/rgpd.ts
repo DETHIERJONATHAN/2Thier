@@ -147,6 +147,15 @@ router.get('/export', async (req: Request, res: Response) => {
       }),
     ]);
 
+    // Additional data exports (#41 enhancement)
+    const [emailAccount, formSubmissions, userPhotos, bookmarks, documents] = await Promise.all([
+      db.emailAccount.findUnique({ where: { userId: user.id }, select: { emailAddress: true, createdAt: true } }).catch(() => null),
+      db.formSubmission.findMany({ where: { userId: user.id }, take: 5000, select: { id: true, data: true, createdAt: true } }).catch(() => []),
+      db.userPhoto.findMany({ where: { userId: user.id }, select: { url: true, category: true, createdAt: true } }).catch(() => []),
+      db.userBookmark.findMany({ where: { userId: user.id }, select: { url: true, title: true, createdAt: true } }).catch(() => []),
+      db.generatedDocument.findMany({ where: { createdBy: user.id }, take: 1000, select: { id: true, title: true, pdfUrl: true, createdAt: true } }).catch(() => []),
+    ]);
+
     const exportData = {
       _meta: {
         exportDate: new Date().toISOString(),
@@ -178,6 +187,11 @@ router.get('/export', async (req: Request, res: Response) => {
       calendar: calendarEvents,
       devices: pushSubscriptions,
       locations,
+      emailAccount,
+      formSubmissions: { count: (formSubmissions as any[]).length, items: formSubmissions },
+      photos: userPhotos,
+      bookmarks,
+      documents: { count: (documents as any[]).length, items: documents },
     };
 
     // Set download headers
@@ -240,6 +254,36 @@ router.post('/delete-account', async (req: Request, res: Response) => {
       db.notification.deleteMany({ where: { userId } }),
       db.pushSubscription.deleteMany({ where: { userId } }),
       db.userLocation.deleteMany({ where: { userId } }),
+    ]);
+
+    // 2b. Delete/anonymize additional personal data (#40 enhancement)
+    await Promise.all([
+      // Email & communications
+      db.emailAccount.deleteMany({ where: { userId } }),
+      db.googleMailWatch.deleteMany({ where: { userId } }).catch(() => {}),
+      db.email.updateMany({ where: { userId }, data: { userId: null as any } }),
+      // Telecom
+      db.telnyxUserConfig.deleteMany({ where: { userId } }).catch(() => {}),
+      db.telnyxSettings.deleteMany({ where: { userId } }).catch(() => {}),
+      db.telnyxPhoneNumber.updateMany({ where: { assignedUserId: userId }, data: { assignedUserId: null } }).catch(() => {}),
+      db.googleVoiceCall.updateMany({ where: { userId }, data: { userId: null } }).catch(() => {}),
+      db.googleVoiceSMS.updateMany({ where: { userId }, data: { userId: null } }).catch(() => {}),
+      // Calendar
+      db.calendarParticipant.deleteMany({ where: { userId } }).catch(() => {}),
+      db.calendarEvent.updateMany({ where: { ownerId: userId }, data: { ownerId: null } }).catch(() => {}),
+      // Documents & forms
+      db.generatedDocument.updateMany({ where: { createdBy: userId }, data: { createdBy: null } }).catch(() => {}),
+      db.productDocument.updateMany({ where: { uploadedById: userId }, data: { uploadedById: null as any } }).catch(() => {}),
+      // Org links
+      db.userOrganization.deleteMany({ where: { userId } }),
+      db.invitation.updateMany({ where: { invitedById: userId }, data: { invitedById: null as any } }).catch(() => {}),
+      // CRM (unassign, don't delete org data)
+      db.lead.updateMany({ where: { assignedToId: userId }, data: { assignedToId: null } }).catch(() => {}),
+      db.chantier.updateMany({ where: { responsableId: userId }, data: { responsableId: null } }).catch(() => {}),
+      db.chantier.updateMany({ where: { commercialId: userId }, data: { commercialId: null } }).catch(() => {}),
+      db.technician.updateMany({ where: { userId }, data: { userId: null } }).catch(() => {}),
+      // Audit trail (anonymize)
+      db.chantierHistory.updateMany({ where: { userId }, data: { userId: null } }).catch(() => {}),
     ]);
 
     // 3. Anonymize user profile (soft delete — keep ID for FK integrity)

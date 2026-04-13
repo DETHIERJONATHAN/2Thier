@@ -66,7 +66,7 @@ export const FormulaDiagnosticTool: React.FC = () => {
                             </div>
                             <div className="space-y-2">
                                 {testResults.map((result: unknown, index: number) => (
-                                    <div key={index} className={`p-2 border rounded ${result.isValid ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                                    <div key={`item-${index}`} className={`p-2 border rounded ${result.isValid ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
                                         <div className="flex items-center">
                                             <div className={`w-5 h-5 rounded-full flex items-center justify-center mr-2 ${result.isValid ? 'bg-green-500' : 'bg-red-500'}`}>
                                                 <span className="text-white text-xs">{result.isValid ? '✓' : '✗'}</span>

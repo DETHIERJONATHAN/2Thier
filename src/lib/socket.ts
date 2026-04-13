@@ -22,6 +22,29 @@ const userSockets = new Map<string, Set<string>>();
 // Map socketId -> userId
 const socketToUser = new Map<string, string>();
 
+// ── #25 WebSocket Rate Limiting ──
+const RATE_LIMIT_WINDOW_MS = 10_000; // 10 seconds
+const RATE_LIMIT_MAX_EVENTS = 50;    // max events per window
+const socketRateLimit = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(socketId: string): boolean {
+  const now = Date.now();
+  let record = socketRateLimit.get(socketId);
+  if (!record || now > record.resetAt) {
+    record = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    socketRateLimit.set(socketId, record);
+  }
+  record.count += 1;
+  return record.count > RATE_LIMIT_MAX_EVENTS;
+}
+// Clean stale rate limit entries every 60 seconds
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of socketRateLimit) {
+    if (now > record.resetAt) socketRateLimit.delete(key);
+  }
+}, 60_000);
+
 /**
  * Initialize Socket.io server with JWT authentication
  */
@@ -87,22 +110,34 @@ export function initializeSocketIO(httpServer: HTTPServer): SocketIOServer {
 
     // ── Event Handlers ──
 
+    // Rate-limit wrapper for all client events
+    const onRateLimited = (event: string, handler: (...args: any[]) => void) => {
+      socket.on(event, (...args: any[]) => {
+        if (isRateLimited(socket.id)) {
+          logger.warn(`[SOCKET] 🚫 Rate limited: user ${userId} event ${event}`);
+          socket.emit('error', { message: 'Rate limit exceeded, slow down' });
+          return;
+        }
+        handler(...args);
+      });
+    };
+
     // Join a specific conversation room
-    socket.on('join-conversation', (conversationId: string) => {
+    onRateLimited('join-conversation', (conversationId: string) => {
       if (typeof conversationId === 'string' && conversationId.length < 100) {
         socket.join(`conv:${conversationId}`);
       }
     });
 
     // Leave a conversation room
-    socket.on('leave-conversation', (conversationId: string) => {
+    onRateLimited('leave-conversation', (conversationId: string) => {
       if (typeof conversationId === 'string') {
         socket.leave(`conv:${conversationId}`);
       }
     });
 
     // Typing indicator
-    socket.on('typing', (data: { conversationId: string; isTyping: boolean }) => {
+    onRateLimited('typing', (data: { conversationId: string; isTyping: boolean }) => {
       if (!data?.conversationId || typeof data.isTyping !== 'boolean') return;
       socket.to(`conv:${data.conversationId}`).emit('user-typing', {
         userId,
@@ -112,7 +147,7 @@ export function initializeSocketIO(httpServer: HTTPServer): SocketIOServer {
     });
 
     // Mark messages as delivered
-    socket.on('messages-delivered', async (data: { conversationId: string; messageIds: string[] }) => {
+    onRateLimited('messages-delivered', async (data: { conversationId: string; messageIds: string[] }) => {
       if (!data?.conversationId || !Array.isArray(data.messageIds)) return;
       try {
         const now = new Date();
@@ -138,7 +173,7 @@ export function initializeSocketIO(httpServer: HTTPServer): SocketIOServer {
     });
 
     // Mark messages as read
-    socket.on('messages-read', async (data: { conversationId: string }) => {
+    onRateLimited('messages-read', async (data: { conversationId: string }) => {
       if (!data?.conversationId) return;
       try {
         const now = new Date();
@@ -170,7 +205,7 @@ export function initializeSocketIO(httpServer: HTTPServer): SocketIOServer {
     });
 
     // Custom status update
-    socket.on('update-status', async (data: { status?: string; emoji?: string; expiresInMinutes?: number }) => {
+    onRateLimited('update-status', async (data: { status?: string; emoji?: string; expiresInMinutes?: number }) => {
       try {
         const expiresAt = data.expiresInMinutes
           ? new Date(Date.now() + data.expiresInMinutes * 60000)
@@ -204,6 +239,7 @@ export function initializeSocketIO(httpServer: HTTPServer): SocketIOServer {
     // Disconnect
     socket.on('disconnect', (reason) => {
       logger.debug(`🔌 [SOCKET] User ${userId} disconnected (${reason})`);
+      socketRateLimit.delete(socket.id);
       const sockets = userSockets.get(userId);
       if (sockets) {
         sockets.delete(socket.id);

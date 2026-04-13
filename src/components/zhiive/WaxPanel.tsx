@@ -383,7 +383,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
       el.innerHTML = `
         <div style="width:40px;height:40px;border-radius:50%;background:${SF.overlayLightNearOpaque};border:3px solid ${SF.primary};box-shadow:0 0 0 8px ${SF.primary}30,0 4px 14px rgba(0,0,0,0.25);overflow:hidden;display:flex;align-items:center;justify-content:center;">
           ${selfUser?.avatarUrl
-            ? `<img src="${selfUser.avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;" />`
+            ? `<img loading="lazy" src="${selfUser.avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;" />`
             : `<span style="color:${SF.primary};font-weight:800;font-size:14px;">${(selfUser?.firstName || selfUser?.name || 'You')[0]}</span>`
           }
         </div>
@@ -768,7 +768,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
         const el = createEl(
           `<div style="width:44px;height:44px;background:${SF.primary};clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 12px ${SF.primary}60;">
             ${c.logoUrl
-              ? `<img src="${c.logoUrl}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;" />`
+              ? `<img loading="lazy" src="${c.logoUrl}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;" />`
               : `<span style="color:white;font-weight:800;font-size:14px;">${(c.name || '?')[0]}</span>`
             }
           </div>`,
@@ -789,7 +789,7 @@ const WaxPanel: React.FC<WaxPanelProps> = ({ api, currentUser }) => {
         const el = createEl(
           `<div style="width:32px;height:32px;border-radius:50%;border:2.5px solid ${borderColor};overflow:hidden;cursor:pointer;background:${SF.primary};display:flex;align-items:center;justify-content:center;box-shadow:0 1px 6px ${SF.overlayDark};">
             ${b.avatarUrl
-              ? `<img src="${b.avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;" />`
+              ? `<img loading="lazy" src="${b.avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;" />`
               : `<span style="color:white;font-size:12px;font-weight:700;">${(b.name || '?')[0]}</span>`
             }
           </div>`,

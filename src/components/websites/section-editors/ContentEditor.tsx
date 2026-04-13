@@ -201,7 +201,7 @@ export const ContentEditor: React.FC<ContentEditorProps> = ({ section, onSave, o
           Colonnes de contenu
         </label>
         {columns.map((column, index) => (
-          <Space key={index} style={{ display: 'flex', marginBottom: 12 }} align="baseline">
+          <Space key={`item-${index}`} style={{ display: 'flex', marginBottom: 12 }} align="baseline">
             <Input
               placeholder="Icône"
               value={column.icon}

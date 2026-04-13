@@ -166,3 +166,12 @@ function extractKey(keyOrUrl: string): string | null {
   }
   return keyOrUrl;
 }
+
+/**
+ * List all file keys in GCS bucket (for orphan detection).
+ */
+export async function listAllGCSFiles(prefix?: string): Promise<string[]> {
+  const bucket = getStorage().bucket(GCS_BUCKET);
+  const [files] = await bucket.getFiles({ prefix: prefix || undefined, maxResults: 10000 });
+  return files.map(f => f.name);
+}

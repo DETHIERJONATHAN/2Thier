@@ -166,7 +166,7 @@ const GoogleVoiceConfig: React.FC<GoogleVoiceConfigProps> = ({ onConfigurationCo
       <Steps current={currentStep} className="mb-8">
         {steps.map((step, index) => (
           <Step 
-            key={index}
+            key={`item-${index}`}
             title={step.title}
             description={step.description}
             icon={step.icon}

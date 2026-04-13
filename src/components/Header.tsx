@@ -424,7 +424,7 @@ const Header: React.FC = () => {
           {/* Logo et nom organisation */}
           <div className="flex items-center space-x-3">
             <Link to="/" className="flex items-center space-x-2 text-white hover:text-gray-200">
-              <img src="/logo.png" alt="Logo" className="h-8 w-8" />
+              <img loading="lazy" src="/logo.png" alt="Logo" className="h-8 w-8" />
               <span className="font-semibold">{currentOrganization?.name}</span>
             </Link>
           </div>

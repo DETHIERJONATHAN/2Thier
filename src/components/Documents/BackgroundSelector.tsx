@@ -168,8 +168,7 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
             backgroundColor: colors.bg,
           }}
         >
-          <img
-            src={svgUri}
+          <img loading="lazy" src={svgUri}
             alt={background.name}
             style={{
               position: 'absolute',

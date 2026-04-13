@@ -308,7 +308,7 @@ export const VoiceAnalysisPanel: React.FC<VoiceAnalysisPanelProps> = ({
           <Space direction="vertical" style={{ width: '100%' }}>
             {contextualSuggestions.map((suggestion, index) => (
               <Card
-                key={index}
+                key={`item-${index}`}
                 size="small"
                 style={{ 
                   backgroundColor: '#fffbe6',
@@ -349,7 +349,7 @@ export const VoiceAnalysisPanel: React.FC<VoiceAnalysisPanelProps> = ({
           <Space wrap>
             {keywordDetections.slice(0, 8).map((keyword, index) => (
               <Tag 
-                key={index}
+                key={`item-${index}`}
                 color="orange"
                 style={{ marginBottom: 4 }}
               >

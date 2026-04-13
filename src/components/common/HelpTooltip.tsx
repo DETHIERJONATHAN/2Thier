@@ -154,8 +154,7 @@ export const HelpTooltip: React.FC<HelpTooltipProps> = ({
     if (type === 'image') {
       return (
         <div style={{ maxWidth: 300 }}>
-          <img
-            src={String(image)}
+          <img loading="lazy" src={String(image)}
             alt="Aide"
             style={{
               maxWidth: '100%',
@@ -221,8 +220,7 @@ export const HelpTooltip: React.FC<HelpTooltipProps> = ({
           )}
           {image && (
             <div>
-              <img
-                src={String(image)}
+              <img loading="lazy" src={String(image)}
                 alt="Aide"
                 style={{
                   maxWidth: '100%',

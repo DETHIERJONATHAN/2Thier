@@ -113,7 +113,7 @@ const ValuesWidget = memo(({ onSelectValue }: ValuesWidgetProps) => {
                         <div key={val.value} className="relative group">
                             <button
                                 type="button"
-                                className="w-8 h-8 flex items-center justify-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 text-gray-800"
+                                className="w-10 h-10 flex items-center justify-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 text-gray-800"
                                 onClick={() => handleValueClick(val.value)}
                                 draggable="true"
                                 title={val.label}

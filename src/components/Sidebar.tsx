@@ -173,8 +173,7 @@ const Sidebar = ({ modules }: { modules: Array<ModuleNav> }) => {
   return (
     <aside className="w-64 bg-gray-100 h-screen flex flex-col border-r">
       <div className="px-6 py-6 flex items-center space-x-3">
-        <img 
-          src="/assets/2thier-logo.svg" 
+        <img loading="lazy" src="/assets/2thier-logo.svg" 
           alt="2Thier Logo" 
           className="h-8 w-8"
         />

@@ -187,7 +187,7 @@ export const CTAEditor: React.FC<CTAEditorProps> = ({ section, onSave, onCancel 
           Boutons d'action
         </label>
         {buttons.map((button, index) => (
-          <Space key={index} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+          <Space key={`item-${index}`} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
             <Input
               placeholder="Icône"
               value={button.icon}

@@ -1,4 +1,5 @@
 import { SF } from '../components/zhiive/ZhiiveTheme';
+import { Virtuoso } from 'react-virtuoso';
 /**
  * ============================================================
  *  PAGE UNIFIÉE DE MESSAGERIE — Zhiive Mail (@zhiive.com)
@@ -834,7 +835,7 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
           />
         </Tooltip>
         <Tooltip title={t('common.select')}>
-          <Button type="text" size="small" icon={<CaretDownOutlined />} style={{ minWidth: 20, padding: '0 2px' }} />
+          <Button type="text" size="small" icon={<CaretDownOutlined />} style={{ minWidth: 36, minHeight: 36, padding: '0 6px' }} />
         </Tooltip>
 
         {selectedIds.size > 0 ? (
@@ -915,7 +916,10 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
         </div>
       ) : (
         <>
-          {messages.map((msg) => {
+          <Virtuoso
+            style={{ flex: 1, minHeight: 300 }}
+            data={messages}
+            itemContent={(_index, msg) => {
             const isActive = selectedMessage?.id === msg.id && splitOpen;
             const isChecked = selectedIds.has(msg.id);
             const senderName = extractSenderName(msg.from || '');
@@ -1099,7 +1103,8 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
                 )}
               </div>
             );
-          })}
+          }}
+          />
 
           {/* Bouton charger plus */}
           {pageToken && (
@@ -1893,15 +1898,15 @@ document.querySelectorAll('img').forEach(function(img) {
           position: 'sticky', top: 0, zIndex: 10,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-            <Button type="text" size="small" icon={<MenuOutlined />} onClick={() => setMobileSidebarOpen(true)} />
+            <Button type="text" size="middle" icon={<MenuOutlined />} onClick={() => setMobileSidebarOpen(true)} style={{ minWidth: 44, minHeight: 44 }} />
             <span style={{ fontWeight: 600, fontSize: 14, color: SF.dark, whiteSpace: 'nowrap' }}>Mail</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 2, overflow: 'hidden', flex: 1, justifyContent: 'flex-end' }}>
-            <Button type="text" size="small" icon={<SearchOutlined />} onClick={() => setSearchExpanded(!searchExpanded)} style={{ color: searchExpanded ? SF.infoPrimary : undefined }} />
-            <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => loadMessages(currentLabelId, searchQuery)} loading={isLoading} />
-            <Button type="text" size="small" icon={<CloudSyncOutlined />} onClick={handleMailSync} loading={isSyncing} style={{ color: '#d48806' }} />
+            <Button type="text" size="middle" icon={<SearchOutlined />} onClick={() => setSearchExpanded(!searchExpanded)} style={{ color: searchExpanded ? SF.infoPrimary : undefined, minWidth: 44, minHeight: 44 }} />
+            <Button type="text" size="middle" icon={<ReloadOutlined />} onClick={() => loadMessages(currentLabelId, searchQuery)} loading={isLoading} style={{ minWidth: 44, minHeight: 44 }} />
+            <Button type="text" size="middle" icon={<CloudSyncOutlined />} onClick={handleMailSync} loading={isSyncing} style={{ color: '#d48806', minWidth: 44, minHeight: 44 }} />
           </div>
-          <EditOutlined onClick={() => handleCompose('new')} style={{ fontSize: 18, color: SF.infoPrimary, cursor: 'pointer', padding: 4, flexShrink: 0 }} />
+          <EditOutlined onClick={() => handleCompose('new')} style={{ fontSize: 18, color: SF.infoPrimary, cursor: 'pointer', padding: 10, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} />
         </div>
         {searchExpanded && (
           <div style={{ backgroundColor: '#f8f9fa', borderBottom: '1px solid #e0e0e0', padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, width: '100%' }}>

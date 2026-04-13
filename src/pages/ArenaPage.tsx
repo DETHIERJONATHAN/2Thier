@@ -8,6 +8,7 @@
  * - Scores en temps réel via Socket.IO
  */
 
+import { PageHelmet } from '../components/common/PageHelmet';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card, Button, Tag, Modal, Form, Input, Select, InputNumber,
@@ -20,7 +21,7 @@ import {
   ReloadOutlined, EnvironmentOutlined, CalendarOutlined,
   ThunderboltOutlined, CheckCircleOutlined, ClockCircleOutlined,
   DeleteOutlined, EditOutlined, EyeOutlined, UserAddOutlined,
-  CrownOutlined, ArrowUpOutlined,
+  CrownOutlined, ArrowUpOutlined, InfoCircleOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
@@ -398,6 +399,41 @@ const ArenaPage: React.FC = () => {
     }
   }, [stableApi, selectedTournament, fetchTournamentDetail, courtsForm, t, antMessage]);
 
+  // ── Court CRUD individuel ──
+
+  const handleAddSingleCourt = useCallback(async () => {
+    if (!selectedTournament) return;
+    const courts = selectedTournament.Courts || [];
+    const nextNum = courts.length + 1;
+    try {
+      await stableApi.post(`/api/arena/tournaments/${selectedTournament.id}/courts/add`, {
+        name: `Terrain ${nextNum}`,
+        teamType: 'DOUBLETTE',
+      });
+      fetchTournamentDetail(selectedTournament.id);
+    } catch (err: any) {
+      antMessage.error(err.message || t('messages.loadingError'));
+    }
+  }, [stableApi, selectedTournament, fetchTournamentDetail, t, antMessage]);
+
+  const handleUpdateCourt = useCallback(async (courtId: string, data: { name?: string; teamType?: string }) => {
+    try {
+      await stableApi.patch(`/api/arena/courts/${courtId}`, data);
+      if (selectedTournament) fetchTournamentDetail(selectedTournament.id);
+    } catch (err: any) {
+      antMessage.error(err.message || t('messages.loadingError'));
+    }
+  }, [stableApi, selectedTournament, fetchTournamentDetail, t, antMessage]);
+
+  const handleDeleteCourt = useCallback(async (courtId: string) => {
+    try {
+      await stableApi.delete(`/api/arena/courts/${courtId}`);
+      if (selectedTournament) fetchTournamentDetail(selectedTournament.id);
+    } catch (err: any) {
+      antMessage.error(err.message || t('messages.loadingError'));
+    }
+  }, [stableApi, selectedTournament, fetchTournamentDetail, t, antMessage]);
+
   const handleDeleteTournament = useCallback(async (id: string) => {
     try {
       await stableApi.delete(`/api/arena/tournaments/${id}`);
@@ -667,7 +703,7 @@ const ArenaPage: React.FC = () => {
             <TabPane tab={<span><TrophyOutlined /> {t('arena.standings')}</span>} key="standings">
               {renderStandingsTab()}
             </TabPane>
-            <TabPane tab={<span><TeamOutlined /> {t('arena.teams')}</span>} key="teams">
+            <TabPane tab={<span><TeamOutlined /> {t('arena.players')} ({(selectedTournament?.PlayerEntries?.length || 0) + (selectedTournament?.TeamEntries?.filter(te => te.status === 'CONFIRMED').length || 0)})</span>} key="teams">
               {renderTeamsTab()}
             </TabPane>
             <TabPane tab={<span><EnvironmentOutlined /> {t('arena.courts')}</span>} key="courts">
@@ -712,7 +748,7 @@ const ArenaPage: React.FC = () => {
               >
                 {/* Équipe 1 */}
                 <div style={{ flex: 1, textAlign: 'right', fontWeight: match.winnerId === match.team1Id ? 700 : 400 }}>
-                  {match.Team1?.name || t('arena.bye')}
+                  {selectedTournament?.format === 'RANDOM_DRAW' ? getTeamPlayerNames(match.Team1) : (match.Team1?.name || t('arena.bye'))}
                 </div>
 
                 {/* Score */}
@@ -759,7 +795,7 @@ const ArenaPage: React.FC = () => {
 
                 {/* Équipe 2 */}
                 <div style={{ flex: 1, textAlign: 'left', fontWeight: match.winnerId === match.team2Id ? 700 : 400 }}>
-                  {match.Team2?.name || t('arena.bye')}
+                  {selectedTournament?.format === 'RANDOM_DRAW' ? getTeamPlayerNames(match.Team2) : (match.Team2?.name || t('arena.bye'))}
                 </div>
 
                 {/* Terrain */}
@@ -845,14 +881,52 @@ const ArenaPage: React.FC = () => {
   // Onglet Équipes
   // ═══════════════════════════════════════════════
 
+  // Helper: noms des joueurs d'une équipe (pour affichage mêlée)
+  const getTeamPlayerNames = (team: { name: string; Members?: { id: string; isCaptain: boolean; User: { id: string; firstName: string; lastName: string; avatarUrl: string | null } }[] } | null): string => {
+    if (!team?.Members || team.Members.length === 0) return team?.name || '?';
+    return team.Members.map(m => `${m.User.firstName} ${m.User.lastName?.[0] || ''}.`).join(' · ');
+  };
+
   const renderTeamsTab = () => {
     const teams = selectedTournament?.TeamEntries || [];
     const players = selectedTournament?.PlayerEntries || [];
+    const isMelee = selectedTournament?.format === 'RANDOM_DRAW';
 
+    if (teams.length === 0 && players.length === 0) return <Empty description={t('arena.noTeams')} />;
+
+    // ── Mode mêlée : liste numérotée de joueurs individuels ──
+    if (isMelee && players.length > 0) {
+      return (
+        <div>
+          <div style={{ marginBottom: 10, padding: '8px 12px', borderRadius: SF.radius, background: `${SF.primary}08`, border: `1px solid ${SF.primary}20`, fontSize: 12 }}>
+            <TeamOutlined /> {players.filter(p => p.status === 'CONFIRMED').length} {t('arena.players')} {t('arena.confirmed').toLowerCase()}
+          </div>
+          <List
+            dataSource={players}
+            renderItem={(p, idx) => (
+              <List.Item>
+                <List.Item.Meta
+                  avatar={
+                    <Space size={8}>
+                      <span style={{ color: SF.textSecondary, minWidth: 24, textAlign: 'right', display: 'inline-block' }}>{idx + 1}.</span>
+                      <Avatar src={p.User.avatarUrl}>{p.User.firstName?.[0]}</Avatar>
+                    </Space>
+                  }
+                  title={`${p.User.firstName} ${p.User.lastName}`}
+                />
+                <Tag color={p.status === 'CONFIRMED' ? 'green' : 'orange'}>
+                  {t(`arena.${p.status.toLowerCase()}`)}
+                </Tag>
+              </List.Item>
+            )}
+          />
+        </div>
+      );
+    }
+
+    // ── Mode équipe formée : liste des équipes avec membres ──
     return (
       <div>
-        {teams.length === 0 && players.length === 0 && <Empty description={t('arena.noTeams')} />}
-
         {teams.length > 0 && (
           <List
             dataSource={teams}
@@ -906,13 +980,18 @@ const ArenaPage: React.FC = () => {
 
         {players.length > 0 && (
           <>
-            <Divider>{t('arena.players')} ({t('arena.registerPlayer')})</Divider>
+            <Divider>{t('arena.players')}</Divider>
             <List
               dataSource={players}
-              renderItem={p => (
+              renderItem={(p, idx) => (
                 <List.Item>
                   <List.Item.Meta
-                    avatar={<Avatar src={p.User.avatarUrl}>{p.User.firstName?.[0]}</Avatar>}
+                    avatar={
+                      <Space size={8}>
+                        <span style={{ color: SF.textSecondary, minWidth: 24, textAlign: 'right', display: 'inline-block' }}>{idx + 1}.</span>
+                        <Avatar src={p.User.avatarUrl}>{p.User.firstName?.[0]}</Avatar>
+                      </Space>
+                    }
                     title={`${p.User.firstName} ${p.User.lastName}`}
                   />
                   <Tag color={p.status === 'CONFIRMED' ? 'green' : 'orange'}>
@@ -933,39 +1012,105 @@ const ArenaPage: React.FC = () => {
 
   const renderCourtsTab = () => {
     const courts = selectedTournament?.Courts || [];
-    if (courts.length === 0) {
-      return (
-        <Empty description={t('arena.courts')}>
-          <Button icon={<PlusOutlined />} onClick={() => setShowCourtsModal(true)}>
-            {t('arena.addCourts')}
-          </Button>
-        </Empty>
-      );
-    }
+    const activeCount = courts.filter(c => c.teamType !== 'IDLE').length;
+    const doublCount = courts.filter(c => c.teamType === 'DOUBLETTE').length;
+    const triplCount = courts.filter(c => c.teamType === 'TRIPLETTE').length;
 
     return (
-      <Row gutter={[12, 12]}>
-        {courts.map(court => (
-          <Col key={court.id} xs={12} sm={8} md={6}>
+      <div>
+        {/* Résumé */}
+        {courts.length > 0 && (
+          <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: SF.radius, background: `${SF.primary}08`, border: `1px solid ${SF.primary}20`, fontSize: 12 }}>
+            <TeamOutlined /> {courts.length} terrains · {activeCount} actifs
+            {doublCount > 0 && ` · ${doublCount} doublette(s)`}
+            {triplCount > 0 && ` · ${triplCount} triplette(s)`}
+          </div>
+        )}
+
+        {courts.length === 0 && (
+          <Empty description={t('arena.noCourts')} style={{ padding: 16 }} />
+        )}
+
+        <Row gutter={[12, 12]}>
+          {courts.map(court => {
+            const isIdle = court.teamType === 'IDLE';
+            return (
+              <Col key={court.id} xs={12} sm={8} md={6}>
+                <Card
+                  size="small"
+                  style={{
+                    borderRadius: SF.radius,
+                    borderColor: isIdle ? SF.border : (court.isAvailable ? SF.success : SF.fire),
+                    opacity: isIdle ? 0.55 : 1,
+                    position: 'relative',
+                  }}
+                >
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    <Text strong><EnvironmentOutlined /> {court.name}</Text>
+                    <Select
+                      size="small"
+                      value={court.teamType}
+                      onChange={(val) => handleUpdateCourt(court.id, { teamType: val })}
+                      style={{ width: '100%' }}
+                    >
+                      <Select.Option value="DOUBLETTE">{t('arena.teamTypes.DOUBLETTE')} (2v2)</Select.Option>
+                      <Select.Option value="TRIPLETTE">{t('arena.teamTypes.TRIPLETTE')} (3v3)</Select.Option>
+                      <Select.Option value="IDLE">{t('common.inactive')}</Select.Option>
+                    </Select>
+                    {!isIdle && (
+                      <Badge
+                        status={court.isAvailable ? 'success' : 'processing'}
+                        text={court.isAvailable ? t('common.available') : t('common.inUse')}
+                      />
+                    )}
+                  </Space>
+                  <Popconfirm
+                    title={t('arena.deleteCourtConfirm')}
+                    onConfirm={() => handleDeleteCourt(court.id)}
+                    okText={t('common.delete')}
+                    cancelText={t('common.cancel')}
+                  >
+                    <Button
+                      type="text" danger size="small"
+                      icon={<DeleteOutlined />}
+                      style={{ position: 'absolute', top: 4, right: 4 }}
+                    />
+                  </Popconfirm>
+                </Card>
+              </Col>
+            );
+          })}
+          {/* Carte + Ajouter */}
+          <Col xs={12} sm={8} md={6}>
             <Card
               size="small"
+              hoverable
+              onClick={handleAddSingleCourt}
               style={{
                 borderRadius: SF.radius,
-                borderColor: court.isAvailable ? SF.success : SF.fire,
+                borderStyle: 'dashed',
+                borderColor: SF.primary,
+                minHeight: 100,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', background: `${SF.primary}05`,
               }}
             >
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Text strong><EnvironmentOutlined /> {court.name}</Text>
-                {court.location && <Text style={{ fontSize: 12, color: SF.textSecondary }}>{court.location}</Text>}
-                <Badge
-                  status={court.isAvailable ? 'success' : 'processing'}
-                  text={court.isAvailable ? t('common.available') : t('common.inUse')}
-                />
-              </Space>
+              <div style={{ textAlign: 'center' }}>
+                <PlusOutlined style={{ fontSize: 22, color: SF.primary }} />
+                <div style={{ fontSize: 12, color: SF.primary, marginTop: 4 }}>{t('arena.addCourt')}</div>
+              </div>
             </Card>
           </Col>
-        ))}
-      </Row>
+        </Row>
+
+        {/* Bouton proposition intelligente */}
+        <div style={{ marginTop: 12 }}>
+          <Button size="small" icon={<ThunderboltOutlined />}
+            onClick={() => setShowCourtsModal(true)}>
+            {t('arena.propose')}
+          </Button>
+        </div>
+      </div>
     );
   };
 
@@ -997,31 +1142,31 @@ const ArenaPage: React.FC = () => {
           isPublic: true,
         }}
       >
-        <Form.Item name="name" label={t('arena.tournament')} rules={[{ required: true }]}>
+        <Form.Item name="name" label={<>{t('arena.tournament')} <Tooltip title={t('arena.tooltips.name')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>} rules={[{ required: true }]}>
           <Input placeholder={t('arena.tournament')} />
         </Form.Item>
 
-        <Form.Item name="description" label={t('common.description')}>
+        <Form.Item name="description" label={<>{t('common.description')} <Tooltip title={t('arena.tooltips.description')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>}>
           <TextArea rows={2} />
         </Form.Item>
 
         <Row gutter={16}>
           <Col span={8}>
-            <Form.Item name="sport" label={t('arena.sport')}>
+            <Form.Item name="sport" label={<>{t('arena.sport')} <Tooltip title={t('arena.tooltips.sport')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>}>
               <Select>
                 {SPORTS.map(s => <Select.Option key={s} value={s}>{t(`arena.sports.${s}`)}</Select.Option>)}
               </Select>
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item name="format" label={t('arena.format')}>
+            <Form.Item name="format" label={<>{t('arena.format')} <Tooltip title={t('arena.tooltips.format')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>}>
               <Select>
                 {FORMATS.map(f => <Select.Option key={f} value={f}>{t(`arena.formats.${f}`)}</Select.Option>)}
               </Select>
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item name="teamType" label={t('arena.teamType')}>
+            <Form.Item name="teamType" label={<>{t('arena.teamType')} <Tooltip title={t('arena.tooltips.teamType')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>}>
               <Select onChange={(val) => {
                 const sizes: Record<string, number> = { SOLO: 1, DOUBLETTE: 2, TRIPLETTE: 3, QUADRETTE: 4 };
                 if (sizes[val]) createForm.setFieldsValue({ playersPerTeam: sizes[val] });
@@ -1039,34 +1184,41 @@ const ArenaPage: React.FC = () => {
             </Form.Item>
           </Col>
           <Col span={6}>
-            <Form.Item name="pointsToWin" label={t('arena.pointsToWin')}>
+            <Form.Item name="pointsToWin" label={<>{t('arena.pointsToWin')} <Tooltip title={t('arena.tooltips.pointsToWin')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>}>
               <InputNumber min={1} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
           <Col span={6}>
-            <Form.Item name="maxTeams" label={t('arena.maxTeams')}>
-              <InputNumber min={2} style={{ width: '100%' }} />
+            <Form.Item noStyle shouldUpdate={(prev, next) => prev.format !== next.format}>
+              {({ getFieldValue }) => {
+                const isMelee = getFieldValue('format') === 'RANDOM_DRAW';
+                return (
+                  <Form.Item name="maxTeams" label={<>{isMelee ? t('arena.maxPlayers') : t('arena.maxTeams')} <Tooltip title={isMelee ? t('arena.tooltips.maxPlayers') : t('arena.tooltips.maxTeams')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>}>
+                    <InputNumber min={2} style={{ width: '100%' }} />
+                  </Form.Item>
+                );
+              }}
             </Form.Item>
           </Col>
           <Col span={6}>
-            <Form.Item name="nbRounds" label={t('arena.rounds')}>
+            <Form.Item name="nbRounds" label={<>{t('arena.rounds')} <Tooltip title={t('arena.tooltips.nbRounds')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>}>
               <InputNumber min={1} max={50} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
         </Row>
 
-        <Form.Item name="location" label={t('arena.location')}>
+        <Form.Item name="location" label={<>{t('arena.location')} <Tooltip title={t('arena.tooltips.location')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>}>
           <Input prefix={<EnvironmentOutlined />} />
         </Form.Item>
 
         <Row gutter={16}>
           <Col span={12}>
-            <Form.Item name="startsAt" label={t('common.startDate')}>
+            <Form.Item name="startsAt" label={<>{t('common.startDate')} <Tooltip title={t('arena.tooltips.startsAt')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>}>
               <DatePicker showTime format="DD/MM/YYYY HH:mm" style={{ width: '100%' }} />
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="endsAt" label={t('common.endDate')}>
+            <Form.Item name="endsAt" label={<>{t('common.endDate')} <Tooltip title={t('arena.tooltips.endsAt')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>}>
               <DatePicker showTime format="DD/MM/YYYY HH:mm" style={{ width: '100%' }} />
             </Form.Item>
           </Col>
@@ -1079,7 +1231,9 @@ const ArenaPage: React.FC = () => {
         <Row gutter={16}>
           <Col span={8}>
             <Form.Item name="allowMixedTeams" valuePropName="checked">
-              <Switch checkedChildren={t('arena.mixedTeams')} unCheckedChildren={t('arena.mixedTeams')} />
+              <Tooltip title={t('arena.tooltips.mixedTeams')}>
+                <Switch checkedChildren={t('arena.mixedTeams')} unCheckedChildren={t('arena.mixedTeams')} />
+              </Tooltip>
             </Form.Item>
           </Col>
           <Col span={8}>
@@ -1089,7 +1243,9 @@ const ArenaPage: React.FC = () => {
           </Col>
           <Col span={8}>
             <Form.Item name="isPublic" valuePropName="checked">
-              <Switch checkedChildren={t('arena.public')} unCheckedChildren={t('arena.private')} />
+              <Tooltip title={t('arena.tooltips.isPublic')}>
+                <Switch checkedChildren={t('arena.public')} unCheckedChildren={t('arena.private')} />
+              </Tooltip>
             </Form.Item>
           </Col>
         </Row>
@@ -1273,6 +1429,7 @@ const ArenaPage: React.FC = () => {
 
   return (
     <div style={{ padding: '0 16px 24px' }}>
+      <PageHelmet title="Arena" description="Tournois et compétitions Zhiive" />
       {/* Header */}
       <div style={{
         display: 'flex',

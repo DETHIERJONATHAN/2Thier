@@ -62,7 +62,7 @@ const FormulaTestTool: React.FC<FormulaTestToolProps> = ({ formula, initialValue
         <h3 className="text-sm font-medium mb-2">Séquence actuelle:</h3>
         <div className="p-2 bg-gray-50 border border-gray-200 rounded-md flex flex-wrap gap-2">
           {formula.sequence.map((item, index) => (
-            <span key={index} className={`px-2 py-1 rounded text-sm ${
+            <span key={`item-${index}`} className={`px-2 py-1 rounded text-sm ${
               item.type === 'field' ? 'bg-blue-100 border border-blue-300' :
               item.type === 'operator' ? 'bg-yellow-100 border border-yellow-300' :
               item.type === 'value' ? 'bg-green-100 border border-green-300' :

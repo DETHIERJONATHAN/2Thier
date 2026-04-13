@@ -173,7 +173,7 @@ export const IndividualCardRenderer: React.FC<IndividualCardRendererProps> = ({
               }}
             >
               {config.header.icon.startsWith('http') ? (
-                <img src={config.header.icon} alt="" style={{ width: config.header.iconSize || 24, height: config.header.iconSize || 24 }} />
+                <img loading="lazy" src={config.header.icon} alt="" style={{ width: config.header.iconSize || 24, height: config.header.iconSize || 24 }} />
               ) : (
                 <span>{config.header.icon}</span>
               )}

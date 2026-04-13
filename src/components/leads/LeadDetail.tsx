@@ -710,7 +710,7 @@ export default function LeadDetail({ leadId, onEdit, onDelete, onCall, onEmail, 
                     <div className="space-y-2">
                       {documents.map((doc, index) => (
                         <div
-                          key={index}
+                          key={`item-${index}`}
                           className={`flex items-center justify-between p-2 rounded ${index % 2 === 0 ? 'bg-blue-50/60' : 'bg-white border border-gray-100'}`}
                         >
                           <Space>

@@ -221,7 +221,7 @@ const AdvancedSelectTestPage: React.FC = () => {
                     <Space direction="vertical" style={{ width: '100%' }} size="large">
                         {testResults.map((result, index) => (
                             <Card 
-                                key={index}
+                                key={`item-${index}`}
                                 size="small"
                                 title={
                                     <Space>

@@ -1143,8 +1143,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
                   cursor: 'pointer',
                 }}
               >
-                <img
-                  src={photo.url}
+                <img loading="lazy" src={photo.url}
                   alt={photo.name}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   onClick={() => {
@@ -1527,8 +1526,7 @@ const TBLImageFieldWithAI: React.FC<TBLImageFieldWithAIProps> = React.memo(({
           // Fallback: image simple sans annotations
           return (
             <div style={{ textAlign: 'center', background: '#000', padding: 16, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <img 
-                src={imgSrc}
+              <img loading="lazy" src={imgSrc}
                 alt="Image plein écran" 
                 style={{ 
                   maxWidth: '100%', 

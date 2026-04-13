@@ -113,6 +113,13 @@ router.post('/avatar', async (req: AuthenticatedRequest, res: Response): Promise
     }
 
     const file = files.avatar;
+
+    // #7 MIME type validation
+    const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+      return res.status(400).json({ error: 'Type de fichier non autorisé. Formats acceptés : JPEG, PNG, GIF, WebP' });
+    }
+
     const avatarUrl = await saveUploadedFileToStorage(file, 'avatars', userId);
 
     // Save to UserPhoto collection
@@ -184,6 +191,13 @@ router.post('/cover', async (req: AuthenticatedRequest, res: Response): Promise<
     }
 
     const file = files.cover;
+
+    // #7 MIME type validation
+    const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+      return res.status(400).json({ error: 'Type de fichier non autorisé. Formats acceptés : JPEG, PNG, GIF, WebP' });
+    }
+
     const coverUrl = await saveUploadedFileToStorage(file, 'covers', userId);
 
     // Save to UserPhoto collection

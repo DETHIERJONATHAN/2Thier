@@ -123,8 +123,7 @@ const FieldRenderer: React.FC<FieldRendererProps> = ({ node, value, onChange }) 
           </label>
           {value && typeof value === 'object' && 'name' in value && (
             <div className="mt-2">
-              <img
-                src={URL.createObjectURL(value as File)}
+              <img loading="lazy" src={URL.createObjectURL(value as File)}
                 alt="Photo prise"
                 className="max-w-xs max-h-48 rounded border mt-2"
               />

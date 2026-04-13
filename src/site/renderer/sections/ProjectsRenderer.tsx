@@ -83,13 +83,12 @@ export const ProjectsRenderer: React.FC<ProjectsRendererProps> = ({ content, mod
               xs={24 / grid.columns.mobile} 
               sm={24 / grid.columns.tablet} 
               md={24 / grid.columns.desktop} 
-              key={index}
+              key={`item-${index}`}
             >
               <Card
                 hoverable
                 cover={
-                  <img 
-                    alt={project.title} 
+                  <img loading="lazy" alt={project.title} 
                     src={project.image} 
                     style={{ 
                       height: '200px', 

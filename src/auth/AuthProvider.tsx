@@ -63,7 +63,8 @@ const staticApi = {
     // Pour les cookies HTTP-only, on n'a pas besoin de token dans les headers
     // Le navigateur enverra automatiquement les cookies
     const response = await fetch(url.startsWith('/api') ? url : `/api${url}`, { 
-      credentials: 'include' // Important: inclure les cookies
+      credentials: 'include', // Important: inclure les cookies
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
     });
     if (!response.ok) {
         let rawText = 'Could not read error response body';
@@ -112,7 +113,7 @@ const staticApi = {
   post: async (url: string, body: unknown) => {
     // Pour les cookies HTTP-only, on n'a pas besoin de token dans les headers
     // Le navigateur enverra automatiquement les cookies
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
     const response = await fetch(url.startsWith('/api') ? url : `/api${url}`, {
       method: 'POST',
       headers,

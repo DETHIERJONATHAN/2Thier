@@ -637,7 +637,7 @@ export const CtaRenderer: React.FC<CtaRendererProps> = ({ content, mode = 'previ
             >
               {stats.map((stat: unknown, index: number) => (
                 <motion.div
-                  key={index}
+                  key={`item-${index}`}
                   whileHover={{ scale: 1.1 }}
                   style={{ textAlign: 'center' }}
                 >

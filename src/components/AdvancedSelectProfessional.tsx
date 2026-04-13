@@ -328,7 +328,7 @@ const AdvancedSelectProfessional: React.FC<Props> = ({
                                 <div style={{ marginTop: 8 }}>
                                     {validationResult.validations.map((validation, index) => (
                                         <Alert
-                                            key={index}
+                                            key={`item-${index}`}
                                             type={validation.severity === 'error' ? 'error' : 
                                                   validation.severity === 'warning' ? 'warning' : 'success'}
                                             message={validation.message}

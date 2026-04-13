@@ -199,7 +199,7 @@ const AdvancedSelectProfessional = ({
                 <Steps current={currentStep} size="small">
                     {steps.map((step, index) => (
                         <Step 
-                            key={index}
+                            key={`item-${index}`}
                             title={step.title}
                             description={step.description}
                             icon={step.icon}

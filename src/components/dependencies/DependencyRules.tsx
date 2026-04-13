@@ -136,7 +136,7 @@ const DependencyRules = ({ fieldId, initialRules = [], formValues = {}, onChange
         <div className="bg-gray-50 p-2 rounded border border-gray-200 mb-2">
           <ul className="text-xs text-gray-700 space-y-1">
             {rules.map((rule, index) => (
-              <li key={index} className="flex items-center">
+              <li key={`item-${index}`} className="flex items-center">
                 <span className="w-5 h-5 flex items-center justify-center bg-blue-100 text-blue-800 rounded-full mr-2">
                   {index + 1}
                 </span>

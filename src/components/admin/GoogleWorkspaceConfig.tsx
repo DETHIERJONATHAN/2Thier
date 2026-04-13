@@ -545,7 +545,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
                 <div>
                   {dnsRecords.mx.map((record: { priority: number; server: string }, index: number) => (
                     <DnsRecord 
-                      key={index}
+                      key={`item-${index}`}
                       type="MX" 
                       value={`${record.priority} ${record.server}`}
                       description={`✅ Configuré dans votre registrar - Serveur Google (priorité ${record.priority})`}
@@ -818,7 +818,7 @@ const GoogleWorkspaceConfig: React.FC<GoogleWorkspaceConfigProps> = ({
             />
             
             {getAllRedirectUris().map((uriConfig, index) => (
-              <RedirectUriItem key={index} config={uriConfig} />
+              <RedirectUriItem key={`item-${index}`} config={uriConfig} />
             ))}
             
             <Alert

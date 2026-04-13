@@ -33,6 +33,7 @@
 
 import { PrismaClient, Prisma } from '@prisma/client';
 import { logger } from './logger';
+import { encryptModelData, decryptModelData, decryptModelArray, getPIIModels, getPIIFields } from './pii-encryption';
 
 // ============================================================================
 // CONFIGURATION
@@ -137,7 +138,12 @@ function createPrismaInstance(): PrismaClient {
     log: config.logLevel,
     datasources: {
       db: {
-        url: buildDatabaseUrl(),
+        url: (() => {
+          const baseUrl = buildDatabaseUrl();
+          // #31 — Inject pool configuration via connection string
+          const sep = baseUrl.includes('?') ? '&' : '?';
+          return `${baseUrl}${sep}connection_limit=${config.connectionLimit}&pool_timeout=${config.poolTimeout}&connect_timeout=${config.connectTimeout}`;
+        })(),
       },
     },
   });
@@ -204,13 +210,13 @@ export async function connectDatabase(): Promise<void> {
  * ```
  */
 
-/** Maximum default take for findMany auto-limit via $extends */
-const MAX_DEFAULT_TAKE = 1000;
+/** Maximum default take for findMany auto-limit via $extends (#6) */
+const MAX_DEFAULT_TAKE = 500;
 
 const _basePrisma = createPrismaInstance();
 
 // $extends: auto-limit findMany calls that don't specify a `take` param
-export const db = _basePrisma.$extends({
+const _limitedPrisma = _basePrisma.$extends({
   query: {
     $allModels: {
       async findMany({ args, query }: { args: Record<string, unknown>; query: (args: Record<string, unknown>) => Promise<unknown> }) {
@@ -218,6 +224,73 @@ export const db = _basePrisma.$extends({
           args.take = MAX_DEFAULT_TAKE;
         }
         return query(args);
+      },
+    },
+  },
+}) as unknown as typeof _basePrisma;
+
+// $extends: PII field-level encryption (#44)
+// Encrypts PII fields on write (create/update), decrypts on read (findMany/findUnique/findFirst)
+export const db = _limitedPrisma.$extends({
+  query: {
+    user: {
+      async create({ args, query }) {
+        if (args.data) args.data = encryptModelData('User', args.data as Record<string, unknown>) as typeof args.data;
+        const result = await query(args);
+        return result ? decryptModelData('User', result as Record<string, unknown>) as typeof result : result;
+      },
+      async update({ args, query }) {
+        if (args.data) args.data = encryptModelData('User', args.data as Record<string, unknown>) as typeof args.data;
+        const result = await query(args);
+        return result ? decryptModelData('User', result as Record<string, unknown>) as typeof result : result;
+      },
+      async upsert({ args, query }) {
+        if (args.create) args.create = encryptModelData('User', args.create as Record<string, unknown>) as typeof args.create;
+        if (args.update) args.update = encryptModelData('User', args.update as Record<string, unknown>) as typeof args.update;
+        const result = await query(args);
+        return result ? decryptModelData('User', result as Record<string, unknown>) as typeof result : result;
+      },
+      async findUnique({ args, query }) {
+        const result = await query(args);
+        return result ? decryptModelData('User', result as Record<string, unknown>) as typeof result : result;
+      },
+      async findFirst({ args, query }) {
+        const result = await query(args);
+        return result ? decryptModelData('User', result as Record<string, unknown>) as typeof result : result;
+      },
+      async findMany({ args, query }) {
+        const results = await query(args);
+        return Array.isArray(results) ? decryptModelArray('User', results as Record<string, unknown>[]) as typeof results : results;
+      },
+    },
+    lead: {
+      async create({ args, query }) {
+        if (args.data) args.data = encryptModelData('Lead', args.data as Record<string, unknown>) as typeof args.data;
+        const result = await query(args);
+        return result ? decryptModelData('Lead', result as Record<string, unknown>) as typeof result : result;
+      },
+      async update({ args, query }) {
+        if (args.data) args.data = encryptModelData('Lead', args.data as Record<string, unknown>) as typeof args.data;
+        const result = await query(args);
+        return result ? decryptModelData('Lead', result as Record<string, unknown>) as typeof result : result;
+      },
+      async upsert({ args, query }) {
+        if (args.create) args.create = encryptModelData('Lead', args.create as Record<string, unknown>) as typeof args.create;
+        if (args.update) args.update = encryptModelData('Lead', args.update as Record<string, unknown>) as typeof args.update;
+        const result = await query(args);
+        return result ? decryptModelData('Lead', result as Record<string, unknown>) as typeof result : result;
+      },
+      async findUnique({ args, query }) {
+        const result = await query(args);
+        return result ? decryptModelData('Lead', result as Record<string, unknown>) as typeof result : result;
+      },
+      async findFirst({ args, query }) {
+        const result = await query(args);
+        return result ? decryptModelData('Lead', result as Record<string, unknown>) as typeof result : result;
+      },
+      async findMany({ args, query }) {
+        const results = await query(args);
+        return Array.isArray(results) ? decryptModelArray('Lead', results as Record<string, unknown>[]) as typeof results : results;
       },
     },
   },

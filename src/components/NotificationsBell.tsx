@@ -391,10 +391,10 @@ const NotificationsBell = () => {
                 flexShrink: 0,
               }}>
                 {bm.imageUrl ? (
-                  <img src={bm.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  <img loading="lazy" src={bm.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : bm.favicon ? (
-                  <img src={bm.favicon} alt="" style={{ width: 20, height: 20 }}
+                  <img loading="lazy" src={bm.favicon} alt="" style={{ width: 20, height: 20 }}
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
                   <GlobalOutlined style={{ fontSize: 18, color: FB.placeholderIcon }} />

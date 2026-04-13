@@ -56,28 +56,6 @@ function shuffleArray<T>(array: T[]): T[] {
 // ──────────────────────────────────────────────
 
 /**
- * Tirage aléatoire simple (mêlée pétanque) :
- * Mélange les équipes et crée des matchs 1v2, 3v4, etc.
- * Si nombre impair, la dernière équipe est "exempt" (bye).
- */
-function generateRandomDraw(teams: TeamForDraw[]): GeneratedMatch[] {
-  const shuffled = shuffleArray(teams);
-  const matches: GeneratedMatch[] = [];
-  let matchNumber = 1;
-
-  for (let i = 0; i < shuffled.length; i += 2) {
-    matches.push({
-      matchNumber,
-      team1Id: shuffled[i].id,
-      team2Id: i + 1 < shuffled.length ? shuffled[i + 1].id : null, // bye
-    });
-    matchNumber++;
-  }
-
-  return matches;
-}
-
-/**
  * Round-Robin avec distribution en journées (circle method).
  * 
  * Pour N équipes (N pair) : N-1 journées, N/2 matchs par journée.
@@ -332,6 +310,13 @@ export async function generateRound(tournamentId: string): Promise<{
 
     const nbRounds = tournament.nbRounds || 5;
 
+    // Respecter la configuration des terrains définie par l'organisateur
+    // Terrains actifs (non-IDLE), dans l'ordre configuré
+    const activeCourts = courts.filter(c => (c as { teamType?: string }).teamType !== 'IDLE');
+    const N = playerIds.length;
+
+    logger.info(`[ARENA] RANDOM_DRAW: ${N} joueurs, ${activeCourts.length} terrains actifs`);
+
     const result = await db.$transaction(async (tx) => {
       let firstRoundId = '';
       let totalMatches = 0;
@@ -353,15 +338,41 @@ export async function generateRound(tournamentId: string): Promise<{
         let playerIdx = 0;
         let matchNumber = 1;
 
-        for (const court of courts) {
-          const teamSize = (court as { teamType?: string }).teamType === 'TRIPLETTE' ? 3 : 2;
-          const playersNeeded = teamSize * 2;
+        for (const court of activeCourts) {
+          const courtType = (court as { teamType?: string }).teamType;
+          const baseTeamSize = courtType === 'TRIPLETTE' ? 3 : 2;
+          const remaining = shuffled.length - playerIdx;
 
-          if (playerIdx + playersNeeded > shuffled.length) break;
+          // Il faut au minimum 2 joueurs pour faire un match (1v1)
+          if (remaining < 2) break;
 
-          const team1Players = shuffled.slice(playerIdx, playerIdx + teamSize);
-          const team2Players = shuffled.slice(playerIdx + teamSize, playerIdx + playersNeeded);
-          playerIdx += playersNeeded;
+          // Calcul adaptatif : répartir les joueurs restants équitablement
+          // Si pas assez pour 2 équipes complètes, on fait des équipes asymétriques
+          const idealNeeded = baseTeamSize * 2;
+
+          let team1Size: number;
+          let team2Size: number;
+
+          if (remaining >= idealNeeded) {
+            // Assez de joueurs → équipes complètes (2v2 ou 3v3)
+            team1Size = baseTeamSize;
+            team2Size = baseTeamSize;
+          } else if (remaining >= baseTeamSize + 1) {
+            // Pas assez pour 2 équipes complètes, mais assez pour asymétrique
+            // Ex: 5 joueurs sur triplette → 3v2, 3 joueurs sur doublette → 2v1
+            team1Size = baseTeamSize;
+            team2Size = remaining - baseTeamSize;
+          } else {
+            // Moins que baseTeamSize+1 : répartir au mieux (ex: 3 joueurs → 2v1)
+            team1Size = Math.ceil(remaining / 2);
+            team2Size = remaining - team1Size;
+          }
+
+          if (team2Size < 1) break;
+
+          const team1Players = shuffled.slice(playerIdx, playerIdx + team1Size);
+          const team2Players = shuffled.slice(playerIdx + team1Size, playerIdx + team1Size + team2Size);
+          playerIdx += team1Size + team2Size;
 
           const team1 = await tx.arenaTeamEntry.create({
             data: { tournamentId, name: `M${r}-${court.name}-A`, status: 'CONFIRMED' },

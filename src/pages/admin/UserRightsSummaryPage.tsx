@@ -180,6 +180,8 @@ const UserRightsSummaryPage: React.FC = () => {
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [filteredOrganizations, setFilteredOrganizations] = useState<Organization[]>([]);
   
+  const { isMobile } = useScreenSize();
+  
   // États de chargement et d'erreur
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingData, setIsFetchingData] = useState(true);
@@ -726,8 +728,6 @@ const UserRightsSummaryPage: React.FC = () => {
     });
   }
 
-  const { isMobile } = useScreenSize();
-
   const cardStyle: React.CSSProperties = { background: FB.white, borderRadius: FB.radius, boxShadow: FB.shadow, marginBottom: 16, padding: isMobile ? 14 : 20 };
   const statCardStyle: React.CSSProperties = { background: FB.white, borderRadius: FB.radius, padding: isMobile ? 14 : 18, boxShadow: FB.shadow, flex: '1 1 180px', minWidth: isMobile ? '100%' : 180 };
   const statLabel: React.CSSProperties = { fontSize: 12, color: FB.textSecondary, marginBottom: 4 };
@@ -1038,7 +1038,7 @@ const UserRightsSummaryPage: React.FC = () => {
                           const isHighPrivilege = role.toLowerCase().includes('admin') || role.toLowerCase().includes('super');
                           return (
                             <Tag 
-                              key={index} 
+                              key={`item-${index}`} 
                               color={isHighPrivilege ? 'red' : 'blue'}
                               icon={isHighPrivilege ? <FireOutlined /> : <UserOutlined />}
                               style={{ padding: '6px 12px', fontSize: '14px' }}

@@ -419,8 +419,7 @@ const ModuleRenderer = ({
     }
     
     return (
-      <img
-        src={config.src}
+      <img loading="lazy" src={config.src}
         alt={config.alt || 'Image'}
         style={{
           width: '100%',
@@ -1029,8 +1028,7 @@ const ModuleRenderer = ({
     const website = interpolateVariables(config.website || '{org.website}', documentData, isEditing);
     
     const LogoBlock = config.showLogo !== false && config.logo && (
-      <img 
-        src={config.logo} 
+      <img loading="lazy" src={config.logo} 
         alt="Logo" 
         style={{ 
           width: logoSize, 
@@ -1216,7 +1214,7 @@ const ModuleRenderer = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', ...themeStyles }}>
           <div>
             {config.showLogo !== false && config.logo && (
-              <img src={config.logo} alt="Logo" style={{ width: config.logoSize || 60, height: 'auto', objectFit: 'contain', marginBottom: '8px' }} />
+              <img loading="lazy" src={config.logo} alt="Logo" style={{ width: config.logoSize || 60, height: 'auto', objectFit: 'contain', marginBottom: '8px' }} />
             )}
             <div style={{ fontWeight: 700, fontSize: '16px', color: labelColor }}>SOCIÉTÉ</div>
             <div style={{ fontWeight: 700, fontSize: nameFs, color: '#222' }}>{companyName}</div>
@@ -1245,7 +1243,7 @@ const ModuleRenderer = ({
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: `${logoGap}px`, ...themeStyles }}>
         {/* Logo à gauche des infos société */}
         {logoW > 0 && (
-          <img src={config.logo} alt="Logo" style={{ width: logoW, height: 'auto', objectFit: 'contain', flexShrink: 0 }} />
+          <img loading="lazy" src={config.logo} alt="Logo" style={{ width: logoW, height: 'auto', objectFit: 'contain', flexShrink: 0 }} />
         )}
 
         {/* Grille alignée : gauche = société, droite = client */}
@@ -1796,7 +1794,7 @@ const ModuleRenderer = ({
           flexWrap: 'wrap',
         }}>
           {services.map((service: { icon: string; label: string }, index: number) => (
-            <div key={index} style={{
+            <div key={`item-${index}`} style={{
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
@@ -1899,7 +1897,7 @@ const ModuleRenderer = ({
           </thead>
           <tbody>
             {items.map((item: { description: string; quantity: number | string; unitPrice: number; total: number }, index: number) => (
-              <tr key={index} style={{
+              <tr key={`item-${index}`} style={{
                 backgroundColor: index % 2 === 1 ? alternateRowColor : '#fff',
                 borderBottom: `1px solid ${borderColor}`,
               }}>
@@ -1956,7 +1954,7 @@ const ModuleRenderer = ({
           </div>
           <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px' }}>
             {conditions.map((condition: string, index: number) => (
-              <li key={index} style={{ marginBottom: '4px' }}>• {condition}</li>
+              <li key={`item-${index}`} style={{ marginBottom: '4px' }}>• {condition}</li>
             ))}
           </ul>
         </div>

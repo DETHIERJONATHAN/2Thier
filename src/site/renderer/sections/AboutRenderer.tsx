@@ -61,8 +61,7 @@ export const AboutRenderer: React.FC<AboutRendererProps> = ({ content }) => {
           <div style={{ textAlign: 'center' }}>
             {image && (
               <div style={{ marginBottom: '40px' }}>
-                <img
-                  src={image}
+                <img loading="lazy" src={image}
                   alt={title}
                   style={{
                     maxWidth: '100%',
@@ -91,8 +90,7 @@ export const AboutRenderer: React.FC<AboutRendererProps> = ({ content }) => {
           <Row gutter={[48, 48]} align="middle">
             <Col xs={24} md={12} style={{ order: imageOrder }}>
               {image && (
-                <img
-                  src={image}
+                <img loading="lazy" src={image}
                   alt={title}
                   style={{
                     width: '100%',
@@ -123,7 +121,7 @@ export const AboutRenderer: React.FC<AboutRendererProps> = ({ content }) => {
         {values && values.length > 0 && (
           <Row gutter={[24, 24]} style={{ marginTop: '60px' }}>
             {values.map((value, index) => (
-              <Col xs={24} sm={12} md={6} key={index}>
+              <Col xs={24} sm={12} md={6} key={`item-${index}`}>
                 <Card
                   bordered={false}
                   style={{

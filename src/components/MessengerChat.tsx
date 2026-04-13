@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { Avatar, Input, Modal, Form, DatePicker, TimePicker, message as antMessage, Tooltip, Dropdown, Drawer } from 'antd';
 import {
   MessageOutlined,
@@ -44,7 +45,7 @@ import { CustomStatusPicker } from './messenger/CustomStatusPicker';
 
 /** MSN Wizz icon — uses the actual wizz.png */
 const WizzIcon = ({ size = 20 }: { size?: number }) => (
-  <img src="/wizz.png" alt="Wizz" width={size} height={size} style={{ objectFit: 'contain' }} />
+  <img loading="lazy" src="/wizz.png" alt="Wizz" width={size} height={size} style={{ objectFit: 'contain' }} />
 );
 import { useAuth } from '../auth/useAuth';
 import { useTelnyxCall, type TelnyxEligibility } from '../hooks/useTelnyxCall';
@@ -978,7 +979,7 @@ const MessengerChat: React.FC = () => {
             padding: '8px 12px', borderBottom: `1px solid ${FB.border}`,
             display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
           }}>
-            <div role="button" tabIndex={0} onClick={goBackToList}
+            <div role="button" tabIndex={0} onClick={goBackToList} aria-label={t('common.back')}
               style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
               onMouseEnter={e => e.currentTarget.style.background = FB.hover}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -994,27 +995,27 @@ const MessengerChat: React.FC = () => {
             <div style={{ display: 'flex', gap: 4 }}>
               <div role="button" tabIndex={0} onClick={() => setShowSharedFiles(true)}
                 title="Fichiers partagés"
-                style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                style={{ width: 36, height: 36, minWidth: 44, minHeight: 44, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 onMouseEnter={e => e.currentTarget.style.background = FB.hover}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 <FolderOpenOutlined style={{ fontSize: 14, color: FB.blue }} />
               </div>
               <div role="button" tabIndex={0} onClick={() => startCall(activeConversationId, 'audio', convName)}
-                title={t('messenger.audioCall')}
-                style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                title={t('messenger.audioCall')} aria-label={t('messenger.audioCall')}
+                style={{ width: 36, height: 36, minWidth: 44, minHeight: 44, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 onMouseEnter={e => e.currentTarget.style.background = FB.hover}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 <PhoneOutlined style={{ fontSize: 14, color: FB.blue }} />
               </div>
               <div role="button" tabIndex={0} onClick={() => startCall(activeConversationId, 'video', convName)}
-                title={t('messenger.videoCall')}
-                style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                title={t('messenger.videoCall')} aria-label={t('messenger.videoCall')}
+                style={{ width: 36, height: 36, minWidth: 44, minHeight: 44, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 onMouseEnter={e => e.currentTarget.style.background = FB.hover}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 <VideoCameraOutlined style={{ fontSize: 14, color: FB.blue }} />
               </div>
-              <div role="button" tabIndex={0} onClick={() => { setIsListOpen(false); setActiveConversationId(null); }}
-                style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              <div role="button" tabIndex={0} onClick={() => { setIsListOpen(false); setActiveConversationId(null); }} aria-label={t('common.close')}
+                style={{ width: 36, height: 36, minWidth: 44, minHeight: 44, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 onMouseEnter={e => e.currentTarget.style.background = FB.hover}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 <CloseOutlined style={{ fontSize: 14, color: FB.textSecondary }} />
@@ -1999,67 +2000,72 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId, conversation, i
       </div>
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {messages.length === 0 && (
+      {messages.length === 0 ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 12px' }}>
           <div style={{ textAlign: 'center', padding: 20, color: FB.textSecondary, fontSize: 13 }}>
             <Avatar size={56} src={convAvatar} icon={isGroup ? <TeamOutlined /> : <UserOutlined />}
               style={{ backgroundColor: convAvatar ? undefined : FB.blue, marginBottom: 8 }} />
             <div style={{ fontWeight: 600, color: FB.text }}>{convName}</div>
             <div style={{ marginTop: 4 }}>{t('messenger.startWhispering')}</div>
           </div>
-        )}
-        {messages.map((msg, i) => {
-          const isMine = msg.senderId === userId;
-          const showAvatar = !isMine && (i === 0 || messages[i - 1].senderId !== msg.senderId);
-          const showName = !isMine && isGroup && showAvatar;
+        </div>
+      ) : (
+        <Virtuoso
+          style={{ flex: 1 }}
+          data={messages}
+          followOutput="smooth"
+          initialTopMostItemIndex={messages.length - 1}
+          itemContent={(i, msg) => {
+            const isMine = msg.senderId === userId;
+            const showAvatar = !isMine && (i === 0 || messages[i - 1].senderId !== msg.senderId);
+            const showName = !isMine && isGroup && showAvatar;
 
-          return (
-            <div key={msg.id} style={{
-              display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start',
-              alignItems: 'flex-end', gap: 6,
-              marginTop: (i > 0 && messages[i - 1].senderId !== msg.senderId) ? 8 : 0,
-            }}>
-              {!isMine && (
-                <div style={{ width: 28, flexShrink: 0 }}>
-                  {showAvatar && (
-                    <Avatar size={28} src={msg.sender.avatarUrl} icon={<UserOutlined />}
-                      style={{ backgroundColor: msg.sender.avatarUrl ? undefined : FB.blue }} />
-                  )}
-                </div>
-              )}
-              <div style={{ maxWidth: '70%' }}>
-                {showName && (
-                  <div style={{ fontSize: 11, color: FB.textSecondary, marginBottom: 2, paddingLeft: 12 }}>
-                    {msg.sender.firstName}
+            return (
+              <div style={{
+                display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start',
+                alignItems: 'flex-end', gap: 6, padding: '0 12px',
+                marginTop: (i > 0 && messages[i - 1].senderId !== msg.senderId) ? 8 : 1,
+              }}>
+                {!isMine && (
+                  <div style={{ width: 28, flexShrink: 0 }}>
+                    {showAvatar && (
+                      <Avatar size={28} src={msg.sender.avatarUrl} icon={<UserOutlined />}
+                        style={{ backgroundColor: msg.sender.avatarUrl ? undefined : FB.blue }} />
+                    )}
                   </div>
                 )}
-                <div style={{
-                  padding: '8px 12px', borderRadius: 18,
-                  background: isMine ? FB.msgBlueBg : FB.msgBg,
-                  color: isMine ? '#fff' : FB.text,
-                  fontSize: 14, lineHeight: '1.35', wordBreak: 'break-word',
-                }}>
-                  {msg.isDeleted ? (
-                    <span style={{ fontStyle: 'italic', opacity: 0.6 }}>{t('messenger.messageDeleted')}</span>
-                  ) : (
-                    msg.content
+                <div style={{ maxWidth: '70%' }}>
+                  {showName && (
+                    <div style={{ fontSize: 11, color: FB.textSecondary, marginBottom: 2, paddingLeft: 12 }}>
+                      {msg.sender.firstName}
+                    </div>
                   )}
-                </div>
-                {/* Show time on last message of a group */}
-                {(i === messages.length - 1 || messages[i + 1].senderId !== msg.senderId) && (
                   <div style={{
-                    fontSize: 10, color: FB.textSecondary, marginTop: 2,
-                    textAlign: isMine ? 'right' : 'left', paddingLeft: isMine ? 0 : 12, paddingRight: isMine ? 12 : 0,
+                    padding: '8px 12px', borderRadius: 18,
+                    background: isMine ? FB.msgBlueBg : FB.msgBg,
+                    color: isMine ? '#fff' : FB.text,
+                    fontSize: 14, lineHeight: '1.35', wordBreak: 'break-word',
                   }}>
-                    {formatTime(msg.createdAt)}
+                    {msg.isDeleted ? (
+                      <span style={{ fontStyle: 'italic', opacity: 0.6 }}>{t('messenger.messageDeleted')}</span>
+                    ) : (
+                      msg.content
+                    )}
                   </div>
-                )}
+                  {(i === messages.length - 1 || messages[i + 1].senderId !== msg.senderId) && (
+                    <div style={{
+                      fontSize: 10, color: FB.textSecondary, marginTop: 2,
+                      textAlign: isMine ? 'right' : 'left', paddingLeft: isMine ? 0 : 12, paddingRight: isMine ? 12 : 0,
+                    }}>
+                      {formatTime(msg.createdAt)}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-        <div ref={messagesEndRef} />
-      </div>
+            );
+          }}
+        />
+      )}
 
       {/* Input */}
       <div style={{

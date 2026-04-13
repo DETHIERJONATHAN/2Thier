@@ -341,7 +341,7 @@ export const NodeActionMenu: React.FC<NodeActionMenuProps> = ({
     <>
       <div
         ref={triggerRef}
-        className="flex items-center justify-center w-6 h-6 hover:bg-gray-100 rounded cursor-pointer opacity-60 hover:opacity-100"
+        className="flex items-center justify-center w-8 h-8 min-w-[44px] min-h-[44px] hover:bg-gray-100 rounded cursor-pointer opacity-60 hover:opacity-100"
         style={{ zIndex: 1000, position: 'relative' }}
         role="button" tabIndex={0} onClick={handleTriggerClick}
         onMouseDown={handleTriggerPointerDown}

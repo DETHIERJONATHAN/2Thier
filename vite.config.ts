@@ -25,48 +25,19 @@ export default defineConfig({
     }),
     
     // 📱 PWA pour cache agressif
+    // 📱 PWA — Service Worker unique (src/sw.ts via injectManifest)
+    // Note: public/sw.js supprimé pour éviter le conflit de deux SW
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: false, // 📱 Manifest servi dynamiquement par l'API selon le hostname
-      workbox: {
-  // 🔧 CORRECTION: Augmenter limite fichiers lourds (assets ~13MB)
-  maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, // 20MB au lieu de 2MB
-        
-        // 🚫 EXCLURE les requêtes API du Service Worker - NE JAMAIS CACHER
-        navigateFallbackDenylist: [/^\/api\//],
-        
-        // Cache strategy agressif
-        runtimeCaching: [
-          {
-            // 🚫 CRITIQUE: Les API doivent TOUJOURS aller au réseau
-            urlPattern: /^.*\/api\/.*/i,
-            handler: 'NetworkOnly',
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 an
-              }
-            }
-          },
-          {
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'images-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 jours
-              }
-            }
-          }
-        ]
-      }
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
+        // 🔧 Augmenter limite fichiers lourds (assets ~13MB)
+        maximumFileSizeToCacheInBytes: 20 * 1024 * 1024,
+      },
     }),
     
     // 📊 BUNDLE ANALYZER (en dev uniquement)

@@ -563,7 +563,7 @@ const ChantierInvoicesTab: React.FC<Props> = ({ chantierId, chantierAmount, isVa
           /* Mode édition du plan */
           <div>
             {billingPlan.map((item, index) => (
-              <div key={index} style={{
+              <div key={`item-${index}`} style={{
                 display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8, flexWrap: 'wrap',
                 padding: '10px 12px', background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0',
               }}>

@@ -1,10 +1,11 @@
+import { PageHelmet } from '../components/common/PageHelmet';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '../auth/useAuth';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useModuleNavigation } from '../contexts/WallNavigationContext';
 import { useZhiiveNav } from '../contexts/ZhiiveNavContext';
-import { Avatar, Spin, message, Modal, Form, Input, Dropdown } from 'antd';
+import { Avatar, Spin, Skeleton, message, Modal, Form, Input, Dropdown } from 'antd';
 import {
   UserOutlined, CameraOutlined, MailOutlined, PhoneOutlined,
   HomeOutlined, BankOutlined, TeamOutlined, CrownOutlined,
@@ -141,8 +142,7 @@ const PhotoCell: React.FC<{
       onMouseLeave={() => setHover(false)}
       onClick={onView}
     >
-      <img
-        src={photo.url}
+      <img loading="lazy" src={photo.url}
         alt=""
         style={{
           position: 'absolute', top: 0, left: 0,
@@ -378,7 +378,7 @@ const ProfilePage = () => {
 
   useEffect(() => {
     if (activeTab === 'media' && user) fetchMedia();
-  }, [activeTab, user, fetchMedia]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab, user, fetchMedia]);  
 
   /* ── Cover drag-to-reposition ────────────────────────────── */
   const handleCoverDragStart = useCallback((clientY: number) => {
@@ -719,7 +719,16 @@ const ProfilePage = () => {
   useEffect(() => { setActiveTab('about'); }, [feedMode]);
 
   if (userLoading || loading) {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}><Spin size="large" /></div>;
+    return (
+      <div style={{ minHeight: 400, padding: 24 }}>
+        <div style={{ height: 200, background: '#e8e8e8', borderRadius: 12, marginBottom: -40 }} />
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, padding: '0 24px', marginBottom: 24 }}>
+          <Skeleton.Avatar active size={96} />
+          <Skeleton active title={{ width: 200 }} paragraph={{ rows: 1, width: [160] }} />
+        </div>
+        <Skeleton active paragraph={{ rows: 3 }} style={{ padding: '0 24px' }} />
+      </div>
+    );
   }
 
   const displayRole = isViewingOther ? ((profile as unknown)?.role || 'user') : (user?.role || 'user');
@@ -759,6 +768,7 @@ const ProfilePage = () => {
 
   return (
     <>
+    <PageHelmet title="Profil" noIndex />
     <div style={{ background: FB.bg, minHeight: '100vh' }}>
 
       {/* ════════ TOP WHITE SECTION (cover + name + tabs) ════════ */}
@@ -1788,8 +1798,7 @@ const ProfilePage = () => {
                     }}
                   />
                 ) : (
-                  <img
-                    src={lightboxUrl}
+                  <img loading="lazy" src={lightboxUrl}
                     alt=""
                     onClick={e => e.stopPropagation()}
                     style={{

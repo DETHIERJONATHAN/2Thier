@@ -825,7 +825,7 @@ Avez-vous quelques minutes pour échanger à ce sujet ?"
                 >
                   <div className="space-y-3">
                     {aiSuggestions.map((suggestion, index) => (
-                      <div key={index} className="flex items-start space-x-3 p-3 bg-white rounded-xl border border-yellow-200 hover:shadow-md transition-shadow">
+                      <div key={`item-${index}`} className="flex items-start space-x-3 p-3 bg-white rounded-xl border border-yellow-200 hover:shadow-md transition-shadow">
                         <div className="w-6 h-6 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                           <Text className="text-yellow-600 text-xs">{index + 1}</Text>
                         </div>

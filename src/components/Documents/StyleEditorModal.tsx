@@ -404,8 +404,7 @@ const StyleEditorModal = ({ open, onClose, onSave, initialStyle, fieldLabel, fie
                   backgroundColor: 'rgba(24, 144, 255, 0.05)',
                   transition: isDragging ? 'none' : 'all 0.2s ease'
                 }}>
-                <img 
-                  src="https://via.placeholder.com/250x100/1890ff/ffffff?text=LOGO"
+                <img loading="lazy" src="https://via.placeholder.com/250x100/1890ff/ffffff?text=LOGO"
                   alt="Aperçu logo"
                   style={{
                     maxWidth: previewStyle.maxWidth || 250,

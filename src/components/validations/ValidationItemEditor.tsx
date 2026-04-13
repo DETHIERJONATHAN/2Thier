@@ -20,19 +20,8 @@ export const ValidationItemEditor: React.FC<ValidationItemEditorProps> = ({
   onToggleExpand,
   onDelete
 }) => {
-  // Vérifier que la validation est valide
-  if (!validation || !validation.id) {
-    logger.error("[ValidationItemEditor] Validation is undefined or missing ID");
-    return (
-      <div className="p-2 bg-red-50 text-red-800 text-xs rounded border border-red-200">
-        Erreur: Validation invalide ou corrompue
-      </div>
-    );
-  }
-
   // Initialiser avec le nom actuel ou "Nouvelle validation" par défaut
-  const initialName = validation.name || "Nouvelle validation";
-  logger.debug(`[ValidationItemEditor] 🏷️ Initialisation avec nom: "${initialName}" pour validation ${validation.id}`);
+  const initialName = validation?.name || "Nouvelle validation";
   const [name, setName] = useState(initialName);
   
   // État pour gérer l'affichage du mode test ou édition
@@ -44,7 +33,17 @@ export const ValidationItemEditor: React.FC<ValidationItemEditorProps> = ({
       logger.debug(`[ValidationItemEditor] 🔄 Mise à jour du nom local suite à changement: "${validation.name}"`);
       setName(validation.name);
     }
-  }, [validation?.name])
+  }, [validation?.name]);
+
+  // Vérifier que la validation est valide
+  if (!validation || !validation.id) {
+    logger.error("[ValidationItemEditor] Validation is undefined or missing ID");
+    return (
+      <div className="p-2 bg-red-50 text-red-800 text-xs rounded border border-red-200">
+        Erreur: Validation invalide ou corrompue
+      </div>
+    );
+  }
 
   const handleNameBlur = () => {
     if (validation && validation.id && name !== validation.name) {
@@ -194,7 +193,7 @@ export const ValidationItemEditor: React.FC<ValidationItemEditorProps> = ({
                   <div className="flex flex-wrap gap-2 mb-4">
                     <strong className="w-full text-xs text-gray-600 mb-1">Séquence à valider:</strong>
                     {validation.sequence.validationSequence.map((item, index) => (
-                      <span key={index} className={`text-xs px-3 py-1 rounded-md ${
+                      <span key={`item-${index}`} className={`text-xs px-3 py-1 rounded-md ${
                         item.type === 'field' ? 'bg-blue-100 text-blue-800' :
                         item.type === 'operator' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-green-100 text-green-800'
@@ -222,7 +221,7 @@ export const ValidationItemEditor: React.FC<ValidationItemEditorProps> = ({
                   <div className="flex flex-wrap gap-2">
                     <strong className="w-full text-xs text-gray-600 mb-1">Séquence de comparaison:</strong>
                     {validation.sequence.comparisonSequence.map((item, index) => (
-                      <span key={index} className={`text-xs px-3 py-1 rounded-md ${
+                      <span key={`item-${index}`} className={`text-xs px-3 py-1 rounded-md ${
                         item.type === 'field' ? 'bg-blue-100 text-blue-800' :
                         item.type === 'operator' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-green-100 text-green-800'

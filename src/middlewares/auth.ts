@@ -166,9 +166,20 @@ export const login = async (req: AuthenticatedRequest, res: Response) => {
     );
 
     // On retire passwordHash avant de renvoyer l'objet utilisateur
-    const { passwordHash, ...userWithoutPassword } = user;
+    const { passwordHash, mfaSecret, mfaBackupCodes, ...userWithoutSensitive } = user;
 
-    res.json({ token, user: userWithoutPassword });
+    // Si le 2FA est activé, ne pas encore accorder le token complet
+    if (user.mfaEnabled) {
+      // Token provisoire (5 min) uniquement pour la vérification MFA
+      const mfaPendingToken = jwt.sign(
+        { userId: user.id, roles: [user.role], mfaPending: true },
+        JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({ mfaRequired: true, mfaToken: mfaPendingToken });
+    }
+
+    res.json({ token, user: userWithoutSensitive });
 
   } catch (e) {
     logger.error('[Login] Erreur lors de la connexion:', e);

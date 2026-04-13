@@ -402,6 +402,15 @@ router.post('/upload', async (req: Request, res: Response) => {
     }
 
     const file = files.file;
+
+    // #7 MIME type validation
+    const ALLOWED_DOC_MIME = /^(image|video|audio)\//;
+    const ALLOWED_DOC_TYPES = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel', 'text/csv', 'text/plain'];
+    if (!ALLOWED_DOC_MIME.test(file.mimetype) && !ALLOWED_DOC_TYPES.includes(file.mimetype)) {
+      return res.status(400).json({ error: 'Type de fichier non autorisé' });
+    }
+
     const fileName = file.name;
     const mimeType = file.mimetype;
     const fileSize = file.size;
@@ -432,6 +441,7 @@ router.post('/upload', async (req: Request, res: Response) => {
           );
           folderId = folderResult.id;
         } catch {
+          // Folder creation failed, continue without folder
         }
 
         const driveFile = await driveService.uploadFile(
@@ -450,6 +460,7 @@ router.post('/upload', async (req: Request, res: Response) => {
           const shareResult = await driveService.makePublic(organizationId, driveFile.id, user.id);
           driveUrl = shareResult.webViewLink || driveUrl;
         } catch {
+          // Sharing failed, continue with existing URL
         }
       } catch (error: unknown) {
         logger.error('[ProductDocuments] ❌ Erreur upload Google Drive:', error);

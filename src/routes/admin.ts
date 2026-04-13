@@ -5,6 +5,7 @@ import { requireRole } from '../middlewares/requireRole';
 import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { logger } from '../lib/logger';
+import { listAllGCSFiles, deleteFile } from '../lib/storage';
 
 const prisma = db;
 const router = express.Router();
@@ -142,6 +143,134 @@ router.get('/mail/settings', async (req: Request, res: Response): Promise<void> 
     logger.error('Erreur lors de la récupération des paramètres mail:', error);
     res.status(500).json({ error: 'Erreur interne du serveur' });
   }
+});
+
+// ============================================================================
+// #42 — GCS ORPHAN CLEANUP
+// ============================================================================
+
+const GCS_URL_PREFIX = 'https://storage.googleapis.com/crm-2thier-uploads/';
+
+/**
+ * GET /api/admin/storage/orphans — List GCS files not referenced in DB.
+ * Super admin only. Returns orphan file keys.
+ */
+router.get('/storage/orphans', requireRole(['super_admin']), async (_req: Request, res: Response): Promise<void> => {
+  try {
+    // 1. Get all GCS files
+    const gcsFiles = await listAllGCSFiles();
+    logger.info(`[GCS-CLEANUP] Found ${gcsFiles.length} files in bucket`);
+
+    // 2. Collect all referenced URLs from DB
+    const referencedKeys = new Set<string>();
+
+    const addUrl = (url: string | null | undefined) => {
+      if (!url) return;
+      if (url.startsWith(GCS_URL_PREFIX)) {
+        referencedKeys.add(url.slice(GCS_URL_PREFIX.length));
+      } else if (url.startsWith('/uploads/')) {
+        referencedKeys.add(url.slice('/uploads/'.length));
+      }
+    };
+
+    const addJsonUrls = (json: unknown) => {
+      if (!json) return;
+      const str = typeof json === 'string' ? json : JSON.stringify(json);
+      const matches = str.match(/https?:\/\/storage\.googleapis\.com\/crm-2thier-uploads\/[^"'\s,\]]+/g);
+      if (matches) matches.forEach(m => addUrl(m));
+    };
+
+    // Query all models with file URL fields (batched)
+    const [users, orgs, leads, stories, wallPosts, wallComments, messages, 
+           photos, docs, chantiers, invoices, timeEntries, signatures, 
+           sparks, battles, capsules, events, moments, expenses] = await Promise.all([
+      prisma.user.findMany({ select: { avatarUrl: true, coverUrl: true } }),
+      prisma.organization.findMany({ select: { logoUrl: true, coverUrl: true } }),
+      prisma.lead.findMany({ select: { id: true } }), // lead has no direct file urls
+      prisma.story.findMany({ select: { mediaUrl: true, musicUrl: true } }),
+      prisma.wallPost.findMany({ select: { mediaUrls: true } }),
+      prisma.wallComment.findMany({ select: { mediaUrl: true } }),
+      prisma.message.findMany({ select: { mediaUrls: true } }),
+      prisma.userPhoto.findMany({ select: { url: true } }),
+      prisma.generatedDocument.findMany({ select: { pdfUrl: true, signatureUrl: true } }),
+      prisma.chantier.findMany({ select: { documentUrl: true } }),
+      prisma.chantierInvoice.findMany({ select: { documentUrl: true, peppolXmlUrl: true } }),
+      prisma.timeEntry.findMany({ select: { clockInPhotoUrl: true, clockOutPhotoUrl: true } }),
+      prisma.electronicSignature.findMany({ select: { signedPdfUrl: true } }),
+      prisma.spark.findMany({ select: { mediaUrl: true } }),
+      prisma.battleEntry.findMany({ select: { mediaUrl: true } }),
+      prisma.timeCapsule.findMany({ select: { mediaUrl: true } }),
+      prisma.socialEvent.findMany({ select: { coverUrl: true } }),
+      prisma.hiveLiveMomentMedia.findMany({ select: { url: true } }),
+      prisma.expense.findMany({ select: { receiptUrl: true } }),
+    ]);
+
+    // Extract URLs
+    users.forEach(u => { addUrl(u.avatarUrl); addUrl(u.coverUrl); });
+    orgs.forEach(o => { addUrl(o.logoUrl); addUrl(o.coverUrl); });
+    stories.forEach(s => { addUrl(s.mediaUrl); addUrl(s.musicUrl); });
+    wallPosts.forEach(p => addJsonUrls(p.mediaUrls));
+    wallComments.forEach(c => addUrl(c.mediaUrl));
+    messages.forEach(m => addJsonUrls(m.mediaUrls));
+    photos.forEach(p => addUrl(p.url));
+    docs.forEach(d => { addUrl(d.pdfUrl); addUrl(d.signatureUrl); });
+    chantiers.forEach(c => addUrl(c.documentUrl));
+    invoices.forEach(i => { addUrl(i.documentUrl); addUrl(i.peppolXmlUrl); });
+    timeEntries.forEach(t => { addUrl(t.clockInPhotoUrl); addUrl(t.clockOutPhotoUrl); });
+    signatures.forEach(s => addUrl(s.signedPdfUrl));
+    sparks.forEach(s => addUrl(s.mediaUrl));
+    battles.forEach(b => addUrl(b.mediaUrl));
+    capsules.forEach(c => addUrl(c.mediaUrl));
+    events.forEach(e => addUrl(e.coverUrl));
+    moments.forEach(m => addUrl(m.url));
+    expenses.forEach(e => addUrl(e.receiptUrl));
+
+    // 3. Find orphans
+    const orphans = gcsFiles.filter(key => !referencedKeys.has(key));
+
+    logger.info(`[GCS-CLEANUP] ${referencedKeys.size} referenced keys, ${orphans.length} orphans detected`);
+
+    res.json({
+      totalGCSFiles: gcsFiles.length,
+      referencedFiles: referencedKeys.size,
+      orphanCount: orphans.length,
+      orphans: orphans.slice(0, 200), // limit response size
+    });
+  } catch (error) {
+    logger.error('[GCS-CLEANUP] Error listing orphans:', error);
+    res.status(500).json({ error: 'Failed to list orphans' });
+  }
+});
+
+/**
+ * DELETE /api/admin/storage/orphans — Delete orphan files from GCS.
+ * Body: { keys: string[] } — list of keys to delete.
+ */
+router.delete('/storage/orphans', requireRole(['super_admin']), async (req: Request, res: Response): Promise<void> => {
+  const { keys } = req.body as { keys?: string[] };
+  if (!keys || !Array.isArray(keys) || keys.length === 0) {
+    res.status(400).json({ error: 'keys array is required' });
+    return;
+  }
+
+  // Safety limit
+  if (keys.length > 500) {
+    res.status(400).json({ error: 'Maximum 500 keys per request' });
+    return;
+  }
+
+  const results = { deleted: 0, failed: 0 };
+  for (const key of keys) {
+    try {
+      await deleteFile(key);
+      results.deleted++;
+    } catch {
+      results.failed++;
+    }
+  }
+
+  logger.info(`[GCS-CLEANUP] Deleted ${results.deleted} orphans (${results.failed} failed)`);
+  res.json(results);
 });
 
 export default router;

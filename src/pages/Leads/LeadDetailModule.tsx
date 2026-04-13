@@ -760,7 +760,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
                   {documents.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {documents.map((doc: { name: string; type: string }, index: number) => (
-                        <Card key={index} size="small" className="cursor-pointer hover:shadow-md">
+                        <Card key={`item-${index}`} size="small" className="cursor-pointer hover:shadow-md">
                           <div className="flex items-center space-x-3">
                             <FileTextOutlined className="text-blue-500 text-xl" />
                             <div>

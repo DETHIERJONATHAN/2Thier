@@ -1,6 +1,7 @@
+import { PageHelmet } from '../components/common/PageHelmet';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Spin, App, Modal, InputNumber, DatePicker, Tooltip, Switch, Image,
+  Spin, Skeleton, App, Modal, InputNumber, DatePicker, Tooltip, Switch, Image,
 } from 'antd';
 import {
   PlusOutlined, SearchOutlined, FileTextOutlined, CheckCircleOutlined,
@@ -1058,6 +1059,7 @@ const FacturePage: React.FC = () => {
 
   return (
     <div style={{ width: '100%', minHeight: '100vh', background: FB.bg }}>
+      <PageHelmet title="Factures" description="Gestion de vos factures et documents" noIndex />
 
       {/* ── Header Card (Facebook style) ── */}
       <FBCard style={{ borderRadius: 0, marginBottom: 0, padding: isMobile ? '12px 16px' : '20px 24px' }}>
@@ -1482,9 +1484,10 @@ const FacturePage: React.FC = () => {
         {activeTab !== 'expenses' && activeTab !== 'accounting' && (
         <>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 24 }}>
-            <Spin size="large" />
-            <div style={{ color: FB.textSecondary, marginTop: 12 }}>Chargement des factures...</div>
+          <div style={{ padding: 16 }}>
+            <Skeleton active title={{ width: '60%' }} paragraph={{ rows: 2 }} style={{ marginBottom: 16 }} />
+            <Skeleton active title={{ width: '45%' }} paragraph={{ rows: 2 }} style={{ marginBottom: 16 }} />
+            <Skeleton active title={{ width: '55%' }} paragraph={{ rows: 2 }} />
           </div>
         ) : invoices.length === 0 ? (
           <FBCard style={{ textAlign: 'center', padding: 48 }}>

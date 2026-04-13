@@ -472,7 +472,7 @@ export const AIAssistantChat: React.FC<AIAssistantChatProps> = ({
           <Space wrap style={{ marginTop: 4 }}>
             {suggestions.map((suggestion, index) => (
               <Tag 
-                key={index}
+                key={`item-${index}`}
                 color="blue"
                 style={{ cursor: 'pointer', fontSize: 11 }}
                 onClick={() => handleSuggestionClick(suggestion)}

@@ -41,7 +41,7 @@ export const isImageIcon = (icon?: string): boolean => {
 export const renderProductIcon = (icon?: string, size: number = 16): React.ReactNode => {
   if (!icon) return null;
   if (isImageIcon(icon)) {
-    return <img src={icon} alt="" style={{ width: size, height: size, objectFit: 'contain', verticalAlign: 'middle', borderRadius: 2 }} />;
+    return <img loading="lazy" src={icon} alt="" style={{ width: size, height: size, objectFit: 'contain', verticalAlign: 'middle', borderRadius: 2 }} />;
   }
   return <span style={{ fontSize: size }}>{icon}</span>;
 };
@@ -133,7 +133,7 @@ const IconPickerContent: React.FC<{
         <div>
           {isImageIcon(value) && (
             <div style={{ textAlign: 'center', marginBottom: 8, padding: 8, background: '#f5f5f5', borderRadius: 8 }}>
-              <img src={value} alt="Icône actuelle" style={{ width: 48, height: 48, objectFit: 'contain' }} />
+              <img loading="lazy" src={value} alt="Icône actuelle" style={{ width: 48, height: 48, objectFit: 'contain' }} />
             </div>
           )}
           <Upload

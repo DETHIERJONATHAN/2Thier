@@ -167,7 +167,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
                 <Space size="middle">
                   {socialData.links.map((item: unknown, index: number) => (
                     <motion.a
-                      key={index}
+                      key={`item-${index}`}
                       href={item.url || '#'}
                       target={item.openInNewTab !== false ? '_blank' : '_self'}
                       rel={item.openInNewTab !== false ? 'noopener noreferrer' : undefined}
@@ -383,7 +383,7 @@ export const FooterRenderer: React.FC<FooterRendererProps> = ({ content }) => {
           {copyright?.legalLinks && copyright.legalLinks.length > 0 && (
             <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
               {copyright.legalLinks.map((link: unknown, index: number) => (
-                <React.Fragment key={index}>
+                <React.Fragment key={`item-${index}`}>
                   {index > 0 && <span style={{ color: SF.overlayLightActive }}>•</span>}
                   <a
                     href={link.url || '#'}

@@ -665,7 +665,7 @@ const UniversalPanel: React.FC<UniversalPanelProps> = ({ value = {}, onChange, r
               </Upload>
               {localValues.displayIcon && typeof localValues.displayIcon === 'string' && (localValues.displayIcon as string).startsWith('data:image') && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <img src={localValues.displayIcon as string} alt="Icône" style={{ width: 24, height: 24, borderRadius: 4 }} />
+                  <img loading="lazy" src={localValues.displayIcon as string} alt="Icône" style={{ width: 24, height: 24, borderRadius: 4 }} />
                   <Text type="secondary" style={{ fontSize: 12 }}>Icône personnalisée chargée</Text>
                 </div>
               )}

@@ -510,7 +510,7 @@ const UsersAdminPageNew: React.FC = () => {
             fontWeight: 700, fontSize: 18, flexShrink: 0, overflow: 'hidden',
           }}>
             {user.avatarUrl
-              ? <img src={user.avatarUrl} alt="" style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} />
+              ? <img loading="lazy" src={user.avatarUrl} alt="" style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} />
               : getInitials(user)}
           </div>
 

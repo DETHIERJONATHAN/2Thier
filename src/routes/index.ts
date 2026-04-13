@@ -95,6 +95,7 @@ import pushRoutes from './push'; // 🔔 Routes Push Notifications
 import zhiiveRoutes from './zhiive'; // 🌊 Routes Zhiive — Réseau Social Nouvelle Génération
 import hiveLiveRoutes from './hive-live'; // 🐝 Routes Hive Live — Ligne de vie interactive
 import globalSearchRoutes from './globalSearch'; // 🔍 Recherche universelle globale
+import mfaRoutes from './mfa'; // 🔐 2FA/MFA TOTP
 import { authenticateToken, fetchFullUser } from '../middleware/auth'; // 🔐 Middleware auth pour TBL
 
 const apiRouter = Router();
@@ -115,6 +116,8 @@ apiRouter.use('/', miscRoutes);
 // Routes de profil utilisateur
 apiRouter.use('/profile', profileRoutes);
 
+// Routes 2FA/MFA
+apiRouter.use('/mfa', mfaRoutes);
 
 // Route de déconnexion directe (attendue par le frontend)
 apiRouter.post('/logout', logout);

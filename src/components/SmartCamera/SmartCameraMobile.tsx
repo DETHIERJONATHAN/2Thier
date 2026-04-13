@@ -914,7 +914,7 @@ const SmartCameraMobile: React.FC<SmartCameraMobileProps> = ({
         {/* Photos capturées */}
         {photos.map((photo, index) => (
           <Card
-            key={index}
+            key={`item-${index}`}
             size="small"
             style={{ 
               background: '#1a1a1a',

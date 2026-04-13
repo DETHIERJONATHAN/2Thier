@@ -18,6 +18,9 @@
  *    POST /api/postal/emails/:id/read → Marquer lu/non lu
  *    GET  /api/postal/folders      → Liste des dossiers
  *    POST /api/postal/inbound      → Webhook réception (appelé par Postal)
+ *    POST /api/postal/bounce       → Webhook bounce/delivery failure (Postal)
+ *    GET  /api/postal/suppressions → Liste des adresses supprimées
+ *    DELETE /api/postal/suppressions/:email → Retirer une suppression
  * ============================================================
  */
 
@@ -56,7 +59,6 @@ async function isPostalApiConfigured(): Promise<boolean> {
     postalApiVerified = contentType.includes('application/json');
     if (!postalApiVerified) {
       logger.warn(`⚠️ [POSTAL] API REST non fonctionnelle (${resp.status}, content-type: ${contentType}) — utilisation SMTP direct`);
-    } else {
     }
   } catch {
     logger.warn('⚠️ [POSTAL] API REST inaccessible — utilisation SMTP direct');
@@ -130,6 +132,28 @@ router.post('/send', authMiddleware, async (req: AuthenticatedRequest, res) => {
     }
 
     const fromEmail = emailAccount.emailAddress;
+
+    // ─── Vérifier les suppressions (bounce) ───
+    const allRecipients = [
+      ...(Array.isArray(to) ? to : [to]),
+      ...(cc ? (Array.isArray(cc) ? cc : [cc]) : []),
+      ...(bcc ? (Array.isArray(bcc) ? bcc : [bcc]) : []),
+    ].map((e: string) => e.trim().toLowerCase());
+
+    const suppressions = await db.emailSuppression.findMany({
+      where: { email: { in: allRecipients } },
+      select: { email: true, reason: true },
+    });
+
+    if (suppressions.length > 0) {
+      const suppressedList = suppressions.map(s => s.email);
+      logger.warn(`⚠️ [POSTAL] Envoi bloqué vers adresses supprimées: ${suppressedList.join(', ')}`);
+      return res.status(422).json({
+        error: 'Certains destinataires sont supprimés (bounce)',
+        suppressedEmails: suppressedList,
+        message: 'Ces adresses ont généré des bounces. Retirez-les ou levez la suppression.',
+      });
+    }
     let messageId: string | undefined;
 
     const usePostalApi = await isPostalApiConfigured();
@@ -627,6 +651,221 @@ router.post('/inbound', async (req, res) => {
       success: false,
       error: error instanceof Error ? error.message : 'Erreur inconnue',
     });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+//  POST /api/postal/bounce
+//  Webhook appelé par Postal pour les bounces et delivery failures.
+//  Supporte les événements : MessageBounced, MessageDeliveryFailed, MessageHeld
+//  PAS d'authentification utilisateur — sécurisé par secret webhook.
+// ─────────────────────────────────────────────────────────────
+router.post('/bounce', async (req, res) => {
+  try {
+    const webhookSecret = process.env.POSTAL_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const token = (req.headers['x-webhook-token'] as string) || (req.query.token as string);
+      if (token !== webhookSecret) {
+        logger.warn('⚠️ [POSTAL] Bounce webhook: token invalide');
+      }
+    }
+
+    const { event, payload } = req.body || {};
+
+    if (!event || !payload) {
+      return res.status(200).json({ status: 'ignored', reason: 'no_event_or_payload' });
+    }
+
+    let recipientEmail: string | null = null;
+    let senderEmail: string | null = null;
+    let bounceType: 'hard' | 'soft' = 'soft';
+    let details = '';
+    let postalMessageId: string | null = null;
+    let postalToken: string | null = null;
+
+    if (event === 'MessageBounced') {
+      // Hard bounce — Postal received a bounce notification
+      recipientEmail = payload?.original_message?.to || null;
+      senderEmail = payload?.original_message?.from || null;
+      bounceType = 'hard';
+      details = payload?.bounce?.subject || 'Hard bounce';
+      postalMessageId = payload?.original_message?.message_id || null;
+      postalToken = payload?.original_message?.token || null;
+    } else if (event === 'MessageDeliveryFailed') {
+      // Delivery failure — could be hard or soft
+      recipientEmail = payload?.message?.rcpt_to || null;
+      senderEmail = payload?.message?.from || null;
+      bounceType = payload?.message?.status === 'HardFail' ? 'hard' : 'soft';
+      details = payload?.details || payload?.output || '';
+      postalMessageId = payload?.message?.message_id || null;
+      postalToken = payload?.message?.token || null;
+    } else if (event === 'MessageHeld') {
+      // Held message — usually spam or policy issue, treat as soft
+      recipientEmail = payload?.message?.rcpt_to || null;
+      senderEmail = payload?.message?.from || null;
+      bounceType = 'soft';
+      details = 'Message held by recipient server';
+      postalToken = payload?.message?.token || null;
+    } else {
+      return res.status(200).json({ status: 'ignored', reason: `unhandled_event: ${event}` });
+    }
+
+    if (!recipientEmail) {
+      return res.status(200).json({ status: 'ignored', reason: 'no_recipient' });
+    }
+
+    const normalizedRecipient = recipientEmail.trim().toLowerCase();
+
+    // ─── Log the bounce ───
+    await db.emailBounce.create({
+      data: {
+        recipientEmail: normalizedRecipient,
+        senderEmail: senderEmail || undefined,
+        bounceType,
+        bounceDetails: details.substring(0, 1000),
+        postalMessageId,
+        postalToken,
+      },
+    });
+
+    logger.warn(`⚠️ [POSTAL] Bounce ${bounceType}: ${normalizedRecipient} — ${details.substring(0, 200)}`);
+
+    // ─── Suppress on hard bounce ───
+    if (bounceType === 'hard') {
+      await db.emailSuppression.upsert({
+        where: { email: normalizedRecipient },
+        create: {
+          email: normalizedRecipient,
+          reason: 'hard_bounce',
+          bounceCount: 1,
+          lastBounceAt: new Date(),
+        },
+        update: {
+          reason: 'hard_bounce',
+          bounceCount: { increment: 1 },
+          lastBounceAt: new Date(),
+        },
+      });
+      logger.warn(`🚫 [POSTAL] Adresse supprimée (hard bounce): ${normalizedRecipient}`);
+    } else {
+      // Soft bounce — suppress after 5 consecutive soft bounces
+      const recentSoftBounces = await db.emailBounce.count({
+        where: {
+          recipientEmail: normalizedRecipient,
+          bounceType: 'soft',
+          createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // last 7 days
+        },
+      });
+
+      if (recentSoftBounces >= 5) {
+        await db.emailSuppression.upsert({
+          where: { email: normalizedRecipient },
+          create: {
+            email: normalizedRecipient,
+            reason: 'hard_bounce',
+            bounceCount: recentSoftBounces,
+            lastBounceAt: new Date(),
+          },
+          update: {
+            reason: 'hard_bounce',
+            bounceCount: recentSoftBounces,
+            lastBounceAt: new Date(),
+          },
+        });
+        logger.warn(`🚫 [POSTAL] Adresse supprimée (5+ soft bounces): ${normalizedRecipient}`);
+      }
+    }
+
+    res.json({ status: 'ok', bounceType, recipient: normalizedRecipient });
+  } catch (error) {
+    logger.error('❌ [POSTAL] Erreur webhook bounce:', error);
+    // Return 200 so Postal doesn't retry indefinitely
+    res.status(200).json({
+      status: 'error',
+      error: error instanceof Error ? error.message : 'Erreur inconnue',
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+//  GET /api/postal/suppressions
+//  Liste les adresses email supprimées (bounces).
+// ─────────────────────────────────────────────────────────────
+router.get('/suppressions', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  if (!req.user?.userId) {
+    return res.status(401).json({ error: 'Authentification requise' });
+  }
+
+  try {
+    const { page = '1', limit = '50' } = req.query as Record<string, string>;
+    const take = Math.min(parseInt(limit, 10) || 50, 200);
+    const skip = (Math.max(parseInt(page, 10) || 1, 1) - 1) * take;
+
+    const [suppressions, total] = await Promise.all([
+      db.emailSuppression.findMany({
+        orderBy: { lastBounceAt: 'desc' },
+        take,
+        skip,
+      }),
+      db.emailSuppression.count(),
+    ]);
+
+    res.json({ suppressions, total, page: parseInt(page, 10), hasMore: skip + take < total });
+  } catch (error) {
+    logger.error('❌ [POSTAL] Erreur listing suppressions:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des suppressions' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+//  DELETE /api/postal/suppressions/:email
+//  Retire une adresse de la liste de suppression.
+// ─────────────────────────────────────────────────────────────
+router.delete('/suppressions/:email', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  if (!req.user?.userId) {
+    return res.status(401).json({ error: 'Authentification requise' });
+  }
+
+  try {
+    const email = decodeURIComponent(req.params.email).trim().toLowerCase();
+
+    const existing = await db.emailSuppression.findUnique({ where: { email } });
+    if (!existing) {
+      return res.status(404).json({ error: 'Adresse non trouvée dans les suppressions' });
+    }
+
+    await db.emailSuppression.delete({ where: { email } });
+
+    logger.info(`✅ [POSTAL] Suppression levée pour: ${email} (par userId: ${req.user.userId})`);
+    res.json({ success: true, message: `Suppression levée pour ${email}` });
+  } catch (error) {
+    logger.error('❌ [POSTAL] Erreur suppression:', error);
+    res.status(500).json({ error: 'Erreur lors de la levée de la suppression' });
+  }
+});
+
+// ========================================
+// #45 — SPF / DKIM / DMARC VERIFICATION
+// ========================================
+
+/**
+ * GET /api/postal/dns-check?domain=example.com&selector=postal
+ * Check SPF, DKIM, DMARC, and MX records for a sending domain.
+ */
+router.get('/dns-check', async (req: any, res: any) => {
+  try {
+    const domain = (req.query.domain as string || '').trim().toLowerCase();
+    if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) {
+      return res.status(400).json({ error: 'Domaine invalide' });
+    }
+    const selector = (req.query.selector as string) || 'postal';
+
+    const { checkEmailDNS } = await import('../services/email-dns-check');
+    const result = await checkEmailDNS(domain, selector);
+    res.json(result);
+  } catch (error) {
+    logger.error('❌ [POSTAL] Erreur DNS check:', error);
+    res.status(500).json({ error: 'Erreur lors de la vérification DNS' });
   }
 });
 

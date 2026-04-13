@@ -233,6 +233,110 @@ router.get('/global', async (req: Request, res: Response): Promise<void> => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// GET /api/search/fulltext?q=query&limit=20
+// Full-text search PostgreSQL — ts_vector + ts_query + pg_trgm fuzzy
+// Optimisé pour les tables à fort contenu textuel
+// ═══════════════════════════════════════════════════════════════
+router.get('/fulltext', async (req: Request, res: Response): Promise<void> => {
+  const user = (req as any).user;
+  if (!user?.id) { res.status(401).json({ error: 'Non authentifié' }); return; }
+
+  const q = (req.query.q as string || '').trim();
+  if (q.length < 2) { res.json({ results: [], query: q, total: 0 }); return; }
+
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+
+  try {
+    // Ensure pg_trgm extension exists (idempotent)
+    await db.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+
+    // Sanitize query for tsquery — replace special chars, create both exact and prefix queries
+    const sanitized = q.replace(/[^\w\sàâäéèêëïîôùûüÿçœæ-]/gi, '').trim();
+    const tsQuery = sanitized.split(/\s+/).filter(Boolean).map(w => `${w}:*`).join(' & ');
+
+    if (!tsQuery) { res.json({ results: [], query: q, total: 0 }); return; }
+
+    // Search across WallPost, Message, Lead, Email with full-text ranking
+    const results = await db.$queryRawUnsafe<Array<{
+      source: string;
+      id: string;
+      title: string;
+      snippet: string;
+      rank: number;
+      route: string;
+    }>>(`
+      (
+        SELECT 'post' AS source, wp.id::text, 
+          LEFT(wp.content, 80) AS title,
+          ts_headline('french', wp.content, to_tsquery('french', $1), 'MaxWords=30, MinWords=10, StartSel=<b>, StopSel=</b>') AS snippet,
+          ts_rank(to_tsvector('french', wp.content), to_tsquery('french', $1)) AS rank,
+          '/dashboard?post=' || wp.id::text AS route
+        FROM "WallPost" wp
+        WHERE to_tsvector('french', wp.content) @@ to_tsquery('french', $1)
+        ORDER BY rank DESC
+        LIMIT $2
+      )
+      UNION ALL
+      (
+        SELECT 'message' AS source, m.id::text,
+          LEFT(m.content, 80) AS title,
+          ts_headline('french', m.content, to_tsquery('french', $1), 'MaxWords=30, MinWords=10') AS snippet,
+          ts_rank(to_tsvector('french', m.content), to_tsquery('french', $1)) AS rank,
+          '/messenger' AS route
+        FROM "Message" m
+        WHERE to_tsvector('french', m.content) @@ to_tsquery('french', $1)
+        ORDER BY rank DESC
+        LIMIT $2
+      )
+      UNION ALL
+      (
+        SELECT 'lead' AS source, l.id::text,
+          COALESCE(l."firstName" || ' ' || l."lastName", l.company, l.email) AS title,
+          ts_headline('french',
+            COALESCE(l."firstName",'') || ' ' || COALESCE(l."lastName",'') || ' ' || COALESCE(l.company,'') || ' ' || COALESCE(l.email,'') || ' ' || COALESCE(l.phone,''),
+            to_tsquery('french', $1), 'MaxWords=20, MinWords=5') AS snippet,
+          ts_rank(
+            to_tsvector('french', COALESCE(l."firstName",'') || ' ' || COALESCE(l."lastName",'') || ' ' || COALESCE(l.company,'') || ' ' || COALESCE(l.email,'')),
+            to_tsquery('french', $1)
+          ) AS rank,
+          '/leads/' || l.id::text AS route
+        FROM "Lead" l
+        WHERE to_tsvector('french', COALESCE(l."firstName",'') || ' ' || COALESCE(l."lastName",'') || ' ' || COALESCE(l.company,'') || ' ' || COALESCE(l.email,''))
+          @@ to_tsquery('french', $1)
+        ORDER BY rank DESC
+        LIMIT $2
+      )
+      UNION ALL
+      (
+        SELECT 'email' AS source, e.id::text,
+          e.subject AS title,
+          ts_headline('french', e.subject || ' ' || LEFT(e.body, 500), to_tsquery('french', $1), 'MaxWords=30, MinWords=10') AS snippet,
+          ts_rank(to_tsvector('french', e.subject || ' ' || LEFT(e.body, 500)), to_tsquery('french', $1)) AS rank,
+          '/emails/' || e.id::text AS route
+        FROM "Email" e
+        WHERE to_tsvector('french', e.subject || ' ' || LEFT(e.body, 500)) @@ to_tsquery('french', $1)
+        ORDER BY rank DESC
+        LIMIT $2
+      )
+      ORDER BY rank DESC
+      LIMIT $2
+    `, tsQuery, limit);
+
+    res.json({
+      results: results.map(r => ({
+        ...r,
+        rank: Number(r.rank),
+      })),
+      query: q,
+      total: results.length,
+    });
+  } catch (err) {
+    logger.error('[FULLTEXT SEARCH] Error:', err);
+    res.status(500).json({ error: 'Erreur lors de la recherche full-text' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // GET /api/search/web?q=query&limit=10
 // Zhiive Search — recherche web via SearXNG auto-hébergé
 // White-label : aucune mention du moteur sous-jacent n'est exposée

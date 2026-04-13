@@ -27,8 +27,7 @@ const PreviewField: React.FC<{ localValues: Record<string, unknown> }> = ({ loca
     if (helpTooltipType === 'image') {
       return helpTooltipImage ? (
         <div style={{ maxWidth: 300 }}>
-          <img 
-            src={String(helpTooltipImage)}
+          <img loading="lazy" src={String(helpTooltipImage)}
             alt="Image d'aide"
             style={{ 
               width: '100%', 
@@ -59,8 +58,7 @@ const PreviewField: React.FC<{ localValues: Record<string, unknown> }> = ({ loca
             />
           )}
           {helpTooltipImage && (
-            <img 
-              src={String(helpTooltipImage)}
+            <img loading="lazy" src={String(helpTooltipImage)}
               alt="Image d'aide"
               style={{ 
                 width: '100%', 

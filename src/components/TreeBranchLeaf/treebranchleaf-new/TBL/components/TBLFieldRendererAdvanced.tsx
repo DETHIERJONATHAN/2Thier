@@ -1108,8 +1108,7 @@ const wrapWithCustomTooltip = (element: React.ReactElement, field: unknown): Rea
   } else if (tooltipType === 'image' && appearanceConfig.helpTooltipImage) {
     tooltipContent = (
       <div style={{ maxWidth: 300 }}>
-        <img 
-          src={appearanceConfig.helpTooltipImage} 
+        <img loading="lazy" src={appearanceConfig.helpTooltipImage} 
           alt="Aide" 
           style={{ maxWidth: '100%', height: 'auto' }}
           onError={(e) => {
@@ -1128,8 +1127,7 @@ const wrapWithCustomTooltip = (element: React.ReactElement, field: unknown): Rea
         )}
         {appearanceConfig.helpTooltipImage && (
           <div style={{ maxWidth: 300 }}>
-            <img 
-              src={appearanceConfig.helpTooltipImage} 
+            <img loading="lazy" src={appearanceConfig.helpTooltipImage} 
               alt="Aide" 
               style={{ maxWidth: '100%', height: 'auto' }}
               onError={(e) => {
@@ -4050,8 +4048,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               </Button>
             </Upload>
             {finalValue && (
-              <img 
-                src={finalValue as string} 
+              <img loading="lazy" src={finalValue as string} 
                 alt="preview" 
                 style={{ 
                   width: '100px', 
@@ -4138,8 +4135,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             </label>
             {finalValue && typeof finalValue === 'string' && (
               <div style={{ marginTop: 8 }}>
-                <img
-                  src={finalValue}
+                <img loading="lazy" src={finalValue}
                   alt="Photo prise"
                   style={{ maxWidth: '200px', maxHeight: '200px', objectFit: 'cover', border: '1px solid #d9d9d9', borderRadius: '6px' }}
                 />

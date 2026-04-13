@@ -3,6 +3,12 @@
  * 
  * API endpoint pour uploader des images (logos, photos projets, etc.)
  * Stockage 100% GCS
+ * 
+ * Pipeline d'optimisation :
+ *  - Redimensionnement max 1920px de large
+ *  - Conversion JPEG/PNG → WebP (meilleure compression)
+ *  - Suppression des métadonnées EXIF (vie privée)
+ *  - Qualité 80% (bon compromis taille/qualité)
  */
 
 import { Router } from 'express';
@@ -10,9 +16,84 @@ import multer from 'multer';
 import { db } from '../lib/database';
 import { uploadFile, deleteFile } from '../lib/storage';
 import { logger } from '../lib/logger';
+import * as sharpModule from 'sharp';
+
+const sharp = (sharpModule as any).default || sharpModule;
 
 const router = Router();
 const prisma = db;
+
+const MAX_WIDTH = 1920;
+const MAX_HEIGHT = 1920;
+const WEBP_QUALITY = 80;
+const JPEG_QUALITY = 82;
+
+/**
+ * Optimize an image buffer: resize, strip EXIF, re-encode.
+ * SVGs and GIFs are returned as-is (animated content).
+ */
+async function optimizeImage(
+  buffer: Buffer,
+  mimetype: string,
+  originalName: string,
+): Promise<{ buffer: Buffer; mimetype: string; filename: string }> {
+  // Skip optimization for SVG and GIF (animated)
+  if (mimetype === 'image/svg+xml' || mimetype === 'image/gif') {
+    return { buffer, mimetype, filename: originalName };
+  }
+
+  try {
+    const image = sharp(buffer);
+    const metadata = await image.metadata();
+
+    // Resize if larger than max dimensions
+    const needsResize = (metadata.width && metadata.width > MAX_WIDTH) ||
+                        (metadata.height && metadata.height > MAX_HEIGHT);
+
+    let pipeline = image.rotate(); // Auto-rotate based on EXIF orientation
+
+    if (needsResize) {
+      pipeline = pipeline.resize(MAX_WIDTH, MAX_HEIGHT, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      });
+    }
+
+    // Convert to WebP for better compression (except for PNG with transparency)
+    const hasAlpha = metadata.hasAlpha;
+    let outputMime: string;
+    let ext: string;
+
+    if (hasAlpha) {
+      // Keep PNG for images with transparency, but optimize it  
+      pipeline = pipeline.png({ quality: WEBP_QUALITY, compressionLevel: 9 });
+      outputMime = 'image/png';
+      ext = '.png';
+    } else {
+      // Convert to WebP for everything else
+      pipeline = pipeline.webp({ quality: WEBP_QUALITY });
+      outputMime = 'image/webp';
+      ext = '.webp';
+    }
+
+    const optimizedBuffer = await pipeline.toBuffer();
+
+    // Only use optimized version if it's actually smaller
+    if (optimizedBuffer.length >= buffer.length) {
+      return { buffer, mimetype, filename: originalName };
+    }
+
+    const baseName = originalName.replace(/\.[^.]+$/, '');
+    const optimizedName = `${baseName}${ext}`;
+
+    logger.info(`🖼️ [IMAGE-OPT] ${originalName}: ${(buffer.length / 1024).toFixed(0)}KB → ${(optimizedBuffer.length / 1024).toFixed(0)}KB (${((1 - optimizedBuffer.length / buffer.length) * 100).toFixed(0)}% savings)`);
+
+    return { buffer: optimizedBuffer, mimetype: outputMime, filename: optimizedName };
+  } catch (error) {
+    logger.warn(`⚠️ [IMAGE-OPT] Optimization failed for ${originalName}, using original:`, error);
+    return { buffer, mimetype, filename: originalName };
+  }
+}
 
 // Toujours memoryStorage : tout va sur GCS, zéro local
 const multerStorage = multer.memoryStorage();
@@ -36,12 +117,13 @@ const upload = multer({
   }
 });
 
-/** Helper: upload multer file to GCS and return absolute URL */
-async function getUploadedFileUrl(file: Express.Multer.File): Promise<{ fileUrl: string }> {
-  const uniqueName = `${Date.now()}_${file.originalname.replace(/\s+/g, '_')}`;
+/** Helper: optimize + upload multer file to GCS and return absolute URL */
+async function getUploadedFileUrl(file: Express.Multer.File): Promise<{ fileUrl: string; optimizedFile: { buffer: Buffer; mimetype: string; filename: string } }> {
+  const optimized = await optimizeImage(file.buffer, file.mimetype, file.originalname);
+  const uniqueName = `${Date.now()}_${optimized.filename.replace(/\s+/g, '_')}`;
   const key = `websites/${uniqueName}`;
-  const url = await uploadFile(file.buffer, key, file.mimetype);
-  return { fileUrl: url };
+  const url = await uploadFile(optimized.buffer, key, optimized.mimetype);
+  return { fileUrl: url, optimizedFile: optimized };
 }
 
 // POST - Upload simple pour documents (sans websiteId requis)
@@ -54,7 +136,7 @@ router.post('/upload', upload.single('file'), async (req: unknown, res) => {
       });
     }
 
-    const { fileUrl } = await getUploadedFileUrl(req.file);
+    const { fileUrl, optimizedFile } = await getUploadedFileUrl(req.file);
 
     res.json({
       success: true,
@@ -62,9 +144,10 @@ router.post('/upload', upload.single('file'), async (req: unknown, res) => {
       url: fileUrl,
       fileUrl,
       file: {
-        fileName: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype
+        fileName: optimizedFile.filename,
+        size: optimizedFile.buffer.length,
+        mimetype: optimizedFile.mimetype,
+        originalSize: req.file.size,
       }
     });
   } catch (error) {
@@ -97,17 +180,17 @@ router.post('/upload-image', upload.single('image'), async (req: unknown, res) =
     }
 
     // Construire l'URL publique
-    const { fileUrl } = await getUploadedFileUrl(req.file);
+    const { fileUrl, optimizedFile } = await getUploadedFileUrl(req.file);
 
     // Enregistrer dans la BDD (table WebSiteMediaFile)
     const mediaFile = await prisma.webSiteMediaFile.create({
       data: {
         websiteId: parseInt(websiteId),
-        fileName: req.file.originalname,
-        fileType: req.file.mimetype, // ✅ CORRECTION: fileType au lieu de mimeType
+        fileName: optimizedFile.filename,
+        fileType: optimizedFile.mimetype,
         fileUrl,
         filePath: fileUrl,
-        fileSize: req.file.size,
+        fileSize: optimizedFile.buffer.length,
         category, // 'logo', 'project', 'service', 'general'
         uploadedById: (req as any).user?.id || null
       }

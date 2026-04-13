@@ -129,8 +129,7 @@ export const useImageModal = () => {
             )}
             {hasRichImage && (
               <div style={{ textAlign: 'center' }}>
-                <img
-                  src={modalState.imageSrc!}
+                <img loading="lazy" src={modalState.imageSrc!}
                   alt={modalState.title}
                   style={{
                     maxWidth: '100%',
@@ -158,8 +157,7 @@ export const useImageModal = () => {
               overflow: 'auto'
             }}
           >
-            <img
-              src={modalState.src}
+            <img loading="lazy" src={modalState.src}
               alt={modalState.title}
               style={{
                 maxWidth: '100%',

@@ -277,7 +277,7 @@ const UsersSettings: React.FC = () => {
                 justifyContent: 'center', flexShrink: 0,
               }}>
                 {u.avatarUrl ? (
-                  <img src={u.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img loading="lazy" src={u.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   <UserOutlined style={{ fontSize: 18, color: FB.blue }} />
                 )}

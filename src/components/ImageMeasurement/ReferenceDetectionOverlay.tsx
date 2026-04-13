@@ -35,8 +35,7 @@ export const ReferenceDetectionOverlay: React.FC<ReferenceDetectionOverlayProps>
   if (!boundingBox) {
     return (
       <div style={{ position: 'relative', maxWidth: imageWidth, margin: '0 auto' }}>
-        <img 
-          src={imageUrl} 
+        <img loading="lazy" src={imageUrl} 
           alt="Mesure" 
           style={{ width: '100%', height: 'auto', display: 'block' }}
         />
@@ -68,8 +67,7 @@ export const ReferenceDetectionOverlay: React.FC<ReferenceDetectionOverlayProps>
       </div>
 
       <div style={containerStyle}>
-        <img 
-          src={imageUrl} 
+        <img loading="lazy" src={imageUrl} 
           alt="Mesure avec référence" 
           style={{ width: '100%', height: 'auto', display: 'block' }}
           onLoad={(e) => {

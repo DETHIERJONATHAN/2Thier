@@ -61,6 +61,141 @@ var init_logger = __esm({
   }
 });
 
+// src/utils/crypto.ts
+function encrypt(text) {
+  if (!key) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("ENCRYPTION_KEY absente/invalide: chiffrement indisponible. Configurez une cl\xE9 de 32 caract\xE8res.");
+    }
+    logger.warn("[CRYPTO] encrypt() appel\xE9 sans cl\xE9 valide en environnement non-production. Retour en clair.");
+    return text;
+  }
+  const iv = crypto2.randomBytes(IV_LENGTH);
+  const cipher = crypto2.createCipheriv(ALGORITHM, key, iv);
+  let encrypted = cipher.update(text, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  return iv.toString("hex") + ":" + encrypted;
+}
+function decrypt(text) {
+  try {
+    if (!text.includes(":")) {
+      return text;
+    }
+    if (!key) {
+      logger.warn("[CRYPTO] decrypt() appel\xE9 sans cl\xE9 valide. Retour du texte original.");
+      return text;
+    }
+    const textParts = text.split(":");
+    if (textParts.length < 2) {
+      throw new Error("Invalid encrypted text format");
+    }
+    const ivHex = textParts.shift();
+    if (!ivHex) {
+      throw new Error("IV is missing");
+    }
+    const iv = Buffer.from(ivHex, "hex");
+    const encryptedText = textParts.join(":");
+    const decipher = crypto2.createDecipheriv(ALGORITHM, key, iv);
+    let decrypted = decipher.update(encryptedText, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  } catch (error) {
+    logger.error("Decryption failed:", error);
+    return text;
+  }
+}
+var crypto2, ALGORITHM, IV_LENGTH, ENCRYPTION_KEY, key;
+var init_crypto = __esm({
+  "src/utils/crypto.ts"() {
+    "use strict";
+    crypto2 = __toESM(require("crypto"), 1);
+    init_logger();
+    ALGORITHM = "aes-256-cbc";
+    IV_LENGTH = 16;
+    ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+    key = null;
+    (() => {
+      try {
+        if (ENCRYPTION_KEY && Buffer.from(ENCRYPTION_KEY, "utf8").length === 32) {
+          key = Buffer.from(ENCRYPTION_KEY, "utf8");
+        } else {
+          logger.warn("[CRYPTO] ENCRYPTION_KEY manquante ou invalide (32 chars requis). Le chiffrement est indisponible jusqu'\xE0 configuration.");
+          key = null;
+        }
+      } catch (e) {
+        logger.warn("[CRYPTO] Impossible d'initialiser la cl\xE9 de chiffrement:", e?.message);
+        key = null;
+      }
+    })();
+  }
+});
+
+// src/lib/pii-encryption.ts
+function isEncrypted(value) {
+  return value.startsWith(ENCRYPTED_PREFIX) && value.includes(":");
+}
+function encryptPII(value) {
+  if (!value || typeof value !== "string" || value.trim() === "") return value;
+  if (isEncrypted(value)) return value;
+  try {
+    return ENCRYPTED_PREFIX + encrypt(value);
+  } catch (err) {
+    logger.error("[PII] Encryption failed:", err?.message);
+    return value;
+  }
+}
+function decryptPII(value) {
+  if (!value || typeof value !== "string") return value;
+  if (!isEncrypted(value)) return value;
+  try {
+    const encrypted = value.slice(ENCRYPTED_PREFIX.length);
+    return decrypt(encrypted);
+  } catch (err) {
+    logger.error("[PII] Decryption failed:", err?.message);
+    return value;
+  }
+}
+function encryptModelData(model, data) {
+  const fields = PII_FIELDS[model];
+  if (!fields) return data;
+  const result = { ...data };
+  for (const field of fields) {
+    if (field in result && typeof result[field] === "string") {
+      result[field] = encryptPII(result[field]);
+    }
+  }
+  return result;
+}
+function decryptModelData(model, data) {
+  const fields = PII_FIELDS[model];
+  if (!fields) return data;
+  const result = { ...data };
+  for (const field of fields) {
+    if (field in result && typeof result[field] === "string") {
+      result[field] = decryptPII(result[field]);
+    }
+  }
+  return result;
+}
+function decryptModelArray(model, data) {
+  const fields = PII_FIELDS[model];
+  if (!fields) return data;
+  return data.map((item) => decryptModelData(model, item));
+}
+var PII_FIELDS, ENCRYPTED_PREFIX;
+var init_pii_encryption = __esm({
+  "src/lib/pii-encryption.ts"() {
+    "use strict";
+    init_crypto();
+    init_logger();
+    PII_FIELDS = {
+      User: ["phoneNumber", "address", "vatNumber"],
+      Lead: ["phone"]
+    };
+    ENCRYPTED_PREFIX = "enc:";
+  }
+});
+
 // src/lib/database.ts
 var database_exports = {};
 __export(database_exports, {
@@ -105,7 +240,11 @@ function createPrismaInstance() {
     log: config.logLevel,
     datasources: {
       db: {
-        url: buildDatabaseUrl()
+        url: (() => {
+          const baseUrl = buildDatabaseUrl();
+          const sep = baseUrl.includes("?") ? "&" : "?";
+          return `${baseUrl}${sep}connection_limit=${config.connectionLimit}&pool_timeout=${config.poolTimeout}&connect_timeout=${config.connectTimeout}`;
+        })()
       }
     }
   });
@@ -152,12 +291,13 @@ function getDatabaseInfo() {
     connected: globalForDb.__db_initialized || false
   };
 }
-var import_client, CURRENT_ADAPTER, DB_CONFIG, globalForDb, MAX_DEFAULT_TAKE, _basePrisma, db, prisma;
+var import_client, CURRENT_ADAPTER, DB_CONFIG, globalForDb, MAX_DEFAULT_TAKE, _basePrisma, _limitedPrisma, db, prisma;
 var init_database = __esm({
   "src/lib/database.ts"() {
     "use strict";
     import_client = require("@prisma/client");
     init_logger();
+    init_pii_encryption();
     CURRENT_ADAPTER = "prisma";
     DB_CONFIG = {
       development: {
@@ -180,9 +320,9 @@ var init_database = __esm({
       }
     };
     globalForDb = globalThis;
-    MAX_DEFAULT_TAKE = 1e3;
+    MAX_DEFAULT_TAKE = 500;
     _basePrisma = createPrismaInstance();
-    db = _basePrisma.$extends({
+    _limitedPrisma = _basePrisma.$extends({
       query: {
         $allModels: {
           async findMany({ args, query }) {
@@ -190,6 +330,70 @@ var init_database = __esm({
               args.take = MAX_DEFAULT_TAKE;
             }
             return query(args);
+          }
+        }
+      }
+    });
+    db = _limitedPrisma.$extends({
+      query: {
+        user: {
+          async create({ args, query }) {
+            if (args.data) args.data = encryptModelData("User", args.data);
+            const result = await query(args);
+            return result ? decryptModelData("User", result) : result;
+          },
+          async update({ args, query }) {
+            if (args.data) args.data = encryptModelData("User", args.data);
+            const result = await query(args);
+            return result ? decryptModelData("User", result) : result;
+          },
+          async upsert({ args, query }) {
+            if (args.create) args.create = encryptModelData("User", args.create);
+            if (args.update) args.update = encryptModelData("User", args.update);
+            const result = await query(args);
+            return result ? decryptModelData("User", result) : result;
+          },
+          async findUnique({ args, query }) {
+            const result = await query(args);
+            return result ? decryptModelData("User", result) : result;
+          },
+          async findFirst({ args, query }) {
+            const result = await query(args);
+            return result ? decryptModelData("User", result) : result;
+          },
+          async findMany({ args, query }) {
+            const results = await query(args);
+            return Array.isArray(results) ? decryptModelArray("User", results) : results;
+          }
+        },
+        lead: {
+          async create({ args, query }) {
+            if (args.data) args.data = encryptModelData("Lead", args.data);
+            const result = await query(args);
+            return result ? decryptModelData("Lead", result) : result;
+          },
+          async update({ args, query }) {
+            if (args.data) args.data = encryptModelData("Lead", args.data);
+            const result = await query(args);
+            return result ? decryptModelData("Lead", result) : result;
+          },
+          async upsert({ args, query }) {
+            if (args.create) args.create = encryptModelData("Lead", args.create);
+            if (args.update) args.update = encryptModelData("Lead", args.update);
+            const result = await query(args);
+            return result ? decryptModelData("Lead", result) : result;
+          },
+          async findUnique({ args, query }) {
+            const result = await query(args);
+            return result ? decryptModelData("Lead", result) : result;
+          },
+          async findFirst({ args, query }) {
+            const result = await query(args);
+            return result ? decryptModelData("Lead", result) : result;
+          },
+          async findMany({ args, query }) {
+            const results = await query(args);
+            return Array.isArray(results) ? decryptModelArray("Lead", results) : results;
           }
         }
       }
@@ -214,12 +418,12 @@ function getPostalService() {
   }
   return _postalService;
 }
-var import_crypto2, PostalEmailService, _postalService;
+var import_crypto3, PostalEmailService, _postalService;
 var init_PostalEmailService = __esm({
   "src/services/PostalEmailService.ts"() {
     "use strict";
     init_database();
-    import_crypto2 = __toESM(require("crypto"), 1);
+    import_crypto3 = __toESM(require("crypto"), 1);
     init_logger();
     PostalEmailService = class {
       apiUrl;
@@ -236,8 +440,8 @@ var init_PostalEmailService = __esm({
        * Envoie un email via l'API REST de Postal.
        * Doc: https://docs.postalserver.io/developer/api/send-message
        */
-      async sendEmail(options) {
-        const { from, to, subject, body: body2, isHtml = false, cc, bcc, replyTo, attachments } = options;
+      async sendEmail(options2) {
+        const { from, to, subject, body: body2, isHtml = false, cc, bcc, replyTo, attachments } = options2;
         const toArray = Array.isArray(to) ? to : [to];
         const payload = {
           to: toArray,
@@ -344,7 +548,7 @@ var init_PostalEmailService = __esm({
           }
           const email = await db.email.create({
             data: {
-              id: import_crypto2.default.randomUUID(),
+              id: import_crypto3.default.randomUUID(),
               userId: emailAccount.userId,
               from: senderEmail,
               to: recipientEmail,
@@ -411,6 +615,7 @@ var init_PostalEmailService = __esm({
 var storage_exports = {};
 __export(storage_exports, {
   deleteFile: () => deleteFile,
+  listAllGCSFiles: () => listAllGCSFiles,
   uploadExpressFile: () => uploadExpressFile,
   uploadFile: () => uploadFile
 });
@@ -484,6 +689,11 @@ function extractKey(keyOrUrl) {
   }
   return keyOrUrl;
 }
+async function listAllGCSFiles(prefix) {
+  const bucket = getStorage().bucket(GCS_BUCKET);
+  const [files] = await bucket.getFiles({ prefix: prefix || void 0, maxResults: 1e4 });
+  return files.map((f) => f.name);
+}
 var import_storage, import_child_process, import_promises, isProduction2, GCS_BUCKET, GcloudAuth, storage;
 var init_storage = __esm({
   "src/lib/storage.ts"() {
@@ -535,75 +745,6 @@ var init_storage = __esm({
       }
     };
     storage = null;
-  }
-});
-
-// src/utils/crypto.ts
-function encrypt(text) {
-  if (!key) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("ENCRYPTION_KEY absente/invalide: chiffrement indisponible. Configurez une cl\xE9 de 32 caract\xE8res.");
-    }
-    logger.warn("[CRYPTO] encrypt() appel\xE9 sans cl\xE9 valide en environnement non-production. Retour en clair.");
-    return text;
-  }
-  const iv = crypto3.randomBytes(IV_LENGTH);
-  const cipher = crypto3.createCipheriv(ALGORITHM, key, iv);
-  let encrypted = cipher.update(text, "utf8", "hex");
-  encrypted += cipher.final("hex");
-  return iv.toString("hex") + ":" + encrypted;
-}
-function decrypt(text) {
-  try {
-    if (!text.includes(":")) {
-      return text;
-    }
-    if (!key) {
-      logger.warn("[CRYPTO] decrypt() appel\xE9 sans cl\xE9 valide. Retour du texte original.");
-      return text;
-    }
-    const textParts = text.split(":");
-    if (textParts.length < 2) {
-      throw new Error("Invalid encrypted text format");
-    }
-    const ivHex = textParts.shift();
-    if (!ivHex) {
-      throw new Error("IV is missing");
-    }
-    const iv = Buffer.from(ivHex, "hex");
-    const encryptedText = textParts.join(":");
-    const decipher = crypto3.createDecipheriv(ALGORITHM, key, iv);
-    let decrypted = decipher.update(encryptedText, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-    return decrypted;
-  } catch (error) {
-    logger.error("Decryption failed:", error);
-    return text;
-  }
-}
-var crypto3, ALGORITHM, IV_LENGTH, ENCRYPTION_KEY, key;
-var init_crypto = __esm({
-  "src/utils/crypto.ts"() {
-    "use strict";
-    crypto3 = __toESM(require("crypto"), 1);
-    init_logger();
-    ALGORITHM = "aes-256-cbc";
-    IV_LENGTH = 16;
-    ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-    key = null;
-    (() => {
-      try {
-        if (ENCRYPTION_KEY && Buffer.from(ENCRYPTION_KEY, "utf8").length === 32) {
-          key = Buffer.from(ENCRYPTION_KEY, "utf8");
-        } else {
-          logger.warn("[CRYPTO] ENCRYPTION_KEY manquante ou invalide (32 chars requis). Le chiffrement est indisponible jusqu'\xE0 configuration.");
-          key = null;
-        }
-      } catch (e) {
-        logger.warn("[CRYPTO] Impossible d'initialiser la cl\xE9 de chiffrement:", e?.message);
-        key = null;
-      }
-    })();
   }
 });
 
@@ -724,12 +865,12 @@ var init_googleConfig = __esm({
 });
 
 // src/google-auth/core/GoogleOAuthCore.ts
-var import_googleapis3, import_crypto7, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, GOOGLE_SCOPES_LIST, SCOPES, GoogleOAuthService, googleOAuthService;
+var import_googleapis3, import_crypto8, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, GOOGLE_SCOPES_LIST, SCOPES, GoogleOAuthService, googleOAuthService;
 var init_GoogleOAuthCore = __esm({
   "src/google-auth/core/GoogleOAuthCore.ts"() {
     "use strict";
     import_googleapis3 = require("googleapis");
-    import_crypto7 = require("crypto");
+    import_crypto8 = require("crypto");
     init_database();
     init_crypto();
     init_googleConfig();
@@ -830,7 +971,7 @@ var init_GoogleOAuthCore = __esm({
         } else {
           await db.googleToken.create({
             data: {
-              id: (0, import_crypto7.randomUUID)(),
+              id: (0, import_crypto8.randomUUID)(),
               userId,
               organizationId,
               accessToken: updateData.accessToken,
@@ -2357,21 +2498,21 @@ async function enrichDataFromSubmission(submissionId, prisma50, valueMap, labelM
     logger.error(`[ENRICHMENT] \xC3\xA2\xC2\x9D\xC5\u2019 Erreur enrichissement:`, error);
   }
 }
-async function getNodeValue(nodeId, submissionId, prisma50, valueMap, options) {
+async function getNodeValue(nodeId, submissionId, prisma50, valueMap, options2) {
   if (nodeId && (nodeId.startsWith("lead.") || nodeId.includes("."))) {
     if (valueMap && valueMap.has(nodeId)) {
       const val = valueMap.get(nodeId);
       if (val === null || val === void 0) {
-        return options?.preserveEmpty ? null : "0";
+        return options2?.preserveEmpty ? null : "0";
       }
       return String(val);
     }
-    return options?.preserveEmpty ? null : "0";
+    return options2?.preserveEmpty ? null : "0";
   }
   if (valueMap && valueMap.has(nodeId)) {
     const val = valueMap.get(nodeId);
     if (val === null || val === void 0) {
-      return options?.preserveEmpty ? null : "0";
+      return options2?.preserveEmpty ? null : "0";
     }
     return String(val);
   }
@@ -2387,7 +2528,7 @@ async function getNodeValue(nodeId, submissionId, prisma50, valueMap, options) {
   if (data?.value !== null && data?.value !== void 0) {
     return String(data.value);
   }
-  return options?.preserveEmpty ? null : "0";
+  return options2?.preserveEmpty ? null : "0";
 }
 async function getNodeLabel(nodeId, prisma50, labelMap) {
   if (labelMap && labelMap.has(nodeId)) {
@@ -4287,8 +4428,8 @@ async function interpretField(fieldId, submissionId, prisma50, valueMap, labelMa
     }
   };
 }
-async function evaluateVariableOperation(variableNodeId, submissionId, prisma50, valueMap, options = {}) {
-  let treeId = options.treeId;
+async function evaluateVariableOperation(variableNodeId, submissionId, prisma50, valueMap, options2 = {}) {
+  let treeId = options2.treeId;
   if (!treeId) {
     const variableNode = await prisma50.treeBranchLeafNode.findUnique({
       where: { id: variableNodeId },
@@ -4297,11 +4438,11 @@ async function evaluateVariableOperation(variableNodeId, submissionId, prisma50,
     treeId = variableNode?.treeId;
   }
   const localValueMap = valueMap || /* @__PURE__ */ new Map();
-  const labelMap = options.labelMap || /* @__PURE__ */ new Map();
+  const labelMap = options2.labelMap || /* @__PURE__ */ new Map();
   if (!valueMap) {
     await enrichDataFromSubmission(submissionId, prisma50, localValueMap, labelMap, treeId);
   } else {
-    if (treeId && !options.labelMap) {
+    if (treeId && !options2.labelMap) {
       const allNodes = await prisma50.treeBranchLeafNode.findMany({
         where: { treeId },
         select: { id: true, label: true, sharedReferenceName: true, field_label: true }
@@ -4313,7 +4454,7 @@ async function evaluateVariableOperation(variableNodeId, submissionId, prisma50,
       }
     }
   }
-  const variable = options.preloadedVariable || await prisma50.treeBranchLeafNodeVariable.findUnique({
+  const variable = options2.preloadedVariable || await prisma50.treeBranchLeafNodeVariable.findUnique({
     where: { nodeId: variableNodeId },
     select: {
       id: true,
@@ -4336,12 +4477,12 @@ async function evaluateVariableOperation(variableNodeId, submissionId, prisma50,
       sourceRef: ""
     };
   }
-  if (options.organizationId && variable.id) {
+  if (options2.organizationId && variable.id) {
     try {
       const gestionnaireOverride = await prisma50.gestionnaireOverride.findUnique({
         where: {
           organizationId_capabilityId: {
-            organizationId: options.organizationId,
+            organizationId: options2.organizationId,
             capabilityId: variable.id
           }
         }
@@ -5652,6 +5793,416 @@ var init_universal_reference_rewriter = __esm({
   }
 });
 
+// src/services/email-dns-check.ts
+var email_dns_check_exports = {};
+__export(email_dns_check_exports, {
+  checkEmailDNS: () => checkEmailDNS
+});
+async function checkSPF(domain) {
+  const issues = [];
+  try {
+    const records = await import_dns.promises.resolveTxt(domain);
+    const spfRecords = records.flat().filter((r) => r.startsWith("v=spf1"));
+    if (spfRecords.length === 0) {
+      return { found: false, valid: false, issues: ["No SPF record found"] };
+    }
+    if (spfRecords.length > 1) {
+      issues.push("Multiple SPF records found (should be exactly 1)");
+    }
+    const spf = spfRecords[0];
+    if (!spf.includes("-all") && !spf.includes("~all")) {
+      issues.push("SPF record should end with -all (hard fail) or ~all (soft fail)");
+    }
+    if (spf.includes("+all")) {
+      issues.push("SPF record has +all which allows any server to send \u2014 very insecure");
+    }
+    return { found: true, record: spf, valid: issues.length === 0, issues };
+  } catch (err) {
+    return { found: false, valid: false, issues: [`DNS lookup failed: ${err?.message}`] };
+  }
+}
+async function checkDKIM(domain, selector = "postal") {
+  try {
+    const dkimDomain = `${selector}._domainkey.${domain}`;
+    const records = await import_dns.promises.resolveTxt(dkimDomain);
+    const dkimRecord = records.flat().join("");
+    if (!dkimRecord) {
+      return { found: false, valid: false, selector };
+    }
+    const valid = dkimRecord.includes("v=DKIM1") && dkimRecord.includes("p=");
+    return { found: true, record: dkimRecord.slice(0, 200), valid, selector };
+  } catch {
+    return { found: false, valid: false, selector };
+  }
+}
+async function checkDMARC(domain) {
+  const issues = [];
+  try {
+    const records = await import_dns.promises.resolveTxt(`_dmarc.${domain}`);
+    const dmarcRecords = records.flat().filter((r) => r.startsWith("v=DMARC1"));
+    if (dmarcRecords.length === 0) {
+      return { found: false, valid: false, issues: ["No DMARC record found"] };
+    }
+    const dmarc = dmarcRecords[0];
+    const policyMatch = dmarc.match(/p=(\w+)/);
+    const policy = policyMatch ? policyMatch[1] : void 0;
+    if (policy === "none") {
+      issues.push('DMARC policy is "none" \u2014 emails will not be rejected on failure');
+    }
+    if (!dmarc.includes("rua=")) {
+      issues.push("No aggregate report address (rua=) configured");
+    }
+    return { found: true, record: dmarc, valid: issues.length === 0, policy, issues };
+  } catch (err) {
+    return { found: false, valid: false, issues: [`DNS lookup failed: ${err?.message}`] };
+  }
+}
+async function checkMX(domain) {
+  try {
+    const records = await import_dns.promises.resolveMx(domain);
+    const mxHosts = records.sort((a, b) => a.priority - b.priority).map((r) => `${r.priority} ${r.exchange}`);
+    return { found: mxHosts.length > 0, records: mxHosts };
+  } catch {
+    return { found: false, records: [] };
+  }
+}
+async function checkEmailDNS(domain, dkimSelector = "postal") {
+  logger.info(`[EMAIL-DNS] Checking DNS records for ${domain}`);
+  const [spf, dkim, dmarc, mx] = await Promise.all([
+    checkSPF(domain),
+    checkDKIM(domain, dkimSelector),
+    checkDMARC(domain),
+    checkMX(domain)
+  ]);
+  let overall = "pass";
+  if (!spf.found || !dmarc.found) overall = "fail";
+  else if (!dkim.found || !spf.valid || !dmarc.valid) overall = "warn";
+  return { domain, spf, dkim, dmarc, mx, overall };
+}
+var import_dns;
+var init_email_dns_check = __esm({
+  "src/services/email-dns-check.ts"() {
+    "use strict";
+    import_dns = require("dns");
+    init_logger();
+  }
+});
+
+// src/lib/swagger.ts
+var swagger_exports = {};
+__export(swagger_exports, {
+  generateSwaggerSpec: () => generateSwaggerSpec
+});
+function generateSwaggerSpec() {
+  const spec = (0, import_swagger_jsdoc.default)(options);
+  spec.paths = { ...spec.paths, ...manualPaths };
+  return spec;
+}
+var import_swagger_jsdoc, options, manualPaths;
+var init_swagger = __esm({
+  "src/lib/swagger.ts"() {
+    "use strict";
+    import_swagger_jsdoc = __toESM(require("swagger-jsdoc"), 1);
+    options = {
+      definition: {
+        openapi: "3.0.0",
+        info: {
+          title: "Zhiive API",
+          version: "1.0.0",
+          description: "API documentation for the Zhiive Hive platform",
+          contact: {
+            name: "2Thier SRL",
+            url: "https://zhiive.com"
+          }
+        },
+        servers: [
+          {
+            url: "/api",
+            description: "API Server"
+          }
+        ],
+        components: {
+          securitySchemes: {
+            bearerAuth: {
+              type: "http",
+              scheme: "bearer",
+              bearerFormat: "JWT"
+            }
+          },
+          schemas: {
+            Error: {
+              type: "object",
+              properties: {
+                error: { type: "string" },
+                message: { type: "string" }
+              }
+            },
+            User: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                email: { type: "string", format: "email" },
+                firstName: { type: "string" },
+                lastName: { type: "string" },
+                role: { type: "string", enum: ["super_admin", "admin", "manager", "user", "client"] },
+                avatarUrl: { type: "string", nullable: true }
+              }
+            },
+            Lead: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                firstName: { type: "string" },
+                lastName: { type: "string" },
+                email: { type: "string" },
+                phone: { type: "string" },
+                company: { type: "string" },
+                status: { type: "string" },
+                source: { type: "string" }
+              }
+            },
+            WallPost: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                content: { type: "string" },
+                authorId: { type: "string" },
+                mediaUrls: { type: "array", items: { type: "string" } },
+                likesCount: { type: "integer" },
+                commentsCount: { type: "integer" },
+                createdAt: { type: "string", format: "date-time" }
+              }
+            },
+            Notification: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                type: { type: "string" },
+                title: { type: "string" },
+                message: { type: "string" },
+                read: { type: "boolean" },
+                createdAt: { type: "string", format: "date-time" }
+              }
+            },
+            Organization: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                name: { type: "string" },
+                logoUrl: { type: "string", nullable: true }
+              }
+            },
+            PaginatedResponse: {
+              type: "object",
+              properties: {
+                data: { type: "array", items: {} },
+                total: { type: "integer" },
+                page: { type: "integer" },
+                limit: { type: "integer" }
+              }
+            }
+          }
+        },
+        security: [{ bearerAuth: [] }],
+        tags: [
+          { name: "Auth", description: "Authentication & session" },
+          { name: "Users", description: "User management" },
+          { name: "Organizations", description: "Organization (Colony) management" },
+          { name: "Wall", description: "Social wall posts (Buzz)" },
+          { name: "Messenger", description: "Private messaging" },
+          { name: "Leads", description: "Lead management" },
+          { name: "Calendar", description: "Calendar events" },
+          { name: "Notifications", description: "Push & in-app notifications" },
+          { name: "Mail", description: "Email (Postal)" },
+          { name: "Wax", description: "Geolocated pins" },
+          { name: "Arena", description: "Tournaments & competitions" },
+          { name: "Search", description: "Global & fulltext search" },
+          { name: "Storage", description: "File upload & management" },
+          { name: "Admin", description: "Administration endpoints" },
+          { name: "Health", description: "Health check" }
+        ]
+      },
+      // Scan route files for JSDoc @swagger annotations
+      apis: []
+    };
+    manualPaths = {
+      "/health": {
+        get: {
+          tags: ["Health"],
+          summary: "Health check",
+          security: [],
+          responses: {
+            200: { description: "Server is healthy", content: { "application/json": { schema: { type: "object", properties: { status: { type: "string" }, uptime: { type: "number" }, memory: { type: "object" } } } } } }
+          }
+        }
+      },
+      "/auth/login": {
+        post: {
+          tags: ["Auth"],
+          summary: "Login with email & password",
+          security: [],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["email", "password"], properties: { email: { type: "string", format: "email" }, password: { type: "string" } } } } } },
+          responses: {
+            200: { description: "JWT token + user", content: { "application/json": { schema: { type: "object", properties: { token: { type: "string" }, user: { $ref: "#/components/schemas/User" } } } } } },
+            401: { description: "Invalid credentials" }
+          }
+        }
+      },
+      "/auth/me": {
+        get: {
+          tags: ["Auth"],
+          summary: "Get current authenticated user",
+          responses: {
+            200: { description: "Current user", content: { "application/json": { schema: { $ref: "#/components/schemas/User" } } } },
+            401: { description: "Not authenticated" }
+          }
+        }
+      },
+      "/users": {
+        get: {
+          tags: ["Users"],
+          summary: "List all users",
+          parameters: [
+            { name: "role", in: "query", schema: { type: "string" }, description: "Filter by role" }
+          ],
+          responses: { 200: { description: "List of users", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/User" } } } } } }
+        }
+      },
+      "/organizations": {
+        get: {
+          tags: ["Organizations"],
+          summary: "List organizations",
+          responses: { 200: { description: "List of organizations", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Organization" } } } } } }
+        }
+      },
+      "/wall/feed": {
+        get: {
+          tags: ["Wall"],
+          summary: "Get wall feed",
+          parameters: [
+            { name: "limit", in: "query", schema: { type: "integer", default: 20 } },
+            { name: "mode", in: "query", schema: { type: "string", enum: ["personal", "org"] } }
+          ],
+          responses: { 200: { description: "Wall posts feed", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/WallPost" } } } } } }
+        }
+      },
+      "/wall/posts": {
+        post: {
+          tags: ["Wall"],
+          summary: "Create a wall post (Buzz)",
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["content"], properties: { content: { type: "string" }, mediaUrls: { type: "array", items: { type: "string" } }, publishAsOrg: { type: "boolean" } } } } } },
+          responses: { 201: { description: "Created post", content: { "application/json": { schema: { $ref: "#/components/schemas/WallPost" } } } } }
+        }
+      },
+      "/leads": {
+        get: {
+          tags: ["Leads"],
+          summary: "List leads",
+          responses: { 200: { description: "List of leads", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Lead" } } } } } }
+        }
+      },
+      "/notifications": {
+        get: {
+          tags: ["Notifications"],
+          summary: "Get user notifications",
+          parameters: [
+            { name: "includeRead", in: "query", schema: { type: "boolean" } }
+          ],
+          responses: { 200: { description: "List of notifications", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Notification" } } } } } }
+        }
+      },
+      "/messenger/conversations": {
+        get: {
+          tags: ["Messenger"],
+          summary: "List conversations",
+          responses: { 200: { description: "List of conversations" } }
+        }
+      },
+      "/messenger/unread": {
+        get: {
+          tags: ["Messenger"],
+          summary: "Get unread message count",
+          responses: { 200: { description: "Unread count", content: { "application/json": { schema: { type: "object", properties: { count: { type: "integer" } } } } } } }
+        }
+      },
+      "/search/global": {
+        get: {
+          tags: ["Search"],
+          summary: "Global search across all entities",
+          parameters: [
+            { name: "q", in: "query", required: true, schema: { type: "string" } }
+          ],
+          responses: { 200: { description: "Search results grouped by entity type" } }
+        }
+      },
+      "/search/fulltext": {
+        get: {
+          tags: ["Search"],
+          summary: "PostgreSQL full-text search",
+          parameters: [
+            { name: "q", in: "query", required: true, schema: { type: "string" } },
+            { name: "limit", in: "query", schema: { type: "integer", default: 20 } }
+          ],
+          responses: { 200: { description: "Full-text search results with snippets" } }
+        }
+      },
+      "/postal/emails": {
+        get: {
+          tags: ["Mail"],
+          summary: "List emails",
+          parameters: [
+            { name: "folder", in: "query", schema: { type: "string" } },
+            { name: "maxResults", in: "query", schema: { type: "integer" } },
+            { name: "page", in: "query", schema: { type: "integer" } }
+          ],
+          responses: { 200: { description: "List of emails" } }
+        }
+      },
+      "/upload": {
+        post: {
+          tags: ["Storage"],
+          summary: "Upload a file",
+          requestBody: { required: true, content: { "multipart/form-data": { schema: { type: "object", properties: { file: { type: "string", format: "binary" } } } } } },
+          responses: { 200: { description: "Upload result with URL", content: { "application/json": { schema: { type: "object", properties: { url: { type: "string" } } } } } } }
+        }
+      },
+      "/wax/pins": {
+        get: {
+          tags: ["Wax"],
+          summary: "Get map pins in bounding box",
+          parameters: [
+            { name: "sw_lat", in: "query", required: true, schema: { type: "number" } },
+            { name: "sw_lng", in: "query", required: true, schema: { type: "number" } },
+            { name: "ne_lat", in: "query", required: true, schema: { type: "number" } },
+            { name: "ne_lng", in: "query", required: true, schema: { type: "number" } }
+          ],
+          responses: { 200: { description: "List of pins" } }
+        }
+      },
+      "/arena/tournaments": {
+        get: {
+          tags: ["Arena"],
+          summary: "List tournaments",
+          responses: { 200: { description: "List of tournaments" } }
+        }
+      },
+      "/admin/storage/orphans": {
+        get: {
+          tags: ["Admin"],
+          summary: "List GCS orphan files (super admin)",
+          responses: { 200: { description: "Orphan file analysis", content: { "application/json": { schema: { type: "object", properties: { totalGCSFiles: { type: "integer" }, referencedFiles: { type: "integer" }, orphanCount: { type: "integer" }, orphans: { type: "array", items: { type: "string" } } } } } } } }
+        },
+        delete: {
+          tags: ["Admin"],
+          summary: "Delete GCS orphan files (super admin)",
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["keys"], properties: { keys: { type: "array", items: { type: "string" } } } } } } },
+          responses: { 200: { description: "Deletion results" } }
+        }
+      }
+    };
+  }
+});
+
 // src/api-server-clean.ts
 var api_server_clean_exports = {};
 __export(api_server_clean_exports, {
@@ -5659,7 +6210,8 @@ __export(api_server_clean_exports, {
 });
 module.exports = __toCommonJS(api_server_clean_exports);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express121 = __toESM(require("express"), 1);
+var Sentry = __toESM(require("@sentry/node"), 1);
+var import_express122 = __toESM(require("express"), 1);
 var import_http = __toESM(require("http"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_fs8 = __toESM(require("fs"), 1);
@@ -5674,7 +6226,7 @@ var import_compression = __toESM(require("compression"), 1);
 var import_express_winston = __toESM(require("express-winston"), 1);
 
 // src/routes/index.ts
-var import_express90 = require("express");
+var import_express91 = require("express");
 
 // src/routes/authRoutes.ts
 var import_express = require("express");
@@ -5687,6 +6239,39 @@ var import_bcryptjs = __toESM(require("bcryptjs"), 1);
 var import_jsonwebtoken = __toESM(require("jsonwebtoken"), 1);
 var import_fs = __toESM(require("fs"), 1);
 init_logger();
+var MAX_FAILED_ATTEMPTS = 5;
+var LOCKOUT_DURATION_MS = 15 * 60 * 1e3;
+var failedAttempts = /* @__PURE__ */ new Map();
+function checkLockout(key2) {
+  const record = failedAttempts.get(key2);
+  if (!record) return { locked: false };
+  if (Date.now() > record.lockedUntil) {
+    failedAttempts.delete(key2);
+    return { locked: false };
+  }
+  if (record.count >= MAX_FAILED_ATTEMPTS) {
+    return { locked: true, remainingSeconds: Math.ceil((record.lockedUntil - Date.now()) / 1e3) };
+  }
+  return { locked: false };
+}
+function recordFailedAttempt(key2) {
+  const record = failedAttempts.get(key2) || { count: 0, lockedUntil: 0 };
+  record.count += 1;
+  if (record.count >= MAX_FAILED_ATTEMPTS) {
+    record.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+    logger.warn(`[AUTH] \u{1F512} Compte verrouill\xE9 pour ${key2} \u2014 ${MAX_FAILED_ATTEMPTS} tentatives \xE9chou\xE9es`);
+  }
+  failedAttempts.set(key2, record);
+}
+function clearFailedAttempts(key2) {
+  failedAttempts.delete(key2);
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [key2, record] of failedAttempts) {
+    if (now > record.lockedUntil) failedAttempts.delete(key2);
+  }
+}, 30 * 60 * 1e3);
 var getJWTSecret = () => {
   let secret = process.env.JWT_SECRET;
   if (secret && secret.trim()) {
@@ -5714,6 +6299,14 @@ var login = async (req2, res) => {
     const stripInvisible = (s) => s.trim().replace(/[\u200B-\u200D\uFEFF\u00A0\u2060]/g, "");
     const email = typeof rawEmail === "string" ? stripInvisible(rawEmail).toLowerCase() : rawEmail;
     const password = typeof rawPassword === "string" ? stripInvisible(rawPassword) : rawPassword;
+    const lockoutKey = typeof email === "string" ? email : "unknown";
+    const lockout = checkLockout(lockoutKey);
+    if (lockout.locked) {
+      logger.warn(`[AUTH] \u{1F512} Tentative bloqu\xE9e pour ${lockoutKey} \u2014 verrouill\xE9 ${lockout.remainingSeconds}s`);
+      return res.status(429).json({
+        message: `Trop de tentatives \xE9chou\xE9es. R\xE9essayez dans ${Math.ceil((lockout.remainingSeconds || 0) / 60)} minutes.`
+      });
+    }
     logger.debug("[AUTH] \u{1F510} Tentative de connexion", {
       email,
       hasPassword: typeof password === "string" && password.length > 0,
@@ -5772,9 +6365,11 @@ var login = async (req2, res) => {
     const isPasswordValid = await import_bcryptjs.default.compare(password, user.passwordHash);
     logger.debug(`[AUTH] \u{1F511} Comparaison mot de passe: ${isPasswordValid ? "\u2705 VALIDE" : "\u274C INVALIDE"}`);
     if (!isPasswordValid) {
+      recordFailedAttempt(lockoutKey);
       logger.debug(`[AUTH] \u274C Mot de passe incorrect pour: ${email}`);
       return res.status(401).json({ message: "Identifiants invalides" });
     }
+    clearFailedAttempts(lockoutKey);
     if (!user.emailVerified && user.role !== "super_admin") {
       logger.debug(`[AUTH] \u26A0\uFE0F Email non v\xE9rifi\xE9 pour: ${email}`);
       return res.status(403).json({
@@ -5827,6 +6422,16 @@ var login = async (req2, res) => {
       // 24 heures
       path: "/"
     });
+    if (req2.session) {
+      await new Promise((resolve2, reject) => {
+        req2.session.regenerate((err) => {
+          if (err) {
+            logger.warn("[AUTH] Session regeneration failed:", err);
+          }
+          resolve2();
+        });
+      });
+    }
     logger.debug(`[AUTH] \u2705 Connexion r\xE9ussie pour ${email} (cookie secure=${cookieSecure}, sameSite=${cookieSameSite})`);
     res.status(200).json(response);
   } catch (error) {
@@ -6234,12 +6839,34 @@ async function impersonationMiddleware(req2, res, next) {
   }
 }
 
+// src/lib/password-policy.ts
+var MIN_LENGTH = 8;
+function validatePassword(password) {
+  const errors = [];
+  if (!password || typeof password !== "string") {
+    return { valid: false, errors: ["Le mot de passe est requis"] };
+  }
+  if (password.length < MIN_LENGTH) {
+    errors.push(`Le mot de passe doit contenir au moins ${MIN_LENGTH} caract\xE8res`);
+  }
+  if (!/[A-Z]/.test(password)) {
+    errors.push("Le mot de passe doit contenir au moins une majuscule");
+  }
+  if (!/[a-z]/.test(password)) {
+    errors.push("Le mot de passe doit contenir au moins une minuscule");
+  }
+  if (!/[0-9]/.test(password)) {
+    errors.push("Le mot de passe doit contenir au moins un chiffre");
+  }
+  return { valid: errors.length === 0, errors };
+}
+
 // src/routes/misc.ts
-var import_crypto3 = require("crypto");
+var import_crypto4 = require("crypto");
 
 // src/services/EmailService.ts
 var import_nodemailer = __toESM(require("nodemailer"), 1);
-var import_crypto = require("crypto");
+var import_crypto2 = require("crypto");
 init_logger();
 var EmailService = class {
   /**
@@ -6318,7 +6945,7 @@ ${content}
   /**
    * Fallback: envoie via Nodemailer SMTP (noreply@2thier.be ou config SMTP)
    */
-  async sendViaSMTP(to, subject, htmlBody, plainText, attachments, options) {
+  async sendViaSMTP(to, subject, htmlBody, plainText, attachments, options2) {
     const smtpHost = process.env.SMTP_HOST;
     const smtpUser = process.env.SMTP_USER;
     const smtpPass = process.env.SMTP_PASS;
@@ -6329,8 +6956,8 @@ ${content}
     const fromAddress = process.env.SMTP_FROM || smtpUser;
     const fromDomain = fromAddress.split("@")[1] || "zhiive.com";
     try {
-      const displayName = options?.fromName || "Zhiive";
-      const replyToAddr = options?.replyTo || fromAddress;
+      const displayName = options2?.fromName || "Zhiive";
+      const replyToAddr = options2?.replyTo || fromAddress;
       const transporter = import_nodemailer.default.createTransport({
         host: smtpHost,
         port: parseInt(process.env.SMTP_PORT || "465"),
@@ -6350,7 +6977,7 @@ ${content}
         headers: {
           "X-Mailer": "Zhiive Mailer",
           "List-Unsubscribe": `<mailto:${fromAddress}?subject=unsubscribe>`,
-          "Message-ID": `<${(0, import_crypto.randomUUID)()}@${fromDomain}>`,
+          "Message-ID": `<${(0, import_crypto2.randomUUID)()}@${fromDomain}>`,
           "Precedence": "bulk"
         }
       });
@@ -6431,16 +7058,20 @@ router.post("/register", async (req2, res) => {
   if (!email || !password || !firstName) {
     return res.status(400).json({ error: "Email, mot de passe et pr\xE9nom sont requis" });
   }
+  const pwCheck = validatePassword(password);
+  if (!pwCheck.valid) {
+    return res.status(400).json({ error: pwCheck.errors.join(". ") });
+  }
   if (registrationType === "createOrg" && !organizationName) {
     return res.status(400).json({ error: "Le nom de l'organisation est requis pour cr\xE9er une organisation" });
   }
   const normalizedEmail = email.trim().toLowerCase();
   try {
     const hashedPassword = await import_bcryptjs3.default.hash(password, 10);
-    const emailVerificationToken = (0, import_crypto3.randomBytes)(32).toString("hex");
+    const emailVerificationToken = (0, import_crypto4.randomBytes)(32).toString("hex");
     const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1e3);
     const result = await db.$transaction(async (tx) => {
-      const userId = (0, import_crypto3.randomUUID)();
+      const userId = (0, import_crypto4.randomUUID)();
       const user = await tx.user.create({
         data: {
           id: userId,
@@ -6459,7 +7090,7 @@ router.post("/register", async (req2, res) => {
       });
       let organization = null;
       if (registrationType === "createOrg") {
-        const orgId = (0, import_crypto3.randomUUID)();
+        const orgId = (0, import_crypto4.randomUUID)();
         organization = await tx.organization.create({
           data: {
             id: orgId,
@@ -6471,7 +7102,7 @@ router.post("/register", async (req2, res) => {
         });
         const adminRole = await tx.role.create({
           data: {
-            id: (0, import_crypto3.randomUUID)(),
+            id: (0, import_crypto4.randomUUID)(),
             name: "admin",
             label: "Administrateur",
             organizationId: orgId,
@@ -6480,7 +7111,7 @@ router.post("/register", async (req2, res) => {
         });
         await tx.role.create({
           data: {
-            id: (0, import_crypto3.randomUUID)(),
+            id: (0, import_crypto4.randomUUID)(),
             name: "user",
             label: "Utilisateur",
             organizationId: orgId,
@@ -6489,7 +7120,7 @@ router.post("/register", async (req2, res) => {
         });
         await tx.userOrganization.create({
           data: {
-            id: (0, import_crypto3.randomUUID)(),
+            id: (0, import_crypto4.randomUUID)(),
             userId: user.id,
             organizationId: orgId,
             roleId: adminRole.id,
@@ -6502,7 +7133,7 @@ router.post("/register", async (req2, res) => {
         if (zhiiveRole) {
           await tx.userOrganization.create({
             data: {
-              id: (0, import_crypto3.randomUUID)(),
+              id: (0, import_crypto4.randomUUID)(),
               userId: user.id,
               organizationId: ZHIIVE_ORG_ID,
               roleId: ZHIIVE_USER_ROLE_ID,
@@ -6519,7 +7150,7 @@ router.post("/register", async (req2, res) => {
         try {
           await tx.emailAccount.create({
             data: {
-              id: (0, import_crypto3.randomUUID)(),
+              id: (0, import_crypto4.randomUUID)(),
               emailAddress: zhiiveEmail,
               encryptedPassword: "",
               mailProvider: "postal",
@@ -6668,7 +7299,7 @@ router.post("/resend-verification", async (req2, res) => {
     if (user.emailVerified) {
       return res.json({ success: true, message: "Votre email est d\xE9j\xE0 v\xE9rifi\xE9. Vous pouvez vous connecter." });
     }
-    const newToken = (0, import_crypto3.randomBytes)(32).toString("hex");
+    const newToken = (0, import_crypto4.randomBytes)(32).toString("hex");
     const newExpires = new Date(Date.now() + 24 * 60 * 60 * 1e3);
     await db.user.update({
       where: { id: user.id },
@@ -6760,7 +7391,7 @@ router.post("/login", async (req2, res) => {
         if (!existing) {
           await db.userOrganization.create({
             data: {
-              id: (0, import_crypto3.randomUUID)(),
+              id: (0, import_crypto4.randomUUID)(),
               userId: freshUser.id,
               organizationId: ZHIIVE_ORG_ID,
               roleId: ZHIIVE_USER_ROLE_ID,
@@ -6855,7 +7486,7 @@ router.get(
           if (!existing) {
             await db.userOrganization.create({
               data: {
-                id: (0, import_crypto3.randomUUID)(),
+                id: (0, import_crypto4.randomUUID)(),
                 userId: user.id,
                 organizationId: ZHIIVE_ORG_ID,
                 roleId: ZHIIVE_USER_ROLE_ID,
@@ -6951,8 +7582,8 @@ router.post("/logout", (_req, res) => {
     { path: "/", secure: needsSecureCookie },
     { path: "/", sameSite: needsSecureCookie ? "none" : "lax" }
   ];
-  cookieOptions.forEach((options) => {
-    res.clearCookie("token", options);
+  cookieOptions.forEach((options2) => {
+    res.clearCookie("token", options2);
   });
   res.header("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({
@@ -7169,6 +7800,10 @@ router2.post("/avatar", async (req2, res) => {
       return res.status(400).json({ error: "Aucun fichier n'a \xE9t\xE9 t\xE9l\xE9vers\xE9." });
     }
     const file = files.avatar;
+    const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+      return res.status(400).json({ error: "Type de fichier non autoris\xE9. Formats accept\xE9s : JPEG, PNG, GIF, WebP" });
+    }
     const avatarUrl = await saveUploadedFileToStorage(file, "avatars", userId);
     try {
       await prisma4.userPhoto.create({
@@ -7233,6 +7868,10 @@ router2.post("/cover", async (req2, res) => {
       return res.status(400).json({ error: "Aucun fichier n'a \xE9t\xE9 t\xE9l\xE9vers\xE9." });
     }
     const file = files.cover;
+    const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+      return res.status(400).json({ error: "Type de fichier non autoris\xE9. Formats accept\xE9s : JPEG, PNG, GIF, WebP" });
+    }
     const coverUrl = await saveUploadedFileToStorage(file, "covers", userId);
     try {
       await prisma4.userPhoto.create({
@@ -10270,8 +10909,7 @@ router9.post("/accept", async (req2, res) => {
             user.firstName || "",
             user.lastName || ""
           );
-          if (workspaceResult.success) {
-          } else {
+          if (!workspaceResult.success) {
             logger.error(`\u26A0\uFE0F [Invitation] \xC9chec cr\xE9ation workspace pour ${user.email}:`, workspaceResult.error);
           }
         } catch (wsError) {
@@ -10289,6 +10927,11 @@ router9.post("/accept", async (req2, res) => {
       return;
     }
     const { firstName, lastName, password } = acceptInvitationSchema.parse(req2.body);
+    const pwCheck = validatePassword(password);
+    if (!pwCheck.valid) {
+      res.status(400).json({ message: pwCheck.errors.join(". ") });
+      return;
+    }
     const existingUser = await db.user.findUnique({ where: { email: invitation.email } });
     if (existingUser) {
       res.status(409).json({ message: "Un utilisateur avec cette adresse e-mail existe d\xE9j\xE0. Veuillez vous connecter pour accepter l'invitation." });
@@ -10538,7 +11181,7 @@ init_database();
 var import_client4 = require("@prisma/client");
 var import_zod2 = require("zod");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
-var import_crypto5 = require("crypto");
+var import_crypto6 = require("crypto");
 init_logger();
 var router10 = (0, import_express11.Router)();
 var prisma7 = db;
@@ -11146,7 +11789,7 @@ router10.post("/", organizationsCreateRateLimit, requireRole2(["super_admin"]), 
       });
     }
     const now = /* @__PURE__ */ new Date();
-    const generatedId = (0, import_crypto5.randomUUID)();
+    const generatedId = (0, import_crypto6.randomUUID)();
     const newOrganization = await prisma7.$transaction(async (tx) => {
       const org = await tx.organization.create({
         data: {
@@ -11691,7 +12334,7 @@ router10.post("/create-my-org", createMyOrgRateLimit, async (req2, res) => {
       });
     }
     const now = /* @__PURE__ */ new Date();
-    const orgId = (0, import_crypto5.randomUUID)();
+    const orgId = (0, import_crypto6.randomUUID)();
     const result = await prisma7.$transaction(async (tx) => {
       const org = await tx.organization.create({
         data: {
@@ -11709,7 +12352,7 @@ router10.post("/create-my-org", createMyOrgRateLimit, async (req2, res) => {
       });
       const adminRole = await tx.role.create({
         data: {
-          id: (0, import_crypto5.randomUUID)(),
+          id: (0, import_crypto6.randomUUID)(),
           name: "admin",
           label: "Administrateur",
           organizationId: orgId,
@@ -11718,7 +12361,7 @@ router10.post("/create-my-org", createMyOrgRateLimit, async (req2, res) => {
       });
       await tx.role.create({
         data: {
-          id: (0, import_crypto5.randomUUID)(),
+          id: (0, import_crypto6.randomUUID)(),
           name: "user",
           label: "Utilisateur",
           organizationId: orgId,
@@ -11727,7 +12370,7 @@ router10.post("/create-my-org", createMyOrgRateLimit, async (req2, res) => {
       });
       await tx.userOrganization.create({
         data: {
-          id: (0, import_crypto5.randomUUID)(),
+          id: (0, import_crypto6.randomUUID)(),
           userId,
           organizationId: orgId,
           roleId: adminRole.id,
@@ -17437,7 +18080,7 @@ init_database();
 var import_zod5 = require("zod");
 var import_fs4 = __toESM(require("fs"), 1);
 var import_path3 = __toESM(require("path"), 1);
-var import_crypto13 = __toESM(require("crypto"), 1);
+var import_crypto14 = __toESM(require("crypto"), 1);
 
 // src/routes/chantier-workflow.ts
 var import_express20 = require("express");
@@ -17539,7 +18182,7 @@ function requireChantierAction(...actions) {
 
 // src/routes/chantier-workflow.ts
 var import_zod4 = require("zod");
-var import_crypto11 = __toESM(require("crypto"), 1);
+var import_crypto12 = __toESM(require("crypto"), 1);
 var import_nodemailer2 = __toESM(require("nodemailer"), 1);
 init_crypto();
 
@@ -18015,7 +18658,7 @@ router19.post("/transitions", authenticateToken, isAdmin, async (req2, res) => {
     const data = validation.data;
     const transition = await db.chantierStatusTransition.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         organizationId,
         fromStatusId: data.fromStatusId,
         toStatusId: data.toStatusId,
@@ -18240,7 +18883,7 @@ router19.post("/invoice-templates", authenticateToken, isAdmin, async (req2, res
     const data = validation.data;
     const template = await db.chantierInvoiceTemplate.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         organizationId,
         statusId: data.statusId || null,
         type: data.type,
@@ -18360,7 +19003,7 @@ router19.put("/chantiers/:chantierId/billing-plan", authenticateToken, isAdmin, 
         const item = items[i];
         const record = await tx.chantierBillingPlanItem.create({
           data: {
-            id: import_crypto11.default.randomUUID(),
+            id: import_crypto12.default.randomUUID(),
             chantierId,
             organizationId,
             statusId: item.statusId || null,
@@ -18379,7 +19022,7 @@ router19.put("/chantiers/:chantierId/billing-plan", authenticateToken, isAdmin, 
     });
     await db.chantierHistory.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         chantierId,
         action: "BILLING_PLAN_UPDATED",
         toValue: `${items.length} lignes, total ${totalPercentage.toFixed(0)}%`,
@@ -18407,7 +19050,7 @@ router19.post("/chantiers/:chantierId/billing-plan/init", authenticateToken, isA
     for (const tpl of templates) {
       const record = await db.chantierBillingPlanItem.create({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           chantierId,
           organizationId,
           statusId: tpl.statusId,
@@ -18472,7 +19115,7 @@ router19.post("/chantiers/:chantierId/validate", authenticateToken, isAdmin, asy
       const amount = item.percentage && chantierAmount ? Math.round(chantierAmount * item.percentage / 100 * 100) / 100 : item.fixedAmount ? Number(item.fixedAmount) : 0;
       await db.chantierInvoice.create({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           chantierId,
           organizationId,
           type: item.type,
@@ -18502,7 +19145,7 @@ router19.post("/chantiers/:chantierId/validate", authenticateToken, isAdmin, asy
     }
     await db.chantierHistory.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         chantierId,
         action: "CHANTIER_VALIDATED",
         toValue: notes || "Chantier valid\xE9 par admin",
@@ -18534,7 +19177,7 @@ router19.post("/chantiers/:chantierId/unvalidate", authenticateToken, isAdmin, a
     });
     await db.chantierHistory.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         chantierId,
         action: "CHANTIER_UNVALIDATED",
         toValue: "Validation retir\xE9e",
@@ -18603,7 +19246,7 @@ router19.post("/chantiers/:chantierId/invoices", authenticateToken, isAdmin, asy
     const data = validation.data;
     const invoice = await db.chantierInvoice.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         chantierId,
         organizationId,
         type: data.type,
@@ -18621,7 +19264,7 @@ router19.post("/chantiers/:chantierId/invoices", authenticateToken, isAdmin, asy
     });
     await db.chantierHistory.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         chantierId,
         action: "INVOICE_CREATED",
         toValue: `${data.type}: ${data.label} (${data.amount}\u20AC)`,
@@ -18659,7 +19302,7 @@ router19.put("/invoices/:id", authenticateToken, isAdmin, async (req2, res) => {
       updateData.paidAt = /* @__PURE__ */ new Date();
       await db.chantierHistory.create({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           chantierId: existing.chantierId,
           action: "INVOICE_PAID",
           fromValue: existing.status,
@@ -18781,7 +19424,7 @@ router19.post("/chantiers/:chantierId/events", authenticateToken, requireChantie
     const data = validation.data;
     const event = await db.chantierEvent.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         chantierId,
         calendarEventId: data.calendarEventId,
         type: data.type,
@@ -18799,7 +19442,7 @@ router19.post("/chantiers/:chantierId/events", authenticateToken, requireChantie
     });
     await db.chantierHistory.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         chantierId,
         action: "EVENT_PLANNED",
         toValue: `${data.type}`,
@@ -18840,7 +19483,7 @@ router19.put("/events/:id", authenticateToken, requireChantierAction("edit"), as
     if (data.status === "PROBLEM" && existing.status !== "PROBLEM") {
       await db.chantierHistory.create({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           chantierId: existing.chantierId,
           action: "PROBLEM_REPORTED",
           fromValue: existing.status,
@@ -18856,7 +19499,7 @@ router19.put("/events/:id", authenticateToken, requireChantierAction("edit"), as
       updateData.validatedById = user?.userId || user?.id;
       await db.chantierHistory.create({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           chantierId: existing.chantierId,
           action: "EVENT_VALIDATED",
           fromValue: existing.status,
@@ -18908,7 +19551,7 @@ router19.put("/events/:id/lock-subcontract", authenticateToken, isAdmin, async (
     });
     await db.chantierHistory.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         chantierId: existing.chantierId,
         action: "SUBCONTRACT_LOCKED",
         toValue: `${existing.subcontractAmount}\u20AC`,
@@ -18997,7 +19640,7 @@ router19.post("/chantiers/:chantierId/history", authenticateToken, async (req2, 
     }
     const entry = await db.chantierHistory.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         chantierId,
         action: action || "NOTE_ADDED",
         toValue: note || null,
@@ -19072,7 +19715,7 @@ async function checkAutoTransitions(chantierId, organizationId, triggerType, use
     });
     await db.chantierHistory.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         chantierId,
         action: "STATUS_CHANGED",
         fromValue: oldStatusId,
@@ -19115,7 +19758,7 @@ async function sendTransitionNotifications(chantierId, organizationId, fromStatu
     for (const u of targetUsers) {
       await createChantierNotifWithPush({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           userId: u.User.id,
           organizationId,
           type: "CHANTIER_STATUS_CHANGED",
@@ -19214,7 +19857,7 @@ async function notifyProblem(chantierId, organizationId, problemNote, user) {
     if (chantier?.commercialId) {
       await createChantierNotifWithPush({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           userId: chantier.commercialId,
           organizationId,
           type: "CHANTIER_PROBLEM_REPORTED",
@@ -19247,7 +19890,7 @@ async function notifyProblem(chantierId, organizationId, problemNote, user) {
       if (admin.User.id === chantier?.commercialId) continue;
       await createChantierNotifWithPush({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           userId: admin.User.id,
           organizationId,
           type: "CHANTIER_PROBLEM_REPORTED",
@@ -19531,7 +20174,7 @@ router19.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
       await tx.chantierEvent.update({ where: { id }, data: eventUpdate });
       await tx.chantierHistory.create({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           chantierId: event.Chantier.id,
           action: reviewType === "TECHNICAL" ? "TECHNICAL_REVIEW_SUBMITTED" : "RECEPTION_REVIEW_SUBMITTED",
           fromValue: event.status,
@@ -19566,7 +20209,7 @@ router19.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
         for (const admin of admins) {
           await createChantierNotifWithPush({
             data: {
-              id: import_crypto11.default.randomUUID(),
+              id: import_crypto12.default.randomUUID(),
               userId: admin.userId,
               organizationId,
               type: "CHANTIER_PROBLEM_REPORTED",
@@ -19583,7 +20226,7 @@ router19.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
         if (event.Chantier.commercialId) {
           await createChantierNotifWithPush({
             data: {
-              id: import_crypto11.default.randomUUID(),
+              id: import_crypto12.default.randomUUID(),
               userId: event.Chantier.commercialId,
               organizationId,
               type: "CHANTIER_PROBLEM_REPORTED",
@@ -19613,7 +20256,7 @@ router19.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
           });
           rectifyStatus = await db.leadStatus.create({
             data: {
-              id: import_crypto11.default.randomUUID(),
+              id: import_crypto12.default.randomUUID(),
               organizationId,
               name: "\xC0 rectifier",
               color: "#fa8c16",
@@ -19640,7 +20283,7 @@ router19.post("/events/:id/submit-review", authenticateToken, async (req2, res) 
         if (lead?.assignedToId) {
           await createChantierNotifWithPush({
             data: {
-              id: import_crypto11.default.randomUUID(),
+              id: import_crypto12.default.randomUUID(),
               userId: lead.assignedToId,
               organizationId,
               type: "CHANTIER_STATUS_CHANGED",
@@ -19822,7 +20465,7 @@ Le commercial doit corriger le TBL et reg\xE9n\xE9rer un nouveau devis.`,
       });
       await tx.chantierHistory.create({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           chantierId,
           action: "REJECTED_TO_LEAD",
           fromValue: chantier.statusId || "unknown",
@@ -19840,7 +20483,7 @@ Le commercial doit corriger le TBL et reg\xE9n\xE9rer un nouveau devis.`,
       try {
         await createChantierNotifWithPush({
           data: {
-            id: import_crypto11.default.randomUUID(),
+            id: import_crypto12.default.randomUUID(),
             userId: chantier.commercialId,
             organizationId,
             type: "CHANTIER_STATUS_CHANGED",
@@ -19940,7 +20583,7 @@ router19.post("/chantiers/:chantierId/reception/prepare", authenticateToken, asy
         }));
       }
     }
-    const clientAccessToken = import_crypto11.default.randomUUID();
+    const clientAccessToken = import_crypto12.default.randomUUID();
     const clientTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3);
     const reception = existingReception ? await db.chantierReception.update({
       where: { chantierId },
@@ -19980,7 +20623,7 @@ router19.post("/chantiers/:chantierId/reception/prepare", authenticateToken, asy
     });
     await db.chantierHistory.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         chantierId,
         action: "RECEPTION_PREPARED",
         userId,
@@ -20122,7 +20765,7 @@ router19.post("/reception/:token/sign", async (req2, res) => {
       });
       await tx.chantierHistory.create({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           chantierId: reception.chantierId,
           action: "RECEPTION_SIGNED",
           toValue: hasReserves ? "ACCEPTED_WITH_RESERVES" : "ACCEPTED",
@@ -20158,7 +20801,7 @@ router19.post("/reception/:token/sign", async (req2, res) => {
         for (const admin of receptionAdmins) {
           await createChantierNotifWithPush({
             data: {
-              id: import_crypto11.default.randomUUID(),
+              id: import_crypto12.default.randomUUID(),
               userId: admin.userId,
               organizationId: chantier.organizationId,
               type: hasReserves ? "CHANTIER_PROBLEM_REPORTED" : "CHANTIER_VISIT_VALIDATED",
@@ -20287,7 +20930,7 @@ router19.post("/chantiers/:chantierId/reception/send-to-client", authenticateTok
     }
     await db.chantierHistory.create({
       data: {
-        id: import_crypto11.default.randomUUID(),
+        id: import_crypto12.default.randomUUID(),
         chantierId,
         action: "RECEPTION_SENT_TO_CLIENT",
         userId: user?.userId || user?.id,
@@ -20372,7 +21015,7 @@ router19.post("/seed", authenticateToken, isAdmin, async (req2, res) => {
       }
       await db.chantierStatusTransition.create({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           organizationId,
           fromStatusId: fromStatus.id,
           toStatusId: toStatus.id,
@@ -20401,7 +21044,7 @@ router19.post("/seed", authenticateToken, isAdmin, async (req2, res) => {
       }
       await db.chantierInvoiceTemplate.create({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           organizationId,
           statusId: status?.id || null,
           type: tpl.type,
@@ -20493,7 +21136,7 @@ router19.post("/events/:id/submit-commercial-correction", authenticateToken, asy
       }
       await tx.chantierHistory.create({
         data: {
-          id: import_crypto11.default.randomUUID(),
+          id: import_crypto12.default.randomUUID(),
           chantierId: event.Chantier.id,
           action: "COMMERCIAL_CORRECTION_SUBMITTED",
           fromValue: "\xC0 rectifier",
@@ -21527,7 +22170,7 @@ router20.put("/:id/status", authenticateToken, async (req2, res) => {
     try {
       await db.chantierHistory.create({
         data: {
-          id: import_crypto13.default.randomUUID(),
+          id: import_crypto14.default.randomUUID(),
           chantierId: id,
           action: "DRAG_DROP",
           fromValue: oldStatusId || null,
@@ -21590,30 +22233,32 @@ router20.put("/:id/status", authenticateToken, async (req2, res) => {
           );
           if (alreadyExists) continue;
           const amount = tpl.percentage && chantierAmount ? Math.round(Number(chantierAmount) * tpl.percentage / 100 * 100) / 100 : tpl.fixedAmount || 0;
-          await db.chantierInvoice.create({
-            data: {
-              id: import_crypto13.default.randomUUID(),
-              chantierId: id,
-              organizationId,
-              type: tpl.type,
-              label: tpl.label,
-              amount,
-              percentage: tpl.percentage,
-              status: "DRAFT",
-              order: tpl.order,
-              updatedAt: /* @__PURE__ */ new Date()
-            }
-          });
-          await db.chantierHistory.create({
-            data: {
-              id: import_crypto13.default.randomUUID(),
-              chantierId: id,
-              action: "INVOICE_CREATED",
-              toValue: tpl.label,
-              userId: user?.userId || user?.id,
-              data: { autoCreated: true, templateId: tpl.id, type: tpl.type, amount }
-            }
-          });
+          await db.$transaction([
+            db.chantierInvoice.create({
+              data: {
+                id: import_crypto14.default.randomUUID(),
+                chantierId: id,
+                organizationId,
+                type: tpl.type,
+                label: tpl.label,
+                amount,
+                percentage: tpl.percentage,
+                status: "DRAFT",
+                order: tpl.order,
+                updatedAt: /* @__PURE__ */ new Date()
+              }
+            }),
+            db.chantierHistory.create({
+              data: {
+                id: import_crypto14.default.randomUUID(),
+                chantierId: id,
+                action: "INVOICE_CREATED",
+                toValue: tpl.label,
+                userId: user?.userId || user?.id,
+                data: { autoCreated: true, templateId: tpl.id, type: tpl.type, amount }
+              }
+            })
+          ]);
         }
       }
     } catch (autoInvErr) {
@@ -21803,7 +22448,7 @@ router20.post("/resubmit-to-chantier/:leadId", authenticateToken, async (req2, r
     });
     await db.chantierHistory.create({
       data: {
-        id: import_crypto13.default.randomUUID(),
+        id: import_crypto14.default.randomUUID(),
         chantierId: chantier.id,
         action: "RECTIFICATION_COMPLETED",
         fromValue: "\xC0 rectifier",
@@ -21819,7 +22464,7 @@ router20.post("/resubmit-to-chantier/:leadId", authenticateToken, async (req2, r
     if (chantier.Responsable) {
       await db.notification.create({
         data: {
-          id: import_crypto13.default.randomUUID(),
+          id: import_crypto14.default.randomUUID(),
           userId: chantier.Responsable.id,
           organizationId,
           type: "CHANTIER_STATUS_CHANGED",
@@ -22416,7 +23061,7 @@ var import_express23 = require("express");
 init_database();
 init_storage();
 var import_nanoid2 = require("nanoid");
-var import_crypto14 = __toESM(require("crypto"), 1);
+var import_crypto15 = __toESM(require("crypto"), 1);
 
 // src/services/documentPdfRenderer.ts
 var import_pdfkit3 = __toESM(require("pdfkit"), 1);
@@ -22985,7 +23630,7 @@ var DocumentPdfRenderer = class {
     }
     this.currentY = this.margin;
   }
-  renderModulePricingTablePaginated(config, x, y, width, height, options) {
+  renderModulePricingTablePaginated(config, x, y, width, height, options2) {
     const title = config.title || "Tarifs";
     const currency = config.currency || "\u20AC";
     let items = [];
@@ -23006,7 +23651,7 @@ var DocumentPdfRenderer = class {
         total: (row.quantity || 1) * parseFloat(row.unitPrice || 0)
       }));
     }
-    const reservedBottomY = options?.reservedBottomY;
+    const reservedBottomY = options2?.reservedBottomY;
     const getPageBottomLimit = () => {
       const hardLimit = this.pageHeight - this.margin;
       if (reservedBottomY && Number.isFinite(reservedBottomY)) {
@@ -23036,7 +23681,7 @@ var DocumentPdfRenderer = class {
     const startNewPage = () => {
       this.doc.addPage();
       this.currentY = 0;
-      options?.onAddPage?.();
+      options2?.onAddPage?.();
     };
     if (!items || items.length === 0) {
       if (!this.canFitOnPage(y, 50)) {
@@ -24565,11 +25210,11 @@ var DocumentPdfRenderer = class {
   /**
    * Dessine du texte souligné à une position donnée
    */
-  drawUnderlinedText(text, x, y, options) {
-    this.doc.text(text, x, y, options);
-    const textWidth = this.doc.widthOfString(text, options);
+  drawUnderlinedText(text, x, y, options2) {
+    this.doc.text(text, x, y, options2);
+    const textWidth = this.doc.widthOfString(text, options2);
     const lineY = y + this.doc.currentLineHeight() - 1;
-    this.doc.save().strokeColor(this.doc._fillColor?.[0] || "#333333").lineWidth(0.5).moveTo(x, lineY).lineTo(x + Math.min(textWidth, options?.width || textWidth), lineY).stroke().restore();
+    this.doc.save().strokeColor(this.doc._fillColor?.[0] || "#333333").lineWidth(0.5).moveTo(x, lineY).lineTo(x + Math.min(textWidth, options2?.width || textWidth), lineY).stroke().restore();
   }
   /**
    * Résout une ref @repeat en remplaçant le templateChildId par templateChildId-suffix
@@ -27143,7 +27788,7 @@ router22.delete("/generated/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-async function generateClientPdfBuffer(documentId, options) {
+async function generateClientPdfBuffer(documentId, options2) {
   const document = await prisma9.generatedDocument.findFirst({
     where: { id: documentId },
     include: {
@@ -27273,7 +27918,7 @@ async function generateClientPdfBuffer(documentId, options) {
     tblData: dataSnapshot.tblData || dataSnapshot,
     selectOptionsMap,
     formulaResultsMap,
-    electronicSignatures: options?.electronicSignatures || void 0,
+    electronicSignatures: options2?.electronicSignatures || void 0,
     quote: {
       ...dataSnapshot.quote || {},
       number: dataSnapshot.quote?.number || document.documentNumber || "",
@@ -27777,7 +28422,7 @@ router22.post("/generated/:id/send-email", async (req2, res) => {
     if (includeSignatureLink && organizationId) {
       try {
         const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-        const accessToken = import_crypto14.default.randomUUID();
+        const accessToken = import_crypto15.default.randomUUID();
         const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1e3);
         const leadData = document.Lead;
         const signerName = [leadData?.firstName, leadData?.lastName].filter(Boolean).join(" ") || to;
@@ -30586,7 +31231,7 @@ var import_express27 = require("express");
 init_database();
 var import_zod10 = require("zod");
 var import_express_rate_limit3 = __toESM(require("express-rate-limit"), 1);
-var import_crypto16 = require("crypto");
+var import_crypto17 = require("crypto");
 init_logger();
 var router26 = (0, import_express27.Router)();
 var prisma11 = db;
@@ -31253,7 +31898,7 @@ router26.post("/:userId/resend-verification", requireRole2(["admin", "super_admi
     if (user.emailVerified) {
       return res.json({ success: true, message: "Cet utilisateur a d\xE9j\xE0 v\xE9rifi\xE9 son email.", alreadyVerified: true });
     }
-    const newToken = (0, import_crypto16.randomBytes)(32).toString("hex");
+    const newToken = (0, import_crypto17.randomBytes)(32).toString("hex");
     const newExpires = new Date(Date.now() + 24 * 60 * 60 * 1e3);
     await prisma11.user.update({
       where: { id: userId },
@@ -31771,6 +32416,7 @@ var import_express31 = __toESM(require("express"), 1);
 init_database();
 init_crypto();
 init_logger();
+init_storage();
 var prisma13 = db;
 var router30 = import_express31.default.Router();
 router30.use(authMiddleware, impersonationMiddleware);
@@ -31882,6 +32528,140 @@ router30.get("/mail/settings", async (req2, res) => {
     logger.error("Erreur lors de la r\xE9cup\xE9ration des param\xE8tres mail:", error);
     res.status(500).json({ error: "Erreur interne du serveur" });
   }
+});
+var GCS_URL_PREFIX = "https://storage.googleapis.com/crm-2thier-uploads/";
+router30.get("/storage/orphans", requireRole2(["super_admin"]), async (_req, res) => {
+  try {
+    const gcsFiles = await listAllGCSFiles();
+    logger.info(`[GCS-CLEANUP] Found ${gcsFiles.length} files in bucket`);
+    const referencedKeys = /* @__PURE__ */ new Set();
+    const addUrl = (url) => {
+      if (!url) return;
+      if (url.startsWith(GCS_URL_PREFIX)) {
+        referencedKeys.add(url.slice(GCS_URL_PREFIX.length));
+      } else if (url.startsWith("/uploads/")) {
+        referencedKeys.add(url.slice("/uploads/".length));
+      }
+    };
+    const addJsonUrls = (json) => {
+      if (!json) return;
+      const str = typeof json === "string" ? json : JSON.stringify(json);
+      const matches = str.match(/https?:\/\/storage\.googleapis\.com\/crm-2thier-uploads\/[^"'\s,\]]+/g);
+      if (matches) matches.forEach((m) => addUrl(m));
+    };
+    const [
+      users,
+      orgs,
+      leads,
+      stories,
+      wallPosts,
+      wallComments,
+      messages,
+      photos,
+      docs,
+      chantiers,
+      invoices,
+      timeEntries,
+      signatures,
+      sparks,
+      battles,
+      capsules,
+      events,
+      moments,
+      expenses
+    ] = await Promise.all([
+      prisma13.user.findMany({ select: { avatarUrl: true, coverUrl: true } }),
+      prisma13.organization.findMany({ select: { logoUrl: true, coverUrl: true } }),
+      prisma13.lead.findMany({ select: { id: true } }),
+      // lead has no direct file urls
+      prisma13.story.findMany({ select: { mediaUrl: true, musicUrl: true } }),
+      prisma13.wallPost.findMany({ select: { mediaUrls: true } }),
+      prisma13.wallComment.findMany({ select: { mediaUrl: true } }),
+      prisma13.message.findMany({ select: { mediaUrls: true } }),
+      prisma13.userPhoto.findMany({ select: { url: true } }),
+      prisma13.generatedDocument.findMany({ select: { pdfUrl: true, signatureUrl: true } }),
+      prisma13.chantier.findMany({ select: { documentUrl: true } }),
+      prisma13.chantierInvoice.findMany({ select: { documentUrl: true, peppolXmlUrl: true } }),
+      prisma13.timeEntry.findMany({ select: { clockInPhotoUrl: true, clockOutPhotoUrl: true } }),
+      prisma13.electronicSignature.findMany({ select: { signedPdfUrl: true } }),
+      prisma13.spark.findMany({ select: { mediaUrl: true } }),
+      prisma13.battleEntry.findMany({ select: { mediaUrl: true } }),
+      prisma13.timeCapsule.findMany({ select: { mediaUrl: true } }),
+      prisma13.socialEvent.findMany({ select: { coverUrl: true } }),
+      prisma13.hiveLiveMomentMedia.findMany({ select: { url: true } }),
+      prisma13.expense.findMany({ select: { receiptUrl: true } })
+    ]);
+    users.forEach((u) => {
+      addUrl(u.avatarUrl);
+      addUrl(u.coverUrl);
+    });
+    orgs.forEach((o) => {
+      addUrl(o.logoUrl);
+      addUrl(o.coverUrl);
+    });
+    stories.forEach((s) => {
+      addUrl(s.mediaUrl);
+      addUrl(s.musicUrl);
+    });
+    wallPosts.forEach((p) => addJsonUrls(p.mediaUrls));
+    wallComments.forEach((c) => addUrl(c.mediaUrl));
+    messages.forEach((m) => addJsonUrls(m.mediaUrls));
+    photos.forEach((p) => addUrl(p.url));
+    docs.forEach((d) => {
+      addUrl(d.pdfUrl);
+      addUrl(d.signatureUrl);
+    });
+    chantiers.forEach((c) => addUrl(c.documentUrl));
+    invoices.forEach((i) => {
+      addUrl(i.documentUrl);
+      addUrl(i.peppolXmlUrl);
+    });
+    timeEntries.forEach((t) => {
+      addUrl(t.clockInPhotoUrl);
+      addUrl(t.clockOutPhotoUrl);
+    });
+    signatures.forEach((s) => addUrl(s.signedPdfUrl));
+    sparks.forEach((s) => addUrl(s.mediaUrl));
+    battles.forEach((b) => addUrl(b.mediaUrl));
+    capsules.forEach((c) => addUrl(c.mediaUrl));
+    events.forEach((e) => addUrl(e.coverUrl));
+    moments.forEach((m) => addUrl(m.url));
+    expenses.forEach((e) => addUrl(e.receiptUrl));
+    const orphans = gcsFiles.filter((key2) => !referencedKeys.has(key2));
+    logger.info(`[GCS-CLEANUP] ${referencedKeys.size} referenced keys, ${orphans.length} orphans detected`);
+    res.json({
+      totalGCSFiles: gcsFiles.length,
+      referencedFiles: referencedKeys.size,
+      orphanCount: orphans.length,
+      orphans: orphans.slice(0, 200)
+      // limit response size
+    });
+  } catch (error) {
+    logger.error("[GCS-CLEANUP] Error listing orphans:", error);
+    res.status(500).json({ error: "Failed to list orphans" });
+  }
+});
+router30.delete("/storage/orphans", requireRole2(["super_admin"]), async (req2, res) => {
+  const { keys } = req2.body;
+  if (!keys || !Array.isArray(keys) || keys.length === 0) {
+    res.status(400).json({ error: "keys array is required" });
+    return;
+  }
+  if (keys.length > 500) {
+    res.status(400).json({ error: "Maximum 500 keys per request" });
+    return;
+  }
+  const results = { deleted: 0, failed: 0 };
+  for (const key2 of keys) {
+    try {
+      await deleteFile(key2);
+      results.deleted++;
+    } catch {
+      results.failed++;
+    }
+  }
+  logger.info(`[GCS-CLEANUP] Deleted ${results.deleted} orphans (${results.failed} failed)`);
+  res.json(results);
 });
 var admin_default = router30;
 
@@ -32568,12 +33348,12 @@ function isLocalhostBaseUrl(value) {
     return /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(trimmed);
   }
 }
-function getBackendBaseUrl(options = {}) {
+function getBackendBaseUrl(options2 = {}) {
   const envBase = (process.env.BACKEND_URL || process.env.APP_URL || process.env.API_URL || "").trim();
-  if (envBase && (!options.req || !isLocalhostBaseUrl(envBase))) return envBase;
-  if (options.req) return getBaseUrlFromRequest(options.req);
+  if (envBase && (!options2.req || !isLocalhostBaseUrl(envBase))) return envBase;
+  if (options2.req) return getBaseUrlFromRequest(options2.req);
   if (process.env.NODE_ENV !== "production") {
-    const portEnv = options.devPortEnvVar || "PORT";
+    const portEnv = options2.devPortEnvVar || "PORT";
     const port2 = (process.env[portEnv] || "4000").trim();
     return `http://localhost:${port2}`;
   }
@@ -32643,8 +33423,8 @@ async function planCascade(organizationId) {
     return [];
   }
 }
-async function initiateCallWithCascade(options, req2) {
-  const { organizationId, fromNumber, toNumber: toNumber2, leadId } = options;
+async function initiateCallWithCascade(options2, req2) {
+  const { organizationId, fromNumber, toNumber: toNumber2, leadId } = options2;
   try {
     const config = await prisma16.telnyxConfig.findUnique({ where: { organizationId } }).catch(() => null);
     const connectionId = (config?.defaultConnectionId || process.env.TELNYX_CONNECTION_ID || "").trim();
@@ -32774,7 +33554,7 @@ var TelnyxCascadeService = {
 
 // src/api/telnyx.ts
 init_crypto();
-var import_crypto20 = __toESM(require("crypto"), 1);
+var import_crypto21 = __toESM(require("crypto"), 1);
 init_logger();
 var router35 = (0, import_express36.Router)();
 var prisma17 = db;
@@ -32957,7 +33737,7 @@ async function getTelnyxAuth(organizationId) {
 function getApiKeyMeta(rawKey) {
   const trimmed = rawKey.replace(/^Bearer\s+/i, "").trim();
   const prefix = trimmed.length >= 4 ? trimmed.slice(0, 4) : trimmed.length > 0 ? trimmed : null;
-  const fingerprint = import_crypto20.default.createHash("sha256").update(trimmed).digest("hex").slice(0, 12);
+  const fingerprint = import_crypto21.default.createHash("sha256").update(trimmed).digest("hex").slice(0, 12);
   return { length: trimmed.length, prefix, fingerprint };
 }
 function normalizeE164(value) {
@@ -34292,7 +35072,7 @@ router35.post("/config", async (req2, res) => {
       ...incomingKey ? { apiKeyMeta: getApiKeyMeta(incomingKey) } : {}
     });
   } catch (error) {
-    const errorId = import_crypto20.default.randomUUID();
+    const errorId = import_crypto21.default.randomUUID();
     logger.error(`\u274C [Telnyx API] Erreur sauvegarde configuration (errorId=${errorId}):`, error);
     const anyErr = error;
     const prismaCode = anyErr?.code;
@@ -36065,7 +36845,7 @@ var analytics_default = router38;
 var import_express40 = __toESM(require("express"), 1);
 var import_fs5 = __toESM(require("fs"), 1);
 var import_path4 = __toESM(require("path"), 1);
-var import_crypto21 = require("crypto");
+var import_crypto22 = require("crypto");
 init_logger();
 var geminiSingleton = getGeminiService();
 var router39 = import_express40.default.Router();
@@ -36140,7 +36920,7 @@ async function logAiUsage(params) {
     };
     await db.aiUsageLog?.create?.({
       data: {
-        id: (0, import_crypto21.randomUUID)(),
+        id: (0, import_crypto22.randomUUID)(),
         organizationId: organizationId || void 0,
         userId: userId || void 0,
         type,
@@ -36156,7 +36936,7 @@ async function logAiUsage(params) {
     }).catch(async () => {
       await db.$executeRawUnsafe(
         'INSERT INTO "AiUsageLog" (id, "userId", "organizationId", type, model, "tokensPrompt", "tokensOutput", "latencyMs", success, "errorCode", "errorMessage", meta) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12);',
-        (0, import_crypto21.randomUUID)(),
+        (0, import_crypto22.randomUUID)(),
         userId,
         organizationId,
         type,
@@ -37920,7 +38700,7 @@ var ai_default = router39;
 var import_express41 = __toESM(require("express"), 1);
 var import_fs6 = __toESM(require("fs"), 1);
 var import_path5 = __toESM(require("path"), 1);
-var import_crypto22 = __toESM(require("crypto"), 1);
+var import_crypto23 = __toESM(require("crypto"), 1);
 var router40 = import_express41.default.Router();
 router40.use(authenticateToken);
 var ALLOWED_ROOTS = ["src", "prisma"];
@@ -38004,7 +38784,7 @@ router40.get("/code/file", (req2, res) => {
     const content = import_fs6.default.readFileSync(target, "utf8");
     const totalBytes = Buffer.byteLength(content, "utf8");
     const lines = content.split(/\r?\n/);
-    const etag = 'W/"' + import_crypto22.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
+    const etag = 'W/"' + import_crypto23.default.createHash("sha256").update(content).digest("hex").slice(0, 16) + '"';
     const ifNoneMatch = req2.headers["if-none-match"];
     if (ifNoneMatch && ifNoneMatch === etag) {
       res.status(304).end();
@@ -39164,10 +39944,10 @@ router44.use(authMiddleware);
 function mapFieldForFrontend(field) {
   if (!field || typeof field !== "object") return field;
   const f = field;
-  const options = Array.isArray(f.FieldOption) ? f.FieldOption.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((o) => ({ id: o.id, label: o.label, value: o.value, order: o.order })) : Array.isArray(f.options) ? f.options : [];
+  const options2 = Array.isArray(f.FieldOption) ? f.FieldOption.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((o) => ({ id: o.id, label: o.label, value: o.value, order: o.order })) : Array.isArray(f.options) ? f.options : [];
   const rest = { ...field };
   delete rest["FieldOption"];
-  return { ...rest, options };
+  return { ...rest, options: options2 };
 }
 router44.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
   try {
@@ -39185,7 +39965,8 @@ router44.get("/", requireRole2(["admin", "super_admin"]), async (req2, res) => {
       where: whereClause,
       orderBy: {
         label: "asc"
-      }
+      },
+      take: 500
     });
     res.json(fields);
   } catch (error) {
@@ -39260,7 +40041,6 @@ router44.post("/:fieldId/options", requireRole2(["admin", "super_admin"]), async
           fieldId
         }
       });
-    } else {
     }
     const updatedField = await prisma21.field.findUnique({
       where: { id: fieldId },
@@ -40953,7 +41733,7 @@ var AdvancedSelectService = class {
     if (field.optionNodes.some((node) => node.data && typeof node.data === "object" && node.data !== null && "workflow" in node.data)) {
       capabilities.push("workflow");
     }
-    const options = field.optionNodes.map((node) => ({
+    const options2 = field.optionNodes.map((node) => ({
       label: node.label,
       value: node.value,
       data: node.data || {}
@@ -40961,7 +41741,7 @@ var AdvancedSelectService = class {
     return {
       ...field,
       capabilities,
-      options
+      options: options2
     };
   }
   /**
@@ -41755,10 +42535,10 @@ var DynamicFormulaEngine = class {
    * � Méthode principale appelée par DevisPage
    * Applique toutes les formules dynamiques selon les configurations de la base de données
    */
-  async applyFormulas(fieldValues, options) {
-    const debug = options?.debug || false;
-    const changedFieldId = options?.changedFieldId;
-    const preloadedRules = options?.preloadedRules;
+  async applyFormulas(fieldValues, options2) {
+    const debug = options2?.debug || false;
+    const changedFieldId = options2?.changedFieldId;
+    const preloadedRules = options2?.preloadedRules;
     if (debug) logger.debug("\u{1F680} [DynamicFormulaEngine] Application des formules - d\xE9clench\xE9e par:", changedFieldId, "r\xE8gles pr\xE9charg\xE9es:", !!preloadedRules);
     try {
       const calculatedValues = {};
@@ -41837,8 +42617,8 @@ var DynamicFormulaEngine = class {
   /**
    * 🎯 Évalue une séquence de formule (comme notre formule Prix Kw/h)
    */
-  async evaluateFormulaSequence(sequence, fieldValues, options = {}) {
-    const debug = options.debug || false;
+  async evaluateFormulaSequence(sequence, fieldValues, options2 = {}) {
+    const debug = options2.debug || false;
     for (const item of sequence) {
       if (!item || typeof item !== "object") continue;
       const element = item;
@@ -41851,8 +42631,8 @@ var DynamicFormulaEngine = class {
   /**
    * 🔀 Évalue un élément conditionnel (IF/THEN/ELSE)
    */
-  async evaluateConditionalElement(element, fieldValues, options = {}) {
-    const debug = options.debug || false;
+  async evaluateConditionalElement(element, fieldValues, options2 = {}) {
+    const debug = options2.debug || false;
     const condition = element.condition;
     if (!condition) {
       return { success: false, error: "Condition manquante" };
@@ -41886,8 +42666,8 @@ var DynamicFormulaEngine = class {
   /**
    * 🌿 Évalue une branche (THEN ou ELSE)
    */
-  async evaluateBranch(branch, fieldValues, options = {}) {
-    const debug = options.debug || false;
+  async evaluateBranch(branch, fieldValues, options2 = {}) {
+    const debug = options2.debug || false;
     if (debug) {
     }
     if (branch.length === 1) {
@@ -41928,8 +42708,8 @@ var DynamicFormulaEngine = class {
   /**
    * ⚡ Évalue une action individuelle
    */
-  async evaluateAction(action, fieldValues, options = {}) {
-    const debug = options.debug || false;
+  async evaluateAction(action, fieldValues, options2 = {}) {
+    const debug = options2.debug || false;
     const type = action.type;
     const value = action.value;
     if (debug) {
@@ -43721,7 +44501,7 @@ var NODE_THEMES = {
 };
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes.ts
-var import_crypto26 = require("crypto");
+var import_crypto27 = require("crypto");
 init_operation_interpreter();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/registry/repeat-id-registry.ts
@@ -43832,7 +44612,7 @@ function logCapacityEvent(payload) {
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/sum-display-field-routes.ts
 var import_client5 = require("@prisma/client");
 init_database();
-var import_crypto23 = require("crypto");
+var import_crypto24 = require("crypto");
 init_logger();
 var prisma28 = db;
 function getOrgId2(req2) {
@@ -43840,8 +44620,8 @@ function getOrgId2(req2) {
   const headerOrg = req2.headers?.["x-organization-id"] || req2.headers?.["x-organization"] || req2.headers?.["organization-id"];
   return user.organizationId || headerOrg || null;
 }
-function registerSumDisplayFieldRoutes(router118) {
-  router118.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+function registerSumDisplayFieldRoutes(router119) {
+  router119.post("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId2(req2);
@@ -43889,7 +44669,7 @@ function registerSumDisplayFieldRoutes(router118) {
         }
       });
       if (!mainVariable) {
-        const newId = (0, import_crypto23.randomUUID)();
+        const newId = (0, import_crypto24.randomUUID)();
         const exposedKey = `var_${nodeId.slice(0, 4)}`;
         const existing = await prisma28.treeBranchLeafNodeVariable.findUnique({ where: { exposedKey } });
         const finalExposedKey = existing ? `var_${nodeId.slice(0, 8)}` : exposedKey;
@@ -44213,7 +44993,7 @@ function registerSumDisplayFieldRoutes(router118) {
       res.status(500).json({ error: "Erreur lors de la cr\xC3\u0192\xC2\xA9ation du champ Total", details: errMsg });
     }
   });
-  router118.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
+  router119.delete("/trees/:treeId/nodes/:nodeId/sum-display-field", async (req2, res) => {
     try {
       const { treeId, nodeId } = req2.params;
       const organizationId = getOrgId2(req2);
@@ -44465,14 +45245,14 @@ async function updateSumDisplayFieldAfterCopyChange(sourceNodeId, prismaClient) 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-capacity-formula.ts
 init_universal_reference_rewriter();
 init_logger();
-async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma50, options = {}) {
+async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma50, options2 = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
     formulaCopyCache = /* @__PURE__ */ new Map(),
     preloadedFormula,
     existingNodeIds,
     formulaIdMap: externalFormulaIdMap
-  } = options;
+  } = options2;
   try {
     if (formulaCopyCache.has(originalFormulaId)) {
       const cachedId = formulaCopyCache.get(originalFormulaId);
@@ -44564,21 +45344,21 @@ async function copyFormulaCapacity(originalFormulaId, newNodeId, suffix, prisma5
         updatedAt: /* @__PURE__ */ new Date()
       }
     });
-    if (!options.skipLinking) {
+    if (!options2.skipLinking) {
       try {
         await linkFormulaToAllNodes(prisma50, newFormulaId, rewrittenTokens);
       } catch (e) {
         logger.error(`\xC3\xA2\xC2\x9D\xC5\u2019 Erreur LIAISON AUTOMATIQUE:`, e.message);
       }
     }
-    if (!options.skipLinking && ownerNodeExistsForUpdate) {
+    if (!options2.skipLinking && ownerNodeExistsForUpdate) {
       try {
         await addToNodeLinkedField2(prisma50, finalOwnerNodeId, "linkedFormulaIds", [newFormulaId]);
       } catch (e) {
         logger.warn(`Erreur MAJ linkedFormulaIds du proprietaire:`, e.message);
       }
     }
-    if (!options.skipCapacitySync && ownerNodeExistsForUpdate) {
+    if (!options2.skipCapacitySync && ownerNodeExistsForUpdate) {
       try {
         await prisma50.treeBranchLeafNode.update({
           where: { id: finalOwnerNodeId },
@@ -44715,12 +45495,12 @@ function extractLinkedFormulaIdsFromConditionSet(conditionSet) {
   }
   return ids;
 }
-async function copyConditionCapacity(originalConditionId, newNodeId, suffix, prisma50, options = {}) {
+async function copyConditionCapacity(originalConditionId, newNodeId, suffix, prisma50, options2 = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
     formulaIdMap = /* @__PURE__ */ new Map(),
     conditionCopyCache = /* @__PURE__ */ new Map()
-  } = options;
+  } = options2;
   try {
     if (conditionCopyCache.has(originalConditionId)) {
       const cachedId = conditionCopyCache.get(originalConditionId);
@@ -45028,12 +45808,12 @@ function stripNumericSuffix(value) {
   if (numericOnly.test(value)) return value;
   return value;
 }
-async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma50, options = {}) {
+async function copyTableCapacity2(originalTableId, newNodeId, suffix, prisma50, options2 = {}) {
   const {
     nodeIdMap = /* @__PURE__ */ new Map(),
     tableCopyCache = /* @__PURE__ */ new Map(),
     tableIdMap: tableIdMap2 = /* @__PURE__ */ new Map()
-  } = options;
+  } = options2;
   try {
     if (tableCopyCache.has(originalTableId)) {
       const cachedId = tableCopyCache.get(originalTableId);
@@ -45352,7 +46132,7 @@ async function addToNodeLinkedField4(prisma50, nodeId, field, idsToAdd) {
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/variable-copy-engine.ts
 init_logger();
-async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, prisma50, options = {}) {
+async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, prisma50, options2 = {}) {
   const {
     formulaIdMap = /* @__PURE__ */ new Map(),
     conditionIdMap = /* @__PURE__ */ new Map(),
@@ -45376,7 +46156,7 @@ async function copyVariableWithCapacities(originalVarId, suffix, newNodeId, pris
     existingVariableKeys,
     preloadedVarsByNodeId
     // displayNodeAlreadyCreated is not used anymore in this function; keep options API stable without reassigning
-  } = options;
+  } = options2;
   let finalNodeId = newNodeId;
   const childDisplayNodeIds = [];
   try {
@@ -46936,9 +47716,9 @@ init_universal_reference_rewriter();
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/copy-selector-tables.ts
 init_logger();
-async function copySelectorTablesAfterNodeCopy(prisma50, copiedRootNodeId, originalRootNodeId, options, suffix) {
+async function copySelectorTablesAfterNodeCopy(prisma50, copiedRootNodeId, originalRootNodeId, options2, suffix) {
   try {
-    const originalNodeIds = Array.from(options.nodeIdMap.keys());
+    const originalNodeIds = Array.from(options2.nodeIdMap.keys());
     if (!originalNodeIds.includes(originalRootNodeId)) {
       originalNodeIds.push(originalRootNodeId);
     }
@@ -46978,7 +47758,7 @@ async function copySelectorTablesAfterNodeCopy(prisma50, copiedRootNodeId, origi
     for (const originalSelector of selectorsInOriginal) {
       const originalTableId = originalSelector.table_activeId;
       if (!originalTableId) continue;
-      const copiedSelectorId = options.nodeIdMap.get(originalSelector.id);
+      const copiedSelectorId = options2.nodeIdMap.get(originalSelector.id);
       if (!copiedSelectorId) {
         continue;
       }
@@ -46998,9 +47778,9 @@ async function copySelectorTablesAfterNodeCopy(prisma50, copiedRootNodeId, origi
           suffix,
           prisma50,
           {
-            nodeIdMap: options.nodeIdMap,
-            tableCopyCache: options.tableCopyCache,
-            tableIdMap: options.tableIdMap
+            nodeIdMap: options2.nodeIdMap,
+            tableCopyCache: options2.tableCopyCache,
+            tableIdMap: options2.tableIdMap
           }
         );
         if (result.success) {
@@ -48935,7 +49715,7 @@ async function deepCopyNodeInternal(prisma50, req2, nodeId, opts) {
 // src/components/TreeBranchLeaf/tbl-bridge/routes/tbl-submission-evaluator.ts
 var import_express56 = require("express");
 init_database();
-var import_crypto24 = require("crypto");
+var import_crypto25 = require("crypto");
 init_operation_interpreter();
 init_logger();
 function isSumTotalNodeId(nodeId) {
@@ -49088,7 +49868,7 @@ async function cloneCompletedSubmissionToDraft(params) {
         // (Prisma/Postgres) Empêche un crash si (submissionId,nodeId) existe déjà.
         skipDuplicates: true,
         data: uniqueOriginalRows.map((r) => ({
-          id: (0, import_crypto24.randomUUID)(),
+          id: (0, import_crypto25.randomUUID)(),
           submissionId: newSubmissionId,
           nodeId: r.nodeId,
           value: r.value,
@@ -51427,8 +52207,8 @@ router55.post("/submissions/preview-evaluate", async (req2, res) => {
             }
           });
           if (nodeInfo?.TreeBranchLeafSelectConfig?.options) {
-            const options = Array.isArray(nodeInfo.TreeBranchLeafSelectConfig.options) ? nodeInfo.TreeBranchLeafSelectConfig.options : [];
-            const selectedOption = options.find((opt) => opt.value === value);
+            const options2 = Array.isArray(nodeInfo.TreeBranchLeafSelectConfig.options) ? nodeInfo.TreeBranchLeafSelectConfig.options : [];
+            const selectedOption = options2.find((opt) => opt.value === value);
             if (selectedOption?.sharedReferenceIds?.length) {
               let optionType = null;
               if (JSON.stringify(selectedOption.sharedReferenceIds) === JSON.stringify(sharedReferenceMapping.plan)) {
@@ -51873,7 +52653,7 @@ var tbl_submission_evaluator_default = router55;
 var import_express57 = require("express");
 var import_client6 = require("@prisma/client");
 init_database();
-var import_crypto25 = require("crypto");
+var import_crypto26 = require("crypto");
 init_logger();
 var router56 = (0, import_express57.Router)();
 var prisma30 = db;
@@ -51997,7 +52777,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
       });
       finalName = `${name} (${existingCount + 1})`;
     }
-    const tableId = (0, import_crypto25.randomUUID)();
+    const tableId = (0, import_crypto26.randomUUID)();
     if (sourceTableId) {
       const sourceTable = await prisma30.treeBranchLeafNodeTable.findUnique({
         where: { id: sourceTableId },
@@ -52118,7 +52898,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
       const colFormat = typeof col === "object" && col !== null && col.format ? col.format : null;
       const colMetadata = typeof col === "object" && col !== null && col.metadata ? col.metadata : {};
       return {
-        id: (0, import_crypto25.randomUUID)(),
+        id: (0, import_crypto26.randomUUID)(),
         tableId,
         columnIndex: index,
         name: colName,
@@ -52129,7 +52909,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
       };
     });
     const tableRowsData = rows.map((row, index) => ({
-      id: (0, import_crypto25.randomUUID)(),
+      id: (0, import_crypto26.randomUUID)(),
       tableId,
       rowIndex: index,
       // IMPORTANT: Prisma JSON ne supporte pas undefined/NaN/BigInt/Date
@@ -52199,7 +52979,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
               if (!existingRowConfig) {
                 await prisma30.treeBranchLeafSelectConfig.create({
                   data: {
-                    id: (0, import_crypto25.randomUUID)(),
+                    id: (0, import_crypto26.randomUUID)(),
                     nodeId: rowSourceField,
                     options: [],
                     multiple: false,
@@ -52231,7 +53011,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
               if (!existingColConfig) {
                 await prisma30.treeBranchLeafSelectConfig.create({
                   data: {
-                    id: (0, import_crypto25.randomUUID)(),
+                    id: (0, import_crypto26.randomUUID)(),
                     nodeId: colSourceField,
                     options: [],
                     multiple: false,
@@ -52261,7 +53041,7 @@ router56.post("/nodes/:nodeId/tables", async (req2, res) => {
             if (!existingCompositeConfig) {
               await prisma30.treeBranchLeafSelectConfig.create({
                 data: {
-                  id: (0, import_crypto25.randomUUID)(),
+                  id: (0, import_crypto26.randomUUID)(),
                   nodeId,
                   options: [],
                   multiple: false,
@@ -52463,7 +53243,7 @@ router56.put("/tables/:id", async (req2, res) => {
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: id } });
         if (columns.length > 0) {
           const newColumnsData = columns.map((col, index) => ({
-            id: (0, import_crypto25.randomUUID)(),
+            id: (0, import_crypto26.randomUUID)(),
             tableId: id,
             columnIndex: index,
             name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
@@ -52479,7 +53259,7 @@ router56.put("/tables/:id", async (req2, res) => {
         await tx.treeBranchLeafNodeTableRow.deleteMany({ where: { tableId: id } });
         if (rows.length > 0) {
           const allRowsData = rows.map((row, index) => ({
-            id: (0, import_crypto25.randomUUID)(),
+            id: (0, import_crypto26.randomUUID)(),
             tableId: id,
             rowIndex: index,
             cells: toJsonSafe2(row)
@@ -52733,7 +53513,7 @@ router56.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
       if (Array.isArray(columns) && columns.length > 0) {
         await tx.treeBranchLeafNodeTableColumn.deleteMany({ where: { tableId: effectiveDataTableId } });
         const newColumnsData = columns.map((col, index) => ({
-          id: (0, import_crypto25.randomUUID)(),
+          id: (0, import_crypto26.randomUUID)(),
           tableId: effectiveDataTableId,
           columnIndex: index,
           name: typeof col === "string" ? col : col.name || `Colonne ${index + 1}`,
@@ -52758,7 +53538,7 @@ router56.put("/nodes/:nodeId/tables/:tableId", async (req2, res) => {
             cellsValue = [rowLabel];
           }
           return {
-            id: (0, import_crypto25.randomUUID)(),
+            id: (0, import_crypto26.randomUUID)(),
             tableId: effectiveDataTableId,
             rowIndex: index,
             cells: toJsonSafe2(cellsValue)
@@ -53038,7 +53818,7 @@ var computeLogicVersion = () => {
     entries: stats.entries,
     parseCount: stats.parseCount
   });
-  const version = (0, import_crypto26.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
+  const version = (0, import_crypto27.createHash)("sha1").update(seed).digest("hex").slice(0, 8);
   return { version, metrics, stats };
 };
 function getAuthCtx3(req2) {
@@ -53398,7 +54178,7 @@ router57.post("/trees", async (req2, res) => {
     if (!targetOrgId) {
       return res.status(400).json({ error: "organizationId requis (en-t\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xAAte x-organization-id ou dans le corps)" });
     }
-    const id = (0, import_crypto26.randomUUID)();
+    const id = (0, import_crypto27.randomUUID)();
     const tree = await prisma31.treeBranchLeafTree.create({
       data: {
         id,
@@ -53437,7 +54217,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
     if (!sourceTree) {
       return res.status(404).json({ error: "Arbre source non trouv\xE9" });
     }
-    const newTreeId = (0, import_crypto26.randomUUID)();
+    const newTreeId = (0, import_crypto27.randomUUID)();
     const newTree = await prisma31.treeBranchLeafTree.create({
       data: {
         id: newTreeId,
@@ -53463,7 +54243,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
     }
     const idMap = /* @__PURE__ */ new Map();
     for (const node of sourceNodes) {
-      idMap.set(node.id, (0, import_crypto26.randomUUID)());
+      idMap.set(node.id, (0, import_crypto27.randomUUID)());
     }
     const now = /* @__PURE__ */ new Date();
     const nodeCreateData = sourceNodes.map((node) => {
@@ -53676,7 +54456,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceVariables.length > 0) {
       const varCreateData = sourceVariables.map((v) => ({
-        id: (0, import_crypto26.randomUUID)(),
+        id: (0, import_crypto27.randomUUID)(),
         nodeId: idMap.get(v.nodeId) ?? v.nodeId,
         exposedKey: `${v.exposedKey}_${newTreeId.slice(0, 8)}`,
         displayName: v.displayName,
@@ -53701,7 +54481,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceConditions.length > 0) {
       const condCreateData = sourceConditions.map((c) => ({
-        id: (0, import_crypto26.randomUUID)(),
+        id: (0, import_crypto27.randomUUID)(),
         nodeId: idMap.get(c.nodeId) ?? c.nodeId,
         organizationId: targetOrgId,
         name: c.name,
@@ -53719,7 +54499,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceFormulas.length > 0) {
       const formulaCreateData = sourceFormulas.map((f) => ({
-        id: (0, import_crypto26.randomUUID)(),
+        id: (0, import_crypto27.randomUUID)(),
         nodeId: idMap.get(f.nodeId) ?? f.nodeId,
         organizationId: targetOrgId,
         name: f.name,
@@ -53739,7 +54519,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
       include: { tableColumns: true, tableRows: true }
     });
     for (const table of sourceTables) {
-      const newTableId = (0, import_crypto26.randomUUID)();
+      const newTableId = (0, import_crypto27.randomUUID)();
       await prisma31.treeBranchLeafNodeTable.create({
         data: {
           id: newTableId,
@@ -53762,7 +54542,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
       if (table.tableColumns.length > 0) {
         await prisma31.treeBranchLeafNodeTableColumn.createMany({
           data: table.tableColumns.map((col) => ({
-            id: (0, import_crypto26.randomUUID)(),
+            id: (0, import_crypto27.randomUUID)(),
             tableId: newTableId,
             columnIndex: col.columnIndex,
             name: col.name,
@@ -53776,7 +54556,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
       if (table.tableRows.length > 0) {
         await prisma31.treeBranchLeafNodeTableRow.createMany({
           data: table.tableRows.map((row) => ({
-            id: (0, import_crypto26.randomUUID)(),
+            id: (0, import_crypto27.randomUUID)(),
             tableId: newTableId,
             rowIndex: row.rowIndex,
             cells: row.cells
@@ -53789,7 +54569,7 @@ router57.post("/trees/:id/duplicate", async (req2, res) => {
     });
     if (sourceSelectConfigs.length > 0) {
       const selectCreateData = sourceSelectConfigs.map((sc) => ({
-        id: (0, import_crypto26.randomUUID)(),
+        id: (0, import_crypto27.randomUUID)(),
         nodeId: idMap.get(sc.nodeId) ?? sc.nodeId,
         options: sc.options,
         multiple: sc.multiple,
@@ -56667,7 +57447,7 @@ router57.put("/trees/:treeId/nodes/:nodeId/data", async (req2, res) => {
           updatedAt: /* @__PURE__ */ new Date()
         },
         create: {
-          id: (0, import_crypto26.randomUUID)(),
+          id: (0, import_crypto27.randomUUID)(),
           nodeId: targetNodeId,
           exposedKey: safeExposedKey || `var_${String(nodeId).slice(0, 4)}`,
           displayName,
@@ -57116,7 +57896,7 @@ router57.post("/nodes/:nodeId/formulas", async (req2, res) => {
     }
     const formula = await prisma31.treeBranchLeafNodeFormula.create({
       data: {
-        id: (0, import_crypto26.randomUUID)(),
+        id: (0, import_crypto27.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -57537,7 +58317,7 @@ router57.post("/nodes/:nodeId/conditions", async (req2, res) => {
     }
     const condition = await prisma31.treeBranchLeafNodeCondition.create({
       data: {
-        id: (0, import_crypto26.randomUUID)(),
+        id: (0, import_crypto27.randomUUID)(),
         nodeId,
         organizationId: organizationId || null,
         name: uniqueName,
@@ -57784,7 +58564,7 @@ var normalizeTableInstance = (table) => {
     throw error;
   }
 };
-var fetchNormalizedTable = async (nodeId, options = {}, client = prisma31) => {
+var fetchNormalizedTable = async (nodeId, options2 = {}, client = prisma31) => {
   const tablesRaw = await client.treeBranchLeafNodeTable.findMany({
     where: { nodeId },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }]
@@ -57793,7 +58573,7 @@ var fetchNormalizedTable = async (nodeId, options = {}, client = prisma31) => {
     return null;
   }
   const tables = tablesRaw.map(normalizeTableInstance);
-  let target = options.tableId ? tables.find((tbl) => tbl.id === options.tableId) : void 0;
+  let target = options2.tableId ? tables.find((tbl) => tbl.id === options2.tableId) : void 0;
   if (!target) {
     const nodeInfo = await client.treeBranchLeafNode.findUnique({
       where: { id: nodeId },
@@ -58573,7 +59353,7 @@ router57.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
     let insertOrder = siblingsCount;
     const now = /* @__PURE__ */ new Date();
     for (const item of toCreate) {
-      const newNodeId = (0, import_crypto26.randomUUID)();
+      const newNodeId = (0, import_crypto27.randomUUID)();
       const nodeMetadata = {
         generatedFrom: "table_lookup",
         tableNodeId: baseNode.id,
@@ -58612,7 +59392,7 @@ router57.post("/nodes/:nodeId/table/generate-selects", async (req2, res) => {
       });
       await prisma31.treeBranchLeafSelectConfig.create({
         data: {
-          id: (0, import_crypto26.randomUUID)(),
+          id: (0, import_crypto27.randomUUID)(),
           nodeId: newNode.id,
           options: [],
           multiple: false,
@@ -58779,14 +59559,14 @@ router57.post("/nodes/:nodeId/table/evaluate", (req2, res) => {
 });
 router57.post("/evaluate/formula", async (req2, res) => {
   try {
-    const { expr, rolesMap, values, options } = req2.body ?? {};
+    const { expr, rolesMap, values, options: options2 } = req2.body ?? {};
     if (typeof expr !== "string" || !expr.trim()) {
       return res.status(400).json({ error: "expr_required" });
     }
-    const strict = Boolean(options?.strict);
-    const enableCache = options?.enableCache !== void 0 ? Boolean(options.enableCache) : true;
-    const divisionByZeroValue = typeof options?.divisionByZeroValue === "number" ? options.divisionByZeroValue : 0;
-    const precisionScale = typeof options?.precisionScale === "number" ? options.precisionScale : void 0;
+    const strict = Boolean(options2?.strict);
+    const enableCache = options2?.enableCache !== void 0 ? Boolean(options2.enableCache) : true;
+    const divisionByZeroValue = typeof options2?.divisionByZeroValue === "number" ? options2.divisionByZeroValue : 0;
+    const precisionScale = typeof options2?.precisionScale === "number" ? options2.precisionScale : void 0;
     const valueStore = values && typeof values === "object" ? values : {};
     const evaluation = await evaluateExpression(expr, createRolesProxy(rolesMap), {
       resolveVariable: (nodeId) => coerceToNumber(valueStore[nodeId]),
@@ -60347,7 +61127,7 @@ router57.post("/submissions", async (req2, res) => {
       const now = /* @__PURE__ */ new Date();
       const created = await prisma31.treeBranchLeafSubmission.create({
         data: {
-          id: (0, import_crypto26.randomUUID)(),
+          id: (0, import_crypto27.randomUUID)(),
           treeId: normalizedTreeId,
           userId: safeUserId,
           leadId: normalizedLeadId,
@@ -60373,7 +61153,7 @@ router57.post("/submissions", async (req2, res) => {
           if (toCreate.length > 0) {
             await tx.treeBranchLeafSubmissionData.createMany({
               data: toCreate.map(({ nodeId, value: raw }) => ({
-                id: (0, import_crypto26.randomUUID)(),
+                id: (0, import_crypto27.randomUUID)(),
                 submissionId: created.id,
                 nodeId,
                 value: raw == null ? null : String(raw),
@@ -60603,7 +61383,7 @@ router57.get("/nodes/:fieldId/select-config", async (req2, res) => {
         if (isRowBased || isColumnBased) {
           selectConfig = await prisma31.treeBranchLeafSelectConfig.create({
             data: {
-              id: (0, import_crypto26.randomUUID)(),
+              id: (0, import_crypto27.randomUUID)(),
               nodeId: fieldId,
               options: [],
               multiple: false,
@@ -60655,7 +61435,7 @@ router57.post("/nodes/:fieldId/select-config", async (req2, res) => {
     const selectConfig = await prisma31.treeBranchLeafSelectConfig.upsert({
       where: { nodeId: fieldId },
       create: {
-        id: (0, import_crypto26.randomUUID)(),
+        id: (0, import_crypto27.randomUUID)(),
         nodeId: fieldId,
         options: [],
         multiple: false,
@@ -60746,7 +61526,7 @@ router57.post("/nodes/:nodeId/normalize-step4", async (req2, res) => {
     const sc = await prisma31.treeBranchLeafSelectConfig.upsert({
       where: { nodeId },
       create: {
-        id: (0, import_crypto26.randomUUID)(),
+        id: (0, import_crypto27.randomUUID)(),
         nodeId,
         options: [],
         multiple: false,
@@ -60828,7 +61608,7 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
         await prisma31.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto26.randomUUID)(),
+            id: (0, import_crypto27.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -60975,9 +61755,9 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
           logger.warn(`\u26A0\uFE0F [TreeBranchLeaf API] Ligne "${effectiveKeyRow}" introuvable`);
           return res.json({ options: [] });
         }
-        let options;
+        let options2;
         if (rowIndex === 0) {
-          options = columns.slice(1).map((colName) => {
+          options2 = columns.slice(1).map((colName) => {
             return {
               value: colName,
               label: selectConfig.displayRow ? colName : colName
@@ -60986,7 +61766,7 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
         } else {
           const dataRowIndex = rowIndex - 1;
           const rowData = data[dataRowIndex] || [];
-          options = columns.slice(1).map((colName, colIdx) => {
+          options2 = columns.slice(1).map((colName, colIdx) => {
             const value = rowData[colIdx];
             return {
               value: String(value),
@@ -61007,7 +61787,7 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
               const matchingRowIdx = rows.findIndex((r) => String(r) === String(filter.resolvedValue));
               if (matchingRowIdx >= 0 && matchingRowIdx < data.length) {
                 const refRowData = data[matchingRowIdx] || [];
-                options = options.filter((_opt, idx) => {
+                options2 = options2.filter((_opt, idx) => {
                   const cellValue = refRowData[idx];
                   return cellValue !== void 0 && cellValue !== null && cellValue !== "";
                 });
@@ -61016,14 +61796,14 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
           }
         }
         const seenValues = /* @__PURE__ */ new Set();
-        options = options.filter((opt) => {
+        options2 = options2.filter((opt) => {
           const key2 = String(opt.value);
           if (seenValues.has(key2)) return false;
           seenValues.add(key2);
           return true;
         });
         return res.json({
-          options,
+          options: options2,
           filterConditions: lookupFilterConditions
         });
       }
@@ -61033,9 +61813,9 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
           logger.warn(`\u26A0\uFE0F [TreeBranchLeaf API] Colonne "${selectConfig.keyColumn}" introuvable`);
           return res.json({ options: [] });
         }
-        let options;
+        let options2;
         if (colIndex === 0) {
-          options = filteredRowIndices.filter((idx) => idx > 0).map((rowIdx) => {
+          options2 = filteredRowIndices.filter((idx) => idx > 0).map((rowIdx) => {
             const rowLabel = rows[rowIdx];
             return {
               value: rowLabel,
@@ -61043,14 +61823,14 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
             };
           }).filter((opt) => opt.value !== "undefined" && opt.value !== "null" && opt.value !== "");
         } else {
-          options = filteredRowIndices.filter((idx) => idx > 0).map((rowIdx) => {
+          options2 = filteredRowIndices.filter((idx) => idx > 0).map((rowIdx) => {
             const fullRow = fullMatrixForFilters[rowIdx] || [];
             const value = fullRow[colIndex];
             return { value: String(value), label: String(value) };
           }).filter((opt) => opt.value !== "undefined" && opt.value !== "null" && opt.value !== "");
         }
         return res.json({
-          options,
+          options: options2,
           columns,
           rows: rows.slice(1).map(String),
           // Sans la ligne d'en-tête
@@ -61087,7 +61867,7 @@ router57.all("/nodes/:nodeId/table/lookup", async (req2, res) => {
           await prisma31.treeBranchLeafSelectConfig.upsert({
             where: { nodeId },
             create: {
-              id: (0, import_crypto26.randomUUID)(),
+              id: (0, import_crypto27.randomUUID)(),
               nodeId,
               options: [],
               multiple: false,
@@ -61216,7 +61996,7 @@ router57.put("/nodes/:nodeId/capabilities/table", async (req2, res) => {
         await prisma31.treeBranchLeafSelectConfig.upsert({
           where: { nodeId },
           create: {
-            id: (0, import_crypto26.randomUUID)(),
+            id: (0, import_crypto27.randomUUID)(),
             nodeId,
             options: [],
             multiple: false,
@@ -61562,7 +62342,7 @@ router57.put("/submissions/:id", async (req2, res) => {
               }
             }
             return {
-              id: (0, import_crypto26.randomUUID)(),
+              id: (0, import_crypto27.randomUUID)(),
               submissionId: id,
               nodeId,
               value: valueStr,
@@ -61712,7 +62492,7 @@ router57.put("/submissions/:id", async (req2, res) => {
         const allRows2 = await tx.treeBranchLeafSubmissionData.findMany({ where: { submissionId: id }, select: { nodeId: true, value: true } });
         const valuesMapTxAll = new Map(allRows2.map((r) => [r.nodeId, r.value == null ? null : String(r.value)]));
         const missingRows = await Promise.all(missingVars.map(async (v) => ({
-          id: (0, import_crypto26.randomUUID)(),
+          id: (0, import_crypto27.randomUUID)(),
           submissionId: id,
           nodeId: v.nodeId,
           value: null,
@@ -62154,7 +62934,7 @@ router57.post("/submissions/stage", async (req2, res) => {
       }
       stage = await prisma31.treeBranchLeafStage.create({
         data: {
-          id: (0, import_crypto26.randomUUID)(),
+          id: (0, import_crypto27.randomUUID)(),
           treeId,
           submissionId,
           leadId,
@@ -62330,7 +63110,7 @@ router57.post("/submissions/stage/commit", async (req2, res) => {
       const result = await prisma31.$transaction(async (tx) => {
         const submission = await tx.treeBranchLeafSubmission.create({
           data: {
-            id: (0, import_crypto26.randomUUID)(),
+            id: (0, import_crypto27.randomUUID)(),
             treeId: stage.treeId,
             userId: stage.userId,
             leadId: stage.leadId,
@@ -62344,7 +63124,7 @@ router57.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto26.randomUUID)(),
+              id: (0, import_crypto27.randomUUID)(),
               submissionId: submission.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -62359,7 +63139,7 @@ router57.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto26.randomUUID)(),
+            id: (0, import_crypto27.randomUUID)(),
             submissionId: submission.id,
             version: 1,
             formData: stage.formData,
@@ -62486,7 +63266,7 @@ router57.post("/submissions/stage/commit", async (req2, res) => {
         if (results.length > 0) {
           await tx.treeBranchLeafSubmissionData.createMany({
             data: results.map((r) => ({
-              id: (0, import_crypto26.randomUUID)(),
+              id: (0, import_crypto27.randomUUID)(),
               submissionId: updated.id,
               nodeId: r.nodeId,
               value: String(r.operationResult || ""),
@@ -62501,7 +63281,7 @@ router57.post("/submissions/stage/commit", async (req2, res) => {
         }
         await tx.treeBranchLeafSubmissionVersion.create({
           data: {
-            id: (0, import_crypto26.randomUUID)(),
+            id: (0, import_crypto27.randomUUID)(),
             submissionId: updated.id,
             version: nextVersion,
             formData: stage.formData,
@@ -62684,7 +63464,7 @@ router57.post("/submissions/:id/restore/:version", async (req2, res) => {
     }
     const stage = await prisma31.treeBranchLeafStage.create({
       data: {
-        id: (0, import_crypto26.randomUUID)(),
+        id: (0, import_crypto27.randomUUID)(),
         treeId: submission.treeId,
         submissionId: id,
         leadId: submission.leadId || "unknown",
@@ -67955,25 +68735,28 @@ router66.post("/submit", submissionRateLimit, async (req2, res) => {
     const ipAddress = req2.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req2.socket.remoteAddress || "unknown";
     const userAgent = req2.headers["user-agent"] ?? "unknown";
     const referredBy = ref || null;
-    const submission = await db.publicFormSubmission.create({
-      data: {
-        formId: form.id,
-        organizationId: form.organizationId,
-        data: payload,
-        status: "new",
-        ipAddress,
-        userAgent,
-        privacyConsent,
-        marketingConsent,
-        referredBy
-      }
-    });
-    await db.publicForm.update({
-      where: { id: form.id },
-      data: {
-        submissionCount: { increment: 1 },
-        lastSubmissionAt: /* @__PURE__ */ new Date()
-      }
+    const submission = await db.$transaction(async (tx) => {
+      const sub = await tx.publicFormSubmission.create({
+        data: {
+          formId: form.id,
+          organizationId: form.organizationId,
+          data: payload,
+          status: "new",
+          ipAddress,
+          userAgent,
+          privacyConsent,
+          marketingConsent,
+          referredBy
+        }
+      });
+      await tx.publicForm.update({
+        where: { id: form.id },
+        data: {
+          submissionCount: { increment: 1 },
+          lastSubmissionAt: /* @__PURE__ */ new Date()
+        }
+      });
+      return sub;
     });
     if (form.autoPublishLeads) {
       try {
@@ -68566,7 +69349,7 @@ var import_express69 = require("express");
 init_database();
 init_PostalEmailService();
 var import_nodemailer4 = __toESM(require("nodemailer"), 1);
-var import_crypto27 = __toESM(require("crypto"), 1);
+var import_crypto28 = __toESM(require("crypto"), 1);
 init_logger();
 var postalApiVerified = false;
 var postalApiChecked = false;
@@ -68587,7 +69370,6 @@ async function isPostalApiConfigured() {
     postalApiVerified = contentType.includes("application/json");
     if (!postalApiVerified) {
       logger.warn(`\u26A0\uFE0F [POSTAL] API REST non fonctionnelle (${resp.status}, content-type: ${contentType}) \u2014 utilisation SMTP direct`);
-    } else {
     }
   } catch {
     logger.warn("\u26A0\uFE0F [POSTAL] API REST inaccessible \u2014 utilisation SMTP direct");
@@ -68640,6 +69422,24 @@ router68.post("/send", authMiddleware, async (req2, res) => {
       return res.status(400).json({ error: "Aucun compte email configur\xE9 pour cet utilisateur" });
     }
     const fromEmail = emailAccount.emailAddress;
+    const allRecipients = [
+      ...Array.isArray(to) ? to : [to],
+      ...cc ? Array.isArray(cc) ? cc : [cc] : [],
+      ...bcc ? Array.isArray(bcc) ? bcc : [bcc] : []
+    ].map((e) => e.trim().toLowerCase());
+    const suppressions = await db.emailSuppression.findMany({
+      where: { email: { in: allRecipients } },
+      select: { email: true, reason: true }
+    });
+    if (suppressions.length > 0) {
+      const suppressedList = suppressions.map((s) => s.email);
+      logger.warn(`\u26A0\uFE0F [POSTAL] Envoi bloqu\xE9 vers adresses supprim\xE9es: ${suppressedList.join(", ")}`);
+      return res.status(422).json({
+        error: "Certains destinataires sont supprim\xE9s (bounce)",
+        suppressedEmails: suppressedList,
+        message: "Ces adresses ont g\xE9n\xE9r\xE9 des bounces. Retirez-les ou levez la suppression."
+      });
+    }
     let messageId;
     const usePostalApi = await isPostalApiConfigured();
     if (usePostalApi) {
@@ -68668,7 +69468,7 @@ router68.post("/send", authMiddleware, async (req2, res) => {
         ...isHtml ? { html: body2 } : { text: body2 },
         headers: {
           "X-Mailer": "ZhiiveMail/1.0",
-          "X-Entity-Ref-ID": import_crypto27.default.randomUUID(),
+          "X-Entity-Ref-ID": import_crypto28.default.randomUUID(),
           "List-Unsubscribe": `<mailto:unsubscribe@zhiive.com?subject=unsubscribe>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
           "Feedback-ID": `zhiive:postal:${req2.user?.userId || "unknown"}`
@@ -68681,7 +69481,7 @@ router68.post("/send", authMiddleware, async (req2, res) => {
     }
     await db.email.create({
       data: {
-        id: import_crypto27.default.randomUUID(),
+        id: import_crypto28.default.randomUUID(),
         userId: req2.user.userId,
         from: fromEmail,
         to: Array.isArray(to) ? to.join(", ") : to,
@@ -69027,13 +69827,177 @@ router68.post("/inbound", async (req2, res) => {
     });
   }
 });
+router68.post("/bounce", async (req2, res) => {
+  try {
+    const webhookSecret = process.env.POSTAL_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const token = req2.headers["x-webhook-token"] || req2.query.token;
+      if (token !== webhookSecret) {
+        logger.warn("\u26A0\uFE0F [POSTAL] Bounce webhook: token invalide");
+      }
+    }
+    const { event, payload } = req2.body || {};
+    if (!event || !payload) {
+      return res.status(200).json({ status: "ignored", reason: "no_event_or_payload" });
+    }
+    let recipientEmail = null;
+    let senderEmail = null;
+    let bounceType = "soft";
+    let details = "";
+    let postalMessageId = null;
+    let postalToken = null;
+    if (event === "MessageBounced") {
+      recipientEmail = payload?.original_message?.to || null;
+      senderEmail = payload?.original_message?.from || null;
+      bounceType = "hard";
+      details = payload?.bounce?.subject || "Hard bounce";
+      postalMessageId = payload?.original_message?.message_id || null;
+      postalToken = payload?.original_message?.token || null;
+    } else if (event === "MessageDeliveryFailed") {
+      recipientEmail = payload?.message?.rcpt_to || null;
+      senderEmail = payload?.message?.from || null;
+      bounceType = payload?.message?.status === "HardFail" ? "hard" : "soft";
+      details = payload?.details || payload?.output || "";
+      postalMessageId = payload?.message?.message_id || null;
+      postalToken = payload?.message?.token || null;
+    } else if (event === "MessageHeld") {
+      recipientEmail = payload?.message?.rcpt_to || null;
+      senderEmail = payload?.message?.from || null;
+      bounceType = "soft";
+      details = "Message held by recipient server";
+      postalToken = payload?.message?.token || null;
+    } else {
+      return res.status(200).json({ status: "ignored", reason: `unhandled_event: ${event}` });
+    }
+    if (!recipientEmail) {
+      return res.status(200).json({ status: "ignored", reason: "no_recipient" });
+    }
+    const normalizedRecipient = recipientEmail.trim().toLowerCase();
+    await db.emailBounce.create({
+      data: {
+        recipientEmail: normalizedRecipient,
+        senderEmail: senderEmail || void 0,
+        bounceType,
+        bounceDetails: details.substring(0, 1e3),
+        postalMessageId,
+        postalToken
+      }
+    });
+    logger.warn(`\u26A0\uFE0F [POSTAL] Bounce ${bounceType}: ${normalizedRecipient} \u2014 ${details.substring(0, 200)}`);
+    if (bounceType === "hard") {
+      await db.emailSuppression.upsert({
+        where: { email: normalizedRecipient },
+        create: {
+          email: normalizedRecipient,
+          reason: "hard_bounce",
+          bounceCount: 1,
+          lastBounceAt: /* @__PURE__ */ new Date()
+        },
+        update: {
+          reason: "hard_bounce",
+          bounceCount: { increment: 1 },
+          lastBounceAt: /* @__PURE__ */ new Date()
+        }
+      });
+      logger.warn(`\u{1F6AB} [POSTAL] Adresse supprim\xE9e (hard bounce): ${normalizedRecipient}`);
+    } else {
+      const recentSoftBounces = await db.emailBounce.count({
+        where: {
+          recipientEmail: normalizedRecipient,
+          bounceType: "soft",
+          createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1e3) }
+          // last 7 days
+        }
+      });
+      if (recentSoftBounces >= 5) {
+        await db.emailSuppression.upsert({
+          where: { email: normalizedRecipient },
+          create: {
+            email: normalizedRecipient,
+            reason: "hard_bounce",
+            bounceCount: recentSoftBounces,
+            lastBounceAt: /* @__PURE__ */ new Date()
+          },
+          update: {
+            reason: "hard_bounce",
+            bounceCount: recentSoftBounces,
+            lastBounceAt: /* @__PURE__ */ new Date()
+          }
+        });
+        logger.warn(`\u{1F6AB} [POSTAL] Adresse supprim\xE9e (5+ soft bounces): ${normalizedRecipient}`);
+      }
+    }
+    res.json({ status: "ok", bounceType, recipient: normalizedRecipient });
+  } catch (error) {
+    logger.error("\u274C [POSTAL] Erreur webhook bounce:", error);
+    res.status(200).json({
+      status: "error",
+      error: error instanceof Error ? error.message : "Erreur inconnue"
+    });
+  }
+});
+router68.get("/suppressions", authMiddleware, async (req2, res) => {
+  if (!req2.user?.userId) {
+    return res.status(401).json({ error: "Authentification requise" });
+  }
+  try {
+    const { page = "1", limit = "50" } = req2.query;
+    const take = Math.min(parseInt(limit, 10) || 50, 200);
+    const skip = (Math.max(parseInt(page, 10) || 1, 1) - 1) * take;
+    const [suppressions, total] = await Promise.all([
+      db.emailSuppression.findMany({
+        orderBy: { lastBounceAt: "desc" },
+        take,
+        skip
+      }),
+      db.emailSuppression.count()
+    ]);
+    res.json({ suppressions, total, page: parseInt(page, 10), hasMore: skip + take < total });
+  } catch (error) {
+    logger.error("\u274C [POSTAL] Erreur listing suppressions:", error);
+    res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des suppressions" });
+  }
+});
+router68.delete("/suppressions/:email", authMiddleware, async (req2, res) => {
+  if (!req2.user?.userId) {
+    return res.status(401).json({ error: "Authentification requise" });
+  }
+  try {
+    const email = decodeURIComponent(req2.params.email).trim().toLowerCase();
+    const existing = await db.emailSuppression.findUnique({ where: { email } });
+    if (!existing) {
+      return res.status(404).json({ error: "Adresse non trouv\xE9e dans les suppressions" });
+    }
+    await db.emailSuppression.delete({ where: { email } });
+    logger.info(`\u2705 [POSTAL] Suppression lev\xE9e pour: ${email} (par userId: ${req2.user.userId})`);
+    res.json({ success: true, message: `Suppression lev\xE9e pour ${email}` });
+  } catch (error) {
+    logger.error("\u274C [POSTAL] Erreur suppression:", error);
+    res.status(500).json({ error: "Erreur lors de la lev\xE9e de la suppression" });
+  }
+});
+router68.get("/dns-check", async (req2, res) => {
+  try {
+    const domain = (req2.query.domain || "").trim().toLowerCase();
+    if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) {
+      return res.status(400).json({ error: "Domaine invalide" });
+    }
+    const selector = req2.query.selector || "postal";
+    const { checkEmailDNS: checkEmailDNS2 } = await Promise.resolve().then(() => (init_email_dns_check(), email_dns_check_exports));
+    const result = await checkEmailDNS2(domain, selector);
+    res.json(result);
+  } catch (error) {
+    logger.error("\u274C [POSTAL] Erreur DNS check:", error);
+    res.status(500).json({ error: "Erreur lors de la v\xE9rification DNS" });
+  }
+});
 var postal_mail_default = router68;
 
 // src/routes/zhiivemail-admin.ts
 var import_express70 = require("express");
 init_database();
 var import_nodemailer5 = __toESM(require("nodemailer"), 1);
-var import_crypto28 = __toESM(require("crypto"), 1);
+var import_crypto29 = __toESM(require("crypto"), 1);
 var import_child_process2 = require("child_process");
 init_logger();
 var router69 = (0, import_express70.Router)();
@@ -69179,7 +70143,7 @@ router69.post("/provision", authMiddleware, requireSuperAdmin, async (req2, res)
     const zhiiveEmail = generateZhiiveEmail(user.firstName, user.lastName, user.email);
     const account = await db.emailAccount.create({
       data: {
-        id: import_crypto28.default.randomUUID(),
+        id: import_crypto29.default.randomUUID(),
         emailAddress: zhiiveEmail,
         encryptedPassword: "",
         mailProvider: "postal",
@@ -69219,7 +70183,7 @@ router69.post("/provision-all", authMiddleware, requireSuperAdmin, async (req2, 
         const zhiiveEmail = generateZhiiveEmail(user.firstName, user.lastName, user.email);
         await db.emailAccount.create({
           data: {
-            id: import_crypto28.default.randomUUID(),
+            id: import_crypto29.default.randomUUID(),
             emailAddress: zhiiveEmail,
             encryptedPassword: "",
             mailProvider: "postal",
@@ -69383,7 +70347,7 @@ router69.get("/server-overview", authMiddleware, requireSuperAdmin, async (_req,
     });
     const spfHasHardfail = spfResult.includes("-all");
     const dmarcHasPolicy = dmarcResult.includes("p=quarantine") || dmarcResult.includes("p=reject");
-    const dns = {
+    const dns2 = {
       mx: { value: mxResult, ok: mxResult.includes("mx.postal.zhiive.com"), status: "ok" },
       spf: {
         value: spfResult,
@@ -69417,7 +70381,7 @@ router69.get("/server-overview", authMiddleware, requireSuperAdmin, async (_req,
         containers,
         disk
       },
-      dns,
+      dns: dns2,
       ipAddresses,
       suppressions: suppressions[0]?.total ? parseInt(suppressions[0].total) : 0
     });
@@ -69560,7 +70524,7 @@ var zhiivemail_admin_default = router69;
 
 // src/routes/mail-provider.ts
 var import_express71 = require("express");
-var import_crypto29 = __toESM(require("crypto"), 1);
+var import_crypto30 = __toESM(require("crypto"), 1);
 init_database();
 init_logger();
 var router70 = (0, import_express71.Router)();
@@ -69596,7 +70560,7 @@ router70.get("/provider", authMiddleware, async (req2, res) => {
       if (orgId) {
         emailAccount = await db.emailAccount.create({
           data: {
-            id: import_crypto29.default.randomUUID(),
+            id: import_crypto30.default.randomUUID(),
             emailAddress: zhiiveEmail,
             encryptedPassword: "",
             // Postal n'a pas besoin de mot de passe utilisateur
@@ -70247,7 +71211,7 @@ var dispatch_default = router72;
 
 // src/routes/integrationsStatus.ts
 var import_express74 = require("express");
-var import_crypto30 = require("crypto");
+var import_crypto31 = require("crypto");
 var import_express_rate_limit13 = __toESM(require("express-rate-limit"), 1);
 init_database();
 init_logger();
@@ -70311,7 +71275,7 @@ router73.post("/ad-platform/connect", requireRole2(["admin", "super_admin"]), as
     } else {
       rec = await prisma38.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto30.randomUUID)(),
+          id: (0, import_crypto31.randomUUID)(),
           organizationId,
           platform,
           name: name || platform,
@@ -70369,7 +71333,7 @@ var import_express75 = require("express");
 init_database();
 var import_axios3 = __toESM(require("axios"), 1);
 var import_googleapis7 = require("googleapis");
-var import_crypto31 = require("crypto");
+var import_crypto32 = require("crypto");
 init_googleConfig();
 
 // src/services/adPlatformService.ts
@@ -71171,7 +72135,7 @@ function sanitizeClientValue(raw) {
 function fingerprintSecret(secret) {
   if (!secret) return null;
   try {
-    const hex = (0, import_crypto31.createHash)("sha256").update(secret).digest("hex");
+    const hex = (0, import_crypto32.createHash)("sha256").update(secret).digest("hex");
     return hex.slice(0, 12);
   } catch {
     return null;
@@ -71271,7 +72235,7 @@ router74.get("/advertising/oauth/:platform/callback", async (req2, res) => {
       }
       const created = await prisma39.adPlatformIntegration.create({
         data: {
-          id: (0, import_crypto31.randomUUID)(),
+          id: (0, import_crypto32.randomUUID)(),
           organizationId,
           platform,
           name: data.name || platform,
@@ -71965,8 +72929,8 @@ router74.get("/advertising/:platform/accounts", async (req2, res) => {
       const runWithApiVersion = async (apiVersion) => {
         const cacheTtlSuccessMs = 3e4;
         const cacheTtlErrorMs = 2e4;
-        const attemptList = async (loginCustomerId, allowCacheRead = true, options) => {
-          const headerFormat = options?.headerFormat ?? "digits";
+        const attemptList = async (loginCustomerId, allowCacheRead = true, options2) => {
+          const headerFormat = options2?.headerFormat ?? "digits";
           const sanitizedLoginForKey = normalizeGoogleAdsCustomerId(loginCustomerId);
           const cacheKeyBase = buildCacheKeyBase(apiVersion, sanitizedLoginForKey ?? loginCustomerId, headerFormat);
           const cacheKeyOk = cacheKeyBase;
@@ -73157,7 +74121,7 @@ router76.get("/fields/:id/options", async (req2, res) => {
       });
       const dataRows = rows.filter((r) => r.rowIndex > 0);
       const firstColumnName = lookupTable.tableColumns[0]?.name || "Nom";
-      const options = dataRows.map((row) => {
+      const options2 = dataRows.map((row) => {
         const cells = row.cells;
         return {
           id: row.id,
@@ -73167,7 +74131,7 @@ router76.get("/fields/:id/options", async (req2, res) => {
         };
       });
       return res.json({
-        options,
+        options: options2,
         source: "lookup",
         parentNodeId: id,
         tableName: lookupTable.name,
@@ -73358,6 +74322,19 @@ router76.post("/upload", async (req2, res) => {
       return res.status(400).json({ error: "Aucun fichier fourni" });
     }
     const file = files.file;
+    const ALLOWED_DOC_MIME = /^(image|video|audio)\//;
+    const ALLOWED_DOC_TYPES = [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "text/csv",
+      "text/plain"
+    ];
+    if (!ALLOWED_DOC_MIME.test(file.mimetype) && !ALLOWED_DOC_TYPES.includes(file.mimetype)) {
+      return res.status(400).json({ error: "Type de fichier non autoris\xE9" });
+    }
     const fileName = file.name;
     const mimeType = file.mimetype;
     const fileSize = file.size;
@@ -74780,7 +75757,7 @@ var wall_default = router79;
 var import_express81 = require("express");
 init_database();
 var import_zod15 = require("zod");
-var import_crypto32 = require("crypto");
+var import_crypto33 = require("crypto");
 init_logger();
 var router80 = (0, import_express81.Router)();
 function getUserContext(req2) {
@@ -74970,7 +75947,7 @@ router80.post("/org-follow/:orgId", authenticateToken, async (req2, res) => {
       where: { userId_organizationId: { userId, organizationId: targetOrgId } },
       update: {},
       create: {
-        id: (0, import_crypto32.randomUUID)(),
+        id: (0, import_crypto33.randomUUID)(),
         userId,
         organizationId: targetOrgId
       }
@@ -75004,7 +75981,7 @@ router80.get("/", authenticateToken, async (req2, res) => {
     if (!settings) {
       settings = await db.socialSettings.create({
         data: {
-          id: (0, import_crypto32.randomUUID)(),
+          id: (0, import_crypto33.randomUUID)(),
           organizationId: orgId,
           updatedAt: /* @__PURE__ */ new Date()
         }
@@ -75029,7 +76006,7 @@ router80.get("/:orgId", authenticateToken, async (req2, res) => {
     if (!settings) {
       settings = await db.socialSettings.create({
         data: {
-          id: (0, import_crypto32.randomUUID)(),
+          id: (0, import_crypto33.randomUUID)(),
           organizationId: targetOrgId,
           updatedAt: /* @__PURE__ */ new Date()
         }
@@ -75053,7 +76030,7 @@ router80.put("/", authenticateToken, async (req2, res) => {
       where: { organizationId: orgId },
       update: { ...parsed.data, updatedAt: /* @__PURE__ */ new Date() },
       create: {
-        id: (0, import_crypto32.randomUUID)(),
+        id: (0, import_crypto33.randomUUID)(),
         organizationId: orgId,
         ...parsed.data,
         updatedAt: /* @__PURE__ */ new Date()
@@ -75080,7 +76057,7 @@ router80.put("/:orgId", authenticateToken, async (req2, res) => {
       where: { organizationId: targetOrgId },
       update: { ...parsed.data, updatedAt: /* @__PURE__ */ new Date() },
       create: {
-        id: (0, import_crypto32.randomUUID)(),
+        id: (0, import_crypto33.randomUUID)(),
         organizationId: targetOrgId,
         ...parsed.data,
         updatedAt: /* @__PURE__ */ new Date()
@@ -75098,7 +76075,7 @@ var social_settings_default = router80;
 var import_express82 = require("express");
 init_database();
 var import_zod16 = require("zod");
-var import_crypto33 = require("crypto");
+var import_crypto34 = require("crypto");
 init_logger();
 var router81 = (0, import_express82.Router)();
 var updatePrefsSchema = import_zod16.z.object({
@@ -75152,7 +76129,7 @@ router81.get("/", authenticateToken, async (req2, res) => {
     if (!prefs) {
       prefs = await db.userNotificationPreference.create({
         data: {
-          id: (0, import_crypto33.randomUUID)(),
+          id: (0, import_crypto34.randomUUID)(),
           userId
         }
       });
@@ -75174,7 +76151,7 @@ router81.put("/", authenticateToken, async (req2, res) => {
       where: { userId },
       update: { ...parsed.data, updatedAt: /* @__PURE__ */ new Date() },
       create: {
-        id: (0, import_crypto33.randomUUID)(),
+        id: (0, import_crypto34.randomUUID)(),
         userId,
         ...parsed.data
       }
@@ -75334,6 +76311,13 @@ router82.get("/export", async (req2, res) => {
         select: { latitude: true, longitude: true, ghostMode: true, updatedAt: true }
       })
     ]);
+    const [emailAccount, formSubmissions, userPhotos, bookmarks, documents] = await Promise.all([
+      db.emailAccount.findUnique({ where: { userId: user.id }, select: { emailAddress: true, createdAt: true } }).catch(() => null),
+      db.formSubmission.findMany({ where: { userId: user.id }, take: 5e3, select: { id: true, data: true, createdAt: true } }).catch(() => []),
+      db.userPhoto.findMany({ where: { userId: user.id }, select: { url: true, category: true, createdAt: true } }).catch(() => []),
+      db.userBookmark.findMany({ where: { userId: user.id }, select: { url: true, title: true, createdAt: true } }).catch(() => []),
+      db.generatedDocument.findMany({ where: { createdBy: user.id }, take: 1e3, select: { id: true, title: true, pdfUrl: true, createdAt: true } }).catch(() => [])
+    ]);
     const exportData = {
       _meta: {
         exportDate: (/* @__PURE__ */ new Date()).toISOString(),
@@ -75364,7 +76348,12 @@ router82.get("/export", async (req2, res) => {
       },
       calendar: calendarEvents,
       devices: pushSubscriptions,
-      locations
+      locations,
+      emailAccount,
+      formSubmissions: { count: formSubmissions.length, items: formSubmissions },
+      photos: userPhotos,
+      bookmarks,
+      documents: { count: documents.length, items: documents }
     };
     const filename = `zhiive-data-export-${user.id.substring(0, 8)}-${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.json`;
     res.setHeader("Content-Type", "application/json");
@@ -75415,6 +76404,50 @@ router82.post("/delete-account", async (req2, res) => {
       db.notification.deleteMany({ where: { userId } }),
       db.pushSubscription.deleteMany({ where: { userId } }),
       db.userLocation.deleteMany({ where: { userId } })
+    ]);
+    await Promise.all([
+      // Email & communications
+      db.emailAccount.deleteMany({ where: { userId } }),
+      db.googleMailWatch.deleteMany({ where: { userId } }).catch(() => {
+      }),
+      db.email.updateMany({ where: { userId }, data: { userId: null } }),
+      // Telecom
+      db.telnyxUserConfig.deleteMany({ where: { userId } }).catch(() => {
+      }),
+      db.telnyxSettings.deleteMany({ where: { userId } }).catch(() => {
+      }),
+      db.telnyxPhoneNumber.updateMany({ where: { assignedUserId: userId }, data: { assignedUserId: null } }).catch(() => {
+      }),
+      db.googleVoiceCall.updateMany({ where: { userId }, data: { userId: null } }).catch(() => {
+      }),
+      db.googleVoiceSMS.updateMany({ where: { userId }, data: { userId: null } }).catch(() => {
+      }),
+      // Calendar
+      db.calendarParticipant.deleteMany({ where: { userId } }).catch(() => {
+      }),
+      db.calendarEvent.updateMany({ where: { ownerId: userId }, data: { ownerId: null } }).catch(() => {
+      }),
+      // Documents & forms
+      db.generatedDocument.updateMany({ where: { createdBy: userId }, data: { createdBy: null } }).catch(() => {
+      }),
+      db.productDocument.updateMany({ where: { uploadedById: userId }, data: { uploadedById: null } }).catch(() => {
+      }),
+      // Org links
+      db.userOrganization.deleteMany({ where: { userId } }),
+      db.invitation.updateMany({ where: { invitedById: userId }, data: { invitedById: null } }).catch(() => {
+      }),
+      // CRM (unassign, don't delete org data)
+      db.lead.updateMany({ where: { assignedToId: userId }, data: { assignedToId: null } }).catch(() => {
+      }),
+      db.chantier.updateMany({ where: { responsableId: userId }, data: { responsableId: null } }).catch(() => {
+      }),
+      db.chantier.updateMany({ where: { commercialId: userId }, data: { commercialId: null } }).catch(() => {
+      }),
+      db.technician.updateMany({ where: { userId }, data: { userId: null } }).catch(() => {
+      }),
+      // Audit trail (anonymize)
+      db.chantierHistory.updateMany({ where: { userId }, data: { userId: null } }).catch(() => {
+      })
     ]);
     await db.user.update({
       where: { id: userId },
@@ -76141,6 +77174,25 @@ init_logger();
 var io = null;
 var userSockets = /* @__PURE__ */ new Map();
 var socketToUser = /* @__PURE__ */ new Map();
+var RATE_LIMIT_WINDOW_MS = 1e4;
+var RATE_LIMIT_MAX_EVENTS = 50;
+var socketRateLimit = /* @__PURE__ */ new Map();
+function isRateLimited(socketId) {
+  const now = Date.now();
+  let record = socketRateLimit.get(socketId);
+  if (!record || now > record.resetAt) {
+    record = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    socketRateLimit.set(socketId, record);
+  }
+  record.count += 1;
+  return record.count > RATE_LIMIT_MAX_EVENTS;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [key2, record] of socketRateLimit) {
+    if (now > record.resetAt) socketRateLimit.delete(key2);
+  }
+}, 6e4);
 function initializeSocketIO(httpServer) {
   io = new import_socket.Server(httpServer, {
     cors: {
@@ -76184,17 +77236,27 @@ function initializeSocketIO(httpServer) {
     socketToUser.set(socket.id, userId);
     updateUserPresence(userId, true);
     joinUserConversations(socket, userId);
-    socket.on("join-conversation", (conversationId) => {
+    const onRateLimited = (event, handler) => {
+      socket.on(event, (...args) => {
+        if (isRateLimited(socket.id)) {
+          logger.warn(`[SOCKET] \u{1F6AB} Rate limited: user ${userId} event ${event}`);
+          socket.emit("error", { message: "Rate limit exceeded, slow down" });
+          return;
+        }
+        handler(...args);
+      });
+    };
+    onRateLimited("join-conversation", (conversationId) => {
       if (typeof conversationId === "string" && conversationId.length < 100) {
         socket.join(`conv:${conversationId}`);
       }
     });
-    socket.on("leave-conversation", (conversationId) => {
+    onRateLimited("leave-conversation", (conversationId) => {
       if (typeof conversationId === "string") {
         socket.leave(`conv:${conversationId}`);
       }
     });
-    socket.on("typing", (data) => {
+    onRateLimited("typing", (data) => {
       if (!data?.conversationId || typeof data.isTyping !== "boolean") return;
       socket.to(`conv:${data.conversationId}`).emit("user-typing", {
         userId,
@@ -76202,7 +77264,7 @@ function initializeSocketIO(httpServer) {
         isTyping: data.isTyping
       });
     });
-    socket.on("messages-delivered", async (data) => {
+    onRateLimited("messages-delivered", async (data) => {
       if (!data?.conversationId || !Array.isArray(data.messageIds)) return;
       try {
         const now = /* @__PURE__ */ new Date();
@@ -76225,7 +77287,7 @@ function initializeSocketIO(httpServer) {
         logger.error("[SOCKET] Error updating delivered status:", err);
       }
     });
-    socket.on("messages-read", async (data) => {
+    onRateLimited("messages-read", async (data) => {
       if (!data?.conversationId) return;
       try {
         const now = /* @__PURE__ */ new Date();
@@ -76253,7 +77315,7 @@ function initializeSocketIO(httpServer) {
         logger.error("[SOCKET] Error updating read status:", err);
       }
     });
-    socket.on("update-status", async (data) => {
+    onRateLimited("update-status", async (data) => {
       try {
         const expiresAt = data.expiresInMinutes ? new Date(Date.now() + data.expiresInMinutes * 6e4) : null;
         await db.userStreak.upsert({
@@ -76282,6 +77344,7 @@ function initializeSocketIO(httpServer) {
     });
     socket.on("disconnect", (reason) => {
       logger.debug(`\u{1F50C} [SOCKET] User ${userId} disconnected (${reason})`);
+      socketRateLimit.delete(socket.id);
       const sockets = userSockets.get(userId);
       if (sockets) {
         sockets.delete(socket.id);
@@ -76692,7 +77755,12 @@ router84.post("/upload", async (req2, res) => {
     const fileList = Array.isArray(uploadedFiles.file) ? uploadedFiles.file : uploadedFiles.file ? [uploadedFiles.file] : Array.isArray(uploadedFiles.files) ? uploadedFiles.files : uploadedFiles.files ? [uploadedFiles.files] : Object.values(uploadedFiles).flat();
     const urls = [];
     let detectedMediaType = "file";
+    const ALLOWED_MIME = /^(image|video|audio)\//;
+    const ALLOWED_DOC_MIME = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
     for (const file of fileList) {
+      if (!ALLOWED_MIME.test(file.mimetype) && !ALLOWED_DOC_MIME.includes(file.mimetype)) {
+        continue;
+      }
       const safeName = file.name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_.-]/g, "");
       const filename = `${Date.now()}_${safeName}`;
       const key2 = `messenger/${user.id}/${filename}`;
@@ -79794,6 +80862,96 @@ router88.get("/global", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la recherche" });
   }
 });
+router88.get("/fulltext", async (req2, res) => {
+  const user = req2.user;
+  if (!user?.id) {
+    res.status(401).json({ error: "Non authentifi\xE9" });
+    return;
+  }
+  const q = (req2.query.q || "").trim();
+  if (q.length < 2) {
+    res.json({ results: [], query: q, total: 0 });
+    return;
+  }
+  const limit = Math.min(parseInt(req2.query.limit) || 20, 50);
+  try {
+    await db.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+    const sanitized = q.replace(/[^\w\sàâäéèêëïîôùûüÿçœæ-]/gi, "").trim();
+    const tsQuery = sanitized.split(/\s+/).filter(Boolean).map((w) => `${w}:*`).join(" & ");
+    if (!tsQuery) {
+      res.json({ results: [], query: q, total: 0 });
+      return;
+    }
+    const results = await db.$queryRawUnsafe(`
+      (
+        SELECT 'post' AS source, wp.id::text, 
+          LEFT(wp.content, 80) AS title,
+          ts_headline('french', wp.content, to_tsquery('french', $1), 'MaxWords=30, MinWords=10, StartSel=<b>, StopSel=</b>') AS snippet,
+          ts_rank(to_tsvector('french', wp.content), to_tsquery('french', $1)) AS rank,
+          '/dashboard?post=' || wp.id::text AS route
+        FROM "WallPost" wp
+        WHERE to_tsvector('french', wp.content) @@ to_tsquery('french', $1)
+        ORDER BY rank DESC
+        LIMIT $2
+      )
+      UNION ALL
+      (
+        SELECT 'message' AS source, m.id::text,
+          LEFT(m.content, 80) AS title,
+          ts_headline('french', m.content, to_tsquery('french', $1), 'MaxWords=30, MinWords=10') AS snippet,
+          ts_rank(to_tsvector('french', m.content), to_tsquery('french', $1)) AS rank,
+          '/messenger' AS route
+        FROM "Message" m
+        WHERE to_tsvector('french', m.content) @@ to_tsquery('french', $1)
+        ORDER BY rank DESC
+        LIMIT $2
+      )
+      UNION ALL
+      (
+        SELECT 'lead' AS source, l.id::text,
+          COALESCE(l."firstName" || ' ' || l."lastName", l.company, l.email) AS title,
+          ts_headline('french',
+            COALESCE(l."firstName",'') || ' ' || COALESCE(l."lastName",'') || ' ' || COALESCE(l.company,'') || ' ' || COALESCE(l.email,'') || ' ' || COALESCE(l.phone,''),
+            to_tsquery('french', $1), 'MaxWords=20, MinWords=5') AS snippet,
+          ts_rank(
+            to_tsvector('french', COALESCE(l."firstName",'') || ' ' || COALESCE(l."lastName",'') || ' ' || COALESCE(l.company,'') || ' ' || COALESCE(l.email,'')),
+            to_tsquery('french', $1)
+          ) AS rank,
+          '/leads/' || l.id::text AS route
+        FROM "Lead" l
+        WHERE to_tsvector('french', COALESCE(l."firstName",'') || ' ' || COALESCE(l."lastName",'') || ' ' || COALESCE(l.company,'') || ' ' || COALESCE(l.email,''))
+          @@ to_tsquery('french', $1)
+        ORDER BY rank DESC
+        LIMIT $2
+      )
+      UNION ALL
+      (
+        SELECT 'email' AS source, e.id::text,
+          e.subject AS title,
+          ts_headline('french', e.subject || ' ' || LEFT(e.body, 500), to_tsquery('french', $1), 'MaxWords=30, MinWords=10') AS snippet,
+          ts_rank(to_tsvector('french', e.subject || ' ' || LEFT(e.body, 500)), to_tsquery('french', $1)) AS rank,
+          '/emails/' || e.id::text AS route
+        FROM "Email" e
+        WHERE to_tsvector('french', e.subject || ' ' || LEFT(e.body, 500)) @@ to_tsquery('french', $1)
+        ORDER BY rank DESC
+        LIMIT $2
+      )
+      ORDER BY rank DESC
+      LIMIT $2
+    `, tsQuery, limit);
+    res.json({
+      results: results.map((r) => ({
+        ...r,
+        rank: Number(r.rank)
+      })),
+      query: q,
+      total: results.length
+    });
+  } catch (err) {
+    logger.error("[FULLTEXT SEARCH] Error:", err);
+    res.status(500).json({ error: "Erreur lors de la recherche full-text" });
+  }
+});
 var SEARXNG_URL = process.env.SEARXNG_URL || "http://46.225.180.8:8888";
 var WEB_SEARCH_RATE_LIMIT = /* @__PURE__ */ new Map();
 var MAX_WEB_SEARCHES_PER_MINUTE = 20;
@@ -80270,12 +81428,151 @@ router88.get("/browse-proxy", asyncHandler(async (req2, res) => {
 }));
 var globalSearch_default = router88;
 
+// src/routes/mfa.ts
+var import_express90 = __toESM(require("express"), 1);
+var import_speakeasy = __toESM(require("speakeasy"), 1);
+var import_qrcode = __toESM(require("qrcode"), 1);
+var import_bcryptjs5 = __toESM(require("bcryptjs"), 1);
+var import_crypto36 = require("crypto");
+init_database();
+var router89 = import_express90.default.Router();
+router89.use(authMiddleware);
+var APP_NAME = "Zhiive";
+var BACKUP_CODES_COUNT = 8;
+function generateBackupCodes() {
+  const plain = [];
+  const hashed = [];
+  for (let i = 0; i < BACKUP_CODES_COUNT; i++) {
+    const code = (0, import_crypto36.randomBytes)(4).toString("hex").toUpperCase();
+    const formatted = `${code.slice(0, 4)}-${code.slice(4)}`;
+    plain.push(formatted);
+    hashed.push(import_bcryptjs5.default.hashSync(formatted, 10));
+  }
+  return { plain, hashed };
+}
+router89.get("/setup", async (req2, res) => {
+  try {
+    const userId = req2.user?.userId;
+    if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
+    const user = await db.user.findUnique({ where: { id: userId }, select: { email: true, mfaEnabled: true } });
+    if (!user) return res.status(404).json({ error: "Utilisateur introuvable" });
+    if (user.mfaEnabled) {
+      return res.status(400).json({ error: "2FA d\xE9j\xE0 activ\xE9. D\xE9sactivez-le d'abord." });
+    }
+    const secretObj = import_speakeasy.default.generateSecret({ length: 20, name: `${APP_NAME} (${user.email})`, issuer: APP_NAME });
+    const secret = secretObj.base32;
+    const qrDataUrl = await import_qrcode.default.toDataURL(secretObj.otpauth_url ?? "");
+    req2.session.mfaSetupSecret = secret;
+    res.json({ secret, qrDataUrl });
+  } catch (e) {
+    res.status(500).json({ error: "Erreur lors de la configuration 2FA" });
+  }
+});
+router89.post("/enable", async (req2, res) => {
+  try {
+    const userId = req2.user?.userId;
+    if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
+    const { token } = req2.body;
+    if (!token) return res.status(400).json({ error: "Code TOTP requis" });
+    const secret = req2.session.mfaSetupSecret;
+    if (!secret) return res.status(400).json({ error: "Session expir\xE9e. Recommencez la configuration." });
+    const isValid = import_speakeasy.default.totp.verify({ secret, encoding: "base32", token, window: 1 });
+    if (!isValid) return res.status(400).json({ error: "Code TOTP invalide ou expir\xE9" });
+    const { plain, hashed } = generateBackupCodes();
+    await db.user.update({
+      where: { id: userId },
+      data: { mfaSecret: secret, mfaEnabled: true, mfaBackupCodes: hashed }
+    });
+    delete req2.session.mfaSetupSecret;
+    res.json({ success: true, backupCodes: plain, message: "2FA activ\xE9 avec succ\xE8s. Sauvegardez vos codes de secours." });
+  } catch (e) {
+    res.status(500).json({ error: "Erreur lors de l'activation 2FA" });
+  }
+});
+router89.post("/disable", async (req2, res) => {
+  try {
+    const userId = req2.user?.userId;
+    if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
+    const { token } = req2.body;
+    if (!token) return res.status(400).json({ error: "Code TOTP ou code de secours requis" });
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { mfaSecret: true, mfaEnabled: true, mfaBackupCodes: true }
+    });
+    if (!user?.mfaEnabled || !user.mfaSecret) {
+      return res.status(400).json({ error: "2FA non activ\xE9 sur ce compte" });
+    }
+    const isValidTotp = import_speakeasy.default.totp.verify({ secret: user.mfaSecret, encoding: "base32", token, window: 1 });
+    const matchedBackup = !isValidTotp && user.mfaBackupCodes.some((h) => import_bcryptjs5.default.compareSync(token, h));
+    if (!isValidTotp && !matchedBackup) {
+      return res.status(400).json({ error: "Code invalide" });
+    }
+    await db.user.update({
+      where: { id: userId },
+      data: { mfaSecret: null, mfaEnabled: false, mfaBackupCodes: [] }
+    });
+    res.json({ success: true, message: "2FA d\xE9sactiv\xE9" });
+  } catch (e) {
+    res.status(500).json({ error: "Erreur lors de la d\xE9sactivation 2FA" });
+  }
+});
+router89.post("/verify", async (req2, res) => {
+  try {
+    const userId = req2.user?.userId;
+    if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
+    const { token } = req2.body;
+    if (!token) return res.status(400).json({ error: "Code requis" });
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { mfaSecret: true, mfaEnabled: true, mfaBackupCodes: true }
+    });
+    if (!user?.mfaEnabled || !user.mfaSecret) {
+      return res.status(400).json({ error: "2FA non activ\xE9" });
+    }
+    const isValidTotp = import_speakeasy.default.totp.verify({ secret: user.mfaSecret, encoding: "base32", token, window: 1 });
+    let usedBackupIndex = -1;
+    if (!isValidTotp) {
+      usedBackupIndex = user.mfaBackupCodes.findIndex((h) => import_bcryptjs5.default.compareSync(token, h));
+    }
+    if (!isValidTotp && usedBackupIndex === -1) {
+      return res.status(400).json({ error: "Code invalide ou expir\xE9" });
+    }
+    if (usedBackupIndex !== -1) {
+      const updatedCodes = [...user.mfaBackupCodes];
+      updatedCodes.splice(usedBackupIndex, 1);
+      await db.user.update({ where: { id: userId }, data: { mfaBackupCodes: updatedCodes } });
+    }
+    req2.session.mfaVerified = true;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: "Erreur lors de la v\xE9rification 2FA" });
+  }
+});
+router89.get("/status", async (req2, res) => {
+  try {
+    const userId = req2.user?.userId;
+    if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { mfaEnabled: true, mfaBackupCodes: true }
+    });
+    res.json({
+      mfaEnabled: user?.mfaEnabled ?? false,
+      backupCodesRemaining: user?.mfaBackupCodes?.length ?? 0
+    });
+  } catch (e) {
+    res.status(500).json({ error: "Erreur" });
+  }
+});
+var mfa_default = router89;
+
 // src/routes/index.ts
-var apiRouter = (0, import_express90.Router)();
+var apiRouter = (0, import_express91.Router)();
 apiRouter.use("/auth", authRoutes_default);
 apiRouter.use("/auto-google-auth", autoGoogleAuthRoutes_default);
 apiRouter.use("/", misc_default);
 apiRouter.use("/profile", profile_default);
+apiRouter.use("/mfa", mfa_default);
 apiRouter.post("/logout", logout);
 apiRouter.use("/organizations", organizations_default);
 apiRouter.use("/organizations", googleWorkspace_default);
@@ -80366,11 +81663,11 @@ apiRouter.get("/health", (_req, res) => {
 var routes_default = apiRouter;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/ia-config-routes.ts
-var import_express91 = __toESM(require("express"), 1);
+var import_express92 = __toESM(require("express"), 1);
 init_database();
 init_logger();
-var router89 = import_express91.default.Router();
-router89.get("/nodes/:nodeId/ia-config", async (req2, res) => {
+var router90 = import_express92.default.Router();
+router90.get("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     logger.debug(`\u{1F4CA} [IA-CONFIG] R\xE9cup\xE9ration config pour node ${nodeId}`);
@@ -80400,7 +81697,7 @@ router89.get("/nodes/:nodeId/ia-config", async (req2, res) => {
     res.status(500).json({ error: "Failed to fetch IA config" });
   }
 });
-router89.put("/nodes/:nodeId/ia-config", async (req2, res) => {
+router90.put("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const config = req2.body;
@@ -80429,7 +81726,7 @@ router89.put("/nodes/:nodeId/ia-config", async (req2, res) => {
     res.status(500).json({ error: "Failed to update IA config" });
   }
 });
-router89.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
+router90.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     logger.debug(`\u{1F5D1}\uFE0F [IA-CONFIG] Suppression config pour node ${nodeId}`);
@@ -80447,14 +81744,14 @@ router89.delete("/nodes/:nodeId/ia-config", async (req2, res) => {
     res.status(500).json({ error: "Failed to delete IA config" });
   }
 });
-var ia_config_routes_default = router89;
+var ia_config_routes_default = router90;
 
 // src/controllers/calculatedValueController.ts
-var import_express92 = require("express");
-var import_crypto35 = require("crypto");
+var import_express93 = require("express");
+var import_crypto37 = require("crypto");
 init_database();
 init_logger();
-var router90 = (0, import_express92.Router)();
+var router91 = (0, import_express93.Router)();
 var prisma42 = db;
 var parseStoredStringValue = (raw) => {
   if (raw === null || raw === void 0) {
@@ -80523,7 +81820,7 @@ var toIsoString = (date) => {
     return void 0;
   }
 };
-router90.get("/:nodeId/calculated-value", async (req2, res) => {
+router91.get("/:nodeId/calculated-value", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const pickQueryString = (key2) => {
@@ -80667,7 +81964,7 @@ router90.get("/:nodeId/calculated-value", async (req2, res) => {
               fieldLabel: node.label
             },
             create: {
-              id: (0, import_crypto35.randomUUID)(),
+              id: (0, import_crypto37.randomUUID)(),
               submissionId,
               nodeId,
               value: String(sum),
@@ -80791,7 +82088,7 @@ router90.get("/:nodeId/calculated-value", async (req2, res) => {
                   lastResolved: resolvedAt
                 },
                 create: {
-                  id: (0, import_crypto35.randomUUID)(),
+                  id: (0, import_crypto37.randomUUID)(),
                   submissionId,
                   nodeId,
                   value: persistedValue,
@@ -80962,7 +82259,7 @@ router90.get("/:nodeId/calculated-value", async (req2, res) => {
                 fieldLabel: node.label
               },
               create: {
-                id: (0, import_crypto35.randomUUID)(),
+                id: (0, import_crypto37.randomUUID)(),
                 submissionId,
                 nodeId,
                 value: stringValue,
@@ -81032,7 +82329,7 @@ router90.get("/:nodeId/calculated-value", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router90.post("/batch-calculated-values", async (req2, res) => {
+router91.post("/batch-calculated-values", async (req2, res) => {
   try {
     const { nodeIds, submissionId } = req2.body;
     if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
@@ -81083,7 +82380,7 @@ router90.post("/batch-calculated-values", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router90.post("/:nodeId/store-calculated-value", async (req2, res) => {
+router91.post("/:nodeId/store-calculated-value", async (req2, res) => {
   try {
     const { nodeId } = req2.params;
     const { calculatedValue, calculatedBy, submissionId } = req2.body;
@@ -81120,7 +82417,7 @@ router90.post("/:nodeId/store-calculated-value", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-router90.post("/store-batch-calculated-values", async (req2, res) => {
+router91.post("/store-batch-calculated-values", async (req2, res) => {
   try {
     const { values, submissionId } = req2.body;
     if (!Array.isArray(values) || values.length === 0) {
@@ -81161,14 +82458,14 @@ router90.post("/store-batch-calculated-values", async (req2, res) => {
     return res.status(500).json({ error: String(error) });
   }
 });
-var calculatedValueController_default = router90;
+var calculatedValueController_default = router91;
 
 // src/routes/tbl-batch-routes.ts
-var import_express93 = require("express");
+var import_express94 = require("express");
 init_database();
 init_logger();
-var router91 = (0, import_express93.Router)();
-router91.use(authenticateToken);
+var router92 = (0, import_express94.Router)();
+router92.use(authenticateToken);
 function getAuthCtx6(req2) {
   const user = req2.user;
   return {
@@ -81176,7 +82473,7 @@ function getAuthCtx6(req2) {
     isSuperAdmin: user?.isSuperAdmin || false
   };
 }
-router91.get("/trees/:treeId/formulas", async (req2, res) => {
+router92.get("/trees/:treeId/formulas", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
@@ -81213,7 +82510,7 @@ router91.get("/trees/:treeId/formulas", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des formules" });
   }
 });
-router91.get("/trees/:treeId/calculated-values", async (req2, res) => {
+router92.get("/trees/:treeId/calculated-values", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { leadId, submissionId: qsSubmissionId } = req2.query;
@@ -81283,7 +82580,7 @@ router91.get("/trees/:treeId/calculated-values", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des valeurs calcul\xE9es" });
   }
 });
-router91.get("/trees/:treeId/select-configs", async (req2, res) => {
+router92.get("/trees/:treeId/select-configs", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
@@ -81345,7 +82642,7 @@ router91.get("/trees/:treeId/select-configs", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des configs select" });
   }
 });
-router91.get("/trees/:treeId/all", async (req2, res) => {
+router92.get("/trees/:treeId/all", async (req2, res) => {
   const { treeId } = req2.params;
   try {
     const { leadId, submissionId: qsSubmissionId } = req2.query;
@@ -81470,7 +82767,7 @@ router91.get("/trees/:treeId/all", async (req2, res) => {
     });
   }
 });
-router91.get("/trees/:treeId/node-data", async (req2, res) => {
+router92.get("/trees/:treeId/node-data", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
@@ -81538,7 +82835,7 @@ router91.get("/trees/:treeId/node-data", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des donn\xE9es de noeuds" });
   }
 });
-router91.get("/trees/:treeId/conditions", async (req2, res) => {
+router92.get("/trees/:treeId/conditions", async (req2, res) => {
   try {
     const { treeId } = req2.params;
     const { organizationId, isSuperAdmin: isSuperAdmin2 } = getAuthCtx6(req2);
@@ -81592,15 +82889,15 @@ router91.get("/trees/:treeId/conditions", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration batch des conditions" });
   }
 });
-var tbl_batch_routes_default = router91;
+var tbl_batch_routes_default = router92;
 
 // src/routes/batch-routes.ts
-var import_express94 = require("express");
+var import_express95 = require("express");
 init_database();
 var import_googleapis8 = require("googleapis");
 init_logger();
-var router92 = (0, import_express94.Router)();
-router92.use(authenticateToken);
+var router93 = (0, import_express95.Router)();
+router93.use(authenticateToken);
 function getAuthCtx7(req2) {
   const user = req2.user;
   return {
@@ -81609,7 +82906,7 @@ function getAuthCtx7(req2) {
     isSuperAdmin: user?.isSuperAdmin || false
   };
 }
-router92.post("/gmail/modify", async (req2, res) => {
+router93.post("/gmail/modify", async (req2, res) => {
   try {
     const { userId, organizationId } = getAuthCtx7(req2);
     const { messageIds, addLabelIds = [], removeLabelIds = [] } = req2.body;
@@ -81646,7 +82943,7 @@ router92.post("/gmail/modify", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router92.post("/gmail/trash", async (req2, res) => {
+router93.post("/gmail/trash", async (req2, res) => {
   try {
     const { userId } = getAuthCtx7(req2);
     const { messageIds } = req2.body;
@@ -81683,7 +82980,7 @@ router92.post("/gmail/trash", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router92.delete("/gmail/delete", async (req2, res) => {
+router93.delete("/gmail/delete", async (req2, res) => {
   try {
     const { userId } = getAuthCtx7(req2);
     const { messageIds } = req2.body;
@@ -81718,7 +83015,7 @@ router92.delete("/gmail/delete", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch Gmail" });
   }
 });
-router92.patch("/leads/status", async (req2, res) => {
+router93.patch("/leads/status", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const { leadIds, statusId } = req2.body;
@@ -81754,7 +83051,7 @@ router92.patch("/leads/status", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router92.patch("/leads/assign", async (req2, res) => {
+router93.patch("/leads/assign", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const { leadIds, assignedToId } = req2.body;
@@ -81781,7 +83078,7 @@ router92.patch("/leads/assign", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router92.delete("/leads", async (req2, res) => {
+router93.delete("/leads", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const { leadIds } = req2.body;
@@ -81804,7 +83101,7 @@ router92.delete("/leads", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch leads" });
   }
 });
-router92.post("/fields/configs", async (req2, res) => {
+router93.post("/fields/configs", async (req2, res) => {
   try {
     const { fieldIds } = req2.body;
     if (!fieldIds || !Array.isArray(fieldIds) || fieldIds.length === 0) {
@@ -81832,7 +83129,7 @@ router92.post("/fields/configs", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch fields" });
   }
 });
-router92.patch("/modules/toggle", async (req2, res) => {
+router93.patch("/modules/toggle", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const { moduleIds, enabled } = req2.body;
@@ -81862,7 +83159,7 @@ router92.patch("/modules/toggle", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur batch modules" });
   }
 });
-router92.get("/analytics/leads-by-status", async (req2, res) => {
+router93.get("/analytics/leads-by-status", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const counts = await db.lead.groupBy({
@@ -81892,7 +83189,7 @@ router92.get("/analytics/leads-by-status", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-router92.get("/analytics/leads-by-source", async (req2, res) => {
+router93.get("/analytics/leads-by-source", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const counts = await db.lead.groupBy({
@@ -81914,7 +83211,7 @@ router92.get("/analytics/leads-by-source", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-router92.get("/analytics/leads-by-assignee", async (req2, res) => {
+router93.get("/analytics/leads-by-assignee", async (req2, res) => {
   try {
     const { organizationId } = getAuthCtx7(req2);
     const counts = await db.lead.groupBy({
@@ -81943,14 +83240,14 @@ router92.get("/analytics/leads-by-assignee", async (req2, res) => {
     res.status(500).json({ error: error.message || "Erreur analytics" });
   }
 });
-var batch_routes_default = router92;
+var batch_routes_default = router93;
 
 // src/api/websites.ts
-var import_express95 = require("express");
+var import_express96 = require("express");
 init_database();
 init_logger();
-var router93 = (0, import_express95.Router)();
-router93.get("/websites", authenticateToken, async (req2, res) => {
+var router94 = (0, import_express96.Router)();
+router94.get("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const showAll = req2.query.all === "true";
@@ -81978,7 +83275,7 @@ router93.get("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router93.get("/websites/id/:id", authenticateToken, async (req2, res) => {
+router94.get("/websites/id/:id", authenticateToken, async (req2, res) => {
   try {
     const { id } = req2.params;
     const websiteId = parseInt(id, 10);
@@ -82001,7 +83298,7 @@ router93.get("/websites/id/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router93.put("/websites/:id", authenticateToken, async (req2, res) => {
+router94.put("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -82066,7 +83363,7 @@ router93.put("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router93.delete("/websites/:id", authenticateToken, async (req2, res) => {
+router94.delete("/websites/:id", authenticateToken, async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.id);
     const organizationId = req2.headers["x-organization-id"];
@@ -82090,7 +83387,7 @@ router93.delete("/websites/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router93.post("/websites", authenticateToken, async (req2, res) => {
+router94.post("/websites", authenticateToken, async (req2, res) => {
   try {
     const organizationId = req2.headers["x-organization-id"];
     const data = req2.body;
@@ -82121,7 +83418,7 @@ router93.post("/websites", authenticateToken, async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router93.get("/websites/:idOrSlug", async (req2, res) => {
+router94.get("/websites/:idOrSlug", async (req2, res) => {
   try {
     const { idOrSlug } = req2.params;
     const organizationId = req2.headers["x-organization-id"];
@@ -82181,7 +83478,7 @@ router93.get("/websites/:idOrSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router93.get("/websites/:slug/services", async (req2, res) => {
+router94.get("/websites/:slug/services", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const website = await db.websites.findFirst({
@@ -82204,7 +83501,7 @@ router93.get("/websites/:slug/services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router93.get("/websites/:slug/projects", async (req2, res) => {
+router94.get("/websites/:slug/projects", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -82232,7 +83529,7 @@ router93.get("/websites/:slug/projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router93.get("/websites/:slug/testimonials", async (req2, res) => {
+router94.get("/websites/:slug/testimonials", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { featured } = req2.query;
@@ -82260,7 +83557,7 @@ router93.get("/websites/:slug/testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router93.get("/websites/:slug/blog", async (req2, res) => {
+router94.get("/websites/:slug/blog", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { limit = "10", featured } = req2.query;
@@ -82299,7 +83596,7 @@ router93.get("/websites/:slug/blog", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router93.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
+router94.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
   try {
     const { slug, postSlug } = req2.params;
     const website = await db.websites.findFirst({
@@ -82336,15 +83633,15 @@ router93.get("/websites/:slug/blog/:postSlug", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var websites_default = router93;
+var websites_default = router94;
 
 // src/api/website-services.ts
-var import_express96 = require("express");
+var import_express97 = require("express");
 init_database();
 init_logger();
-var router94 = (0, import_express96.Router)();
+var router95 = (0, import_express97.Router)();
 var prisma43 = db;
-router94.get("/website-services/:websiteId", async (req2, res) => {
+router95.get("/website-services/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const services = await prisma43.webSiteService.findMany({
@@ -82361,7 +83658,7 @@ router94.get("/website-services/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router94.post("/website-services", async (req2, res) => {
+router95.post("/website-services", async (req2, res) => {
   try {
     const { websiteId, key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
     if (!websiteId || !key2 || !title) {
@@ -82391,7 +83688,7 @@ router94.post("/website-services", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router94.put("/website-services/:id", async (req2, res) => {
+router95.put("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { key: key2, icon, title, description, features, ctaText, ctaUrl, isActive } = req2.body;
@@ -82414,7 +83711,7 @@ router94.put("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router94.delete("/website-services/:id", async (req2, res) => {
+router95.delete("/website-services/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma43.webSiteService.delete({
@@ -82426,7 +83723,7 @@ router94.delete("/website-services/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router94.post("/website-services/reorder", async (req2, res) => {
+router95.post("/website-services/reorder", async (req2, res) => {
   try {
     const { services } = req2.body;
     if (!Array.isArray(services)) {
@@ -82446,15 +83743,15 @@ router94.post("/website-services/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_services_default = router94;
+var website_services_default = router95;
 
 // src/api/website-projects.ts
-var import_express97 = require("express");
+var import_express98 = require("express");
 init_database();
 init_logger();
-var router95 = (0, import_express97.Router)();
+var router96 = (0, import_express98.Router)();
 var prisma44 = db;
-router95.get("/website-projects/:websiteId", async (req2, res) => {
+router96.get("/website-projects/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const projects = await prisma44.webSiteProject.findMany({
@@ -82471,7 +83768,7 @@ router95.get("/website-projects/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router95.post("/website-projects", async (req2, res) => {
+router96.post("/website-projects", async (req2, res) => {
   try {
     const { websiteId, title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
     if (!websiteId || !title) {
@@ -82500,7 +83797,7 @@ router95.post("/website-projects", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router95.put("/website-projects/:id", async (req2, res) => {
+router96.put("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { title, location, details, tags, isActive, isFeatured, completedAt } = req2.body;
@@ -82522,7 +83819,7 @@ router95.put("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router95.delete("/website-projects/:id", async (req2, res) => {
+router96.delete("/website-projects/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma44.webSiteProject.delete({
@@ -82534,7 +83831,7 @@ router95.delete("/website-projects/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router95.post("/website-projects/reorder", async (req2, res) => {
+router96.post("/website-projects/reorder", async (req2, res) => {
   try {
     const { projects } = req2.body;
     if (!Array.isArray(projects)) {
@@ -82554,15 +83851,15 @@ router95.post("/website-projects/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_projects_default = router95;
+var website_projects_default = router96;
 
 // src/api/website-testimonials.ts
-var import_express98 = require("express");
+var import_express99 = require("express");
 init_database();
 init_logger();
-var router96 = (0, import_express98.Router)();
+var router97 = (0, import_express99.Router)();
 var prisma45 = db;
-router96.get("/website-testimonials/:websiteId", async (req2, res) => {
+router97.get("/website-testimonials/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const testimonials = await prisma45.webSiteTestimonial.findMany({
@@ -82579,7 +83876,7 @@ router96.get("/website-testimonials/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router96.post("/website-testimonials", async (req2, res) => {
+router97.post("/website-testimonials", async (req2, res) => {
   try {
     const { websiteId, customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
     if (!websiteId || !customerName || !text) {
@@ -82609,7 +83906,7 @@ router96.post("/website-testimonials", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router96.put("/website-testimonials/:id", async (req2, res) => {
+router97.put("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { customerName, location, service, rating, text, isActive, isFeatured, publishedAt } = req2.body;
@@ -82632,7 +83929,7 @@ router96.put("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router96.delete("/website-testimonials/:id", async (req2, res) => {
+router97.delete("/website-testimonials/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await prisma45.webSiteTestimonial.delete({
@@ -82644,7 +83941,7 @@ router96.delete("/website-testimonials/:id", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router96.post("/website-testimonials/reorder", async (req2, res) => {
+router97.post("/website-testimonials/reorder", async (req2, res) => {
   try {
     const { testimonials } = req2.body;
     if (!Array.isArray(testimonials)) {
@@ -82664,14 +83961,14 @@ router96.post("/website-testimonials/reorder", async (req2, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-var website_testimonials_default = router96;
+var website_testimonials_default = router97;
 
 // src/api/website-sections.ts
-var import_express99 = __toESM(require("express"), 1);
+var import_express100 = __toESM(require("express"), 1);
 init_database();
 init_logger();
-var router97 = import_express99.default.Router();
-router97.get("/website-sections/:websiteId", async (req2, res) => {
+var router98 = import_express100.default.Router();
+router98.get("/website-sections/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const sections = await db.website_sections.findMany({
@@ -82688,7 +83985,7 @@ router97.get("/website-sections/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router97.post("/website-sections", async (req2, res) => {
+router98.post("/website-sections", async (req2, res) => {
   try {
     const { websiteId, key: key2, type, name, content, backgroundColor, textColor, customCss } = req2.body;
     const maxOrder = await db.website_sections.aggregate({
@@ -82716,7 +84013,7 @@ router97.post("/website-sections", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router97.put("/website-sections/:id", async (req2, res) => {
+router98.put("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -82760,7 +84057,7 @@ router97.put("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router97.patch("/website-sections/:id", async (req2, res) => {
+router98.patch("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { name, content, backgroundColor, textColor, customCss, isActive } = req2.body;
@@ -82804,7 +84101,7 @@ router97.patch("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router97.delete("/website-sections/:id", async (req2, res) => {
+router98.delete("/website-sections/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const section = await db.website_sections.findUnique({
@@ -82822,7 +84119,7 @@ router97.delete("/website-sections/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router97.post("/website-sections/reorder", async (req2, res) => {
+router98.post("/website-sections/reorder", async (req2, res) => {
   try {
     const { sections } = req2.body;
     await db.$transaction(
@@ -82839,7 +84136,7 @@ router97.post("/website-sections/reorder", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router97.post("/website-sections/duplicate/:id", async (req2, res) => {
+router98.post("/website-sections/duplicate/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const original = await db.website_sections.findUnique({
@@ -82870,13 +84167,13 @@ router97.post("/website-sections/duplicate/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_sections_default = router97;
+var website_sections_default = router98;
 
 // src/api/website-themes.ts
-var import_express100 = require("express");
+var import_express101 = require("express");
 init_logger();
-var router98 = (0, import_express100.Router)();
-router98.get("/:websiteId", async (req2, res) => {
+var router99 = (0, import_express101.Router)();
+router99.get("/:websiteId", async (req2, res) => {
   try {
     const { websiteId } = req2.params;
     const theme = await db.webSiteTheme.findUnique({
@@ -82891,7 +84188,7 @@ router98.get("/:websiteId", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router98.post("/", async (req2, res) => {
+router99.post("/", async (req2, res) => {
   try {
     const themeData = req2.body;
     const theme = await db.webSiteTheme.create({
@@ -82903,7 +84200,7 @@ router98.post("/", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router98.put("/:id", async (req2, res) => {
+router99.put("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     const themeData = req2.body;
@@ -82917,7 +84214,7 @@ router98.put("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router98.delete("/:id", async (req2, res) => {
+router99.delete("/:id", async (req2, res) => {
   try {
     const { id } = req2.params;
     await db.webSiteTheme.delete({
@@ -82929,13 +84226,13 @@ router98.delete("/:id", async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var website_themes_default = router98;
+var website_themes_default = router99;
 
 // src/api/contact-form.ts
-var import_express101 = require("express");
+var import_express102 = require("express");
 init_database();
 init_logger();
-var router99 = (0, import_express101.Router)();
+var router100 = (0, import_express102.Router)();
 var prisma46 = db;
 var isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -82953,7 +84250,7 @@ var isSpam = (data) => {
   }
   return false;
 };
-router99.post("/contact-form", async (req2, res) => {
+router100.post("/contact-form", async (req2, res) => {
   try {
     const data = req2.body;
     if (!data.name || data.name.trim().length < 2) {
@@ -83018,7 +84315,7 @@ router99.post("/contact-form", async (req2, res) => {
     });
   }
 });
-router99.get("/contact-submissions/:websiteId", async (req2, res) => {
+router100.get("/contact-submissions/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const submissions = await prisma46.contactSubmission.findMany({
@@ -83033,7 +84330,7 @@ router99.get("/contact-submissions/:websiteId", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router99.patch("/contact-submission/:id/read", async (req2, res) => {
+router100.patch("/contact-submission/:id/read", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const submission = await prisma46.contactSubmission.update({
@@ -83046,7 +84343,7 @@ router99.patch("/contact-submission/:id/read", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router99.patch("/contact-submission/:id/status", async (req2, res) => {
+router100.patch("/contact-submission/:id/status", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const { status, notes } = req2.body;
@@ -83068,7 +84365,7 @@ router99.patch("/contact-submission/:id/status", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router99.delete("/contact-submission/:id", async (req2, res) => {
+router100.delete("/contact-submission/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     await prisma46.contactSubmission.delete({
@@ -83080,16 +84377,61 @@ router99.delete("/contact-submission/:id", async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-var contact_form_default = router99;
+var contact_form_default = router100;
 
 // src/api/image-upload.ts
-var import_express102 = require("express");
+var import_express103 = require("express");
 var import_multer = __toESM(require("multer"), 1);
 init_database();
 init_storage();
 init_logger();
-var router100 = (0, import_express102.Router)();
+var sharpModule = __toESM(require("sharp"), 1);
+var sharp = sharpModule.default || sharpModule;
+var router101 = (0, import_express103.Router)();
 var prisma47 = db;
+var MAX_WIDTH = 1920;
+var MAX_HEIGHT = 1920;
+var WEBP_QUALITY = 80;
+async function optimizeImage(buffer, mimetype, originalName) {
+  if (mimetype === "image/svg+xml" || mimetype === "image/gif") {
+    return { buffer, mimetype, filename: originalName };
+  }
+  try {
+    const image = sharp(buffer);
+    const metadata = await image.metadata();
+    const needsResize = metadata.width && metadata.width > MAX_WIDTH || metadata.height && metadata.height > MAX_HEIGHT;
+    let pipeline = image.rotate();
+    if (needsResize) {
+      pipeline = pipeline.resize(MAX_WIDTH, MAX_HEIGHT, {
+        fit: "inside",
+        withoutEnlargement: true
+      });
+    }
+    const hasAlpha = metadata.hasAlpha;
+    let outputMime;
+    let ext;
+    if (hasAlpha) {
+      pipeline = pipeline.png({ quality: WEBP_QUALITY, compressionLevel: 9 });
+      outputMime = "image/png";
+      ext = ".png";
+    } else {
+      pipeline = pipeline.webp({ quality: WEBP_QUALITY });
+      outputMime = "image/webp";
+      ext = ".webp";
+    }
+    const optimizedBuffer = await pipeline.toBuffer();
+    if (optimizedBuffer.length >= buffer.length) {
+      return { buffer, mimetype, filename: originalName };
+    }
+    const baseName = originalName.replace(/\.[^.]+$/, "");
+    const optimizedName = `${baseName}${ext}`;
+    logger.info(`\u{1F5BC}\uFE0F [IMAGE-OPT] ${originalName}: ${(buffer.length / 1024).toFixed(0)}KB \u2192 ${(optimizedBuffer.length / 1024).toFixed(0)}KB (${((1 - optimizedBuffer.length / buffer.length) * 100).toFixed(0)}% savings)`);
+    return { buffer: optimizedBuffer, mimetype: outputMime, filename: optimizedName };
+  } catch (error) {
+    logger.warn(`\u26A0\uFE0F [IMAGE-OPT] Optimization failed for ${originalName}, using original:`, error);
+    return { buffer, mimetype, filename: originalName };
+  }
+}
 var multerStorage = import_multer.default.memoryStorage();
 var fileFilter = (req2, file, cb) => {
   const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/svg+xml"];
@@ -83108,12 +84450,13 @@ var upload = (0, import_multer.default)({
   }
 });
 async function getUploadedFileUrl(file) {
-  const uniqueName = `${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`;
+  const optimized = await optimizeImage(file.buffer, file.mimetype, file.originalname);
+  const uniqueName = `${Date.now()}_${optimized.filename.replace(/\s+/g, "_")}`;
   const key2 = `websites/${uniqueName}`;
-  const url = await uploadFile(file.buffer, key2, file.mimetype);
-  return { fileUrl: url };
+  const url = await uploadFile(optimized.buffer, key2, optimized.mimetype);
+  return { fileUrl: url, optimizedFile: optimized };
 }
-router100.post("/upload", upload.single("file"), async (req2, res) => {
+router101.post("/upload", upload.single("file"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -83121,16 +84464,17 @@ router100.post("/upload", upload.single("file"), async (req2, res) => {
         message: "Aucun fichier fourni"
       });
     }
-    const { fileUrl } = await getUploadedFileUrl(req2.file);
+    const { fileUrl, optimizedFile } = await getUploadedFileUrl(req2.file);
     res.json({
       success: true,
       message: "Image upload\xE9e avec succ\xE8s",
       url: fileUrl,
       fileUrl,
       file: {
-        fileName: req2.file.originalname,
-        size: req2.file.size,
-        mimetype: req2.file.mimetype
+        fileName: optimizedFile.filename,
+        size: optimizedFile.buffer.length,
+        mimetype: optimizedFile.mimetype,
+        originalSize: req2.file.size
       }
     });
   } catch (error) {
@@ -83142,7 +84486,7 @@ router100.post("/upload", upload.single("file"), async (req2, res) => {
     });
   }
 });
-router100.post("/upload-image", upload.single("image"), async (req2, res) => {
+router101.post("/upload-image", upload.single("image"), async (req2, res) => {
   try {
     if (!req2.file) {
       return res.status(400).json({
@@ -83157,16 +84501,15 @@ router100.post("/upload-image", upload.single("image"), async (req2, res) => {
         message: "Website ID manquant"
       });
     }
-    const { fileUrl } = await getUploadedFileUrl(req2.file);
+    const { fileUrl, optimizedFile } = await getUploadedFileUrl(req2.file);
     const mediaFile = await prisma47.webSiteMediaFile.create({
       data: {
         websiteId: parseInt(websiteId),
-        fileName: req2.file.originalname,
-        fileType: req2.file.mimetype,
-        // ✅ CORRECTION: fileType au lieu de mimeType
+        fileName: optimizedFile.filename,
+        fileType: optimizedFile.mimetype,
         fileUrl,
         filePath: fileUrl,
-        fileSize: req2.file.size,
+        fileSize: optimizedFile.buffer.length,
         category,
         // 'logo', 'project', 'service', 'general'
         uploadedById: req2.user?.id || null
@@ -83192,7 +84535,7 @@ router100.post("/upload-image", upload.single("image"), async (req2, res) => {
     });
   }
 });
-router100.get("/images/:websiteId", async (req2, res) => {
+router101.get("/images/:websiteId", async (req2, res) => {
   try {
     const websiteId = parseInt(req2.params.websiteId);
     const { category } = req2.query;
@@ -83216,7 +84559,7 @@ router100.get("/images/:websiteId", async (req2, res) => {
     });
   }
 });
-router100.delete("/image/:id", async (req2, res) => {
+router101.delete("/image/:id", async (req2, res) => {
   try {
     const id = parseInt(req2.params.id);
     const mediaFile = await prisma47.webSiteMediaFile.findUnique({
@@ -83248,10 +84591,10 @@ router100.delete("/image/:id", async (req2, res) => {
     });
   }
 });
-var image_upload_default = router100;
+var image_upload_default = router101;
 
 // src/api/ai-content.ts
-var import_express103 = require("express");
+var import_express104 = require("express");
 
 // src/services/aiContentService.ts
 init_logger();
@@ -83466,8 +84809,8 @@ var aiContentService = new AIContentService();
 
 // src/api/ai-content.ts
 init_logger();
-var router101 = (0, import_express103.Router)();
-router101.post("/generate-service", async (req2, res) => {
+var router102 = (0, import_express104.Router)();
+router102.post("/generate-service", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, keywords } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -83493,7 +84836,7 @@ router101.post("/generate-service", async (req2, res) => {
     });
   }
 });
-router101.post("/generate-project", async (req2, res) => {
+router102.post("/generate-project", async (req2, res) => {
   try {
     const { siteName, industry, projectType, location } = req2.body;
     if (!siteName || !industry || !projectType) {
@@ -83519,7 +84862,7 @@ router101.post("/generate-project", async (req2, res) => {
     });
   }
 });
-router101.post("/generate-testimonial", async (req2, res) => {
+router102.post("/generate-testimonial", async (req2, res) => {
   try {
     const { siteName, industry, serviceType, customerType } = req2.body;
     if (!siteName || !industry || !serviceType) {
@@ -83545,7 +84888,7 @@ router101.post("/generate-testimonial", async (req2, res) => {
     });
   }
 });
-router101.post("/generate-page", async (req2, res) => {
+router102.post("/generate-page", async (req2, res) => {
   try {
     const { siteName, siteType, industry, mainServices, targetAudience } = req2.body;
     if (!siteName || !siteType || !industry || !mainServices) {
@@ -83572,7 +84915,7 @@ router101.post("/generate-page", async (req2, res) => {
     });
   }
 });
-router101.post("/optimize-seo", async (req2, res) => {
+router102.post("/optimize-seo", async (req2, res) => {
   try {
     const { currentTitle, currentDescription, pageContent, targetKeywords, siteName, industry } = req2.body;
     if (!pageContent || !siteName || !industry) {
@@ -83600,7 +84943,7 @@ router101.post("/optimize-seo", async (req2, res) => {
     });
   }
 });
-router101.post("/generate-multiple-services", async (req2, res) => {
+router102.post("/generate-multiple-services", async (req2, res) => {
   try {
     const { siteName, industry, serviceTypes } = req2.body;
     if (!siteName || !industry || !serviceTypes || !Array.isArray(serviceTypes)) {
@@ -83626,16 +84969,16 @@ router101.post("/generate-multiple-services", async (req2, res) => {
     });
   }
 });
-var ai_content_default = router101;
+var ai_content_default = router102;
 
 // src/api/ai.ts
-var import_express104 = __toESM(require("express"), 1);
+var import_express105 = __toESM(require("express"), 1);
 var import_generative_ai3 = require("@google/generative-ai");
 init_logger();
-var router102 = import_express104.default.Router();
+var router103 = import_express105.default.Router();
 var genAI2 = new import_generative_ai3.GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 var MODEL_NAME = "gemini-pro";
-router102.post("/generate", async (req2, res) => {
+router103.post("/generate", async (req2, res) => {
   try {
     const { prompt, context, sectionType, currentValue } = req2.body;
     if (!prompt) {
@@ -83796,7 +85139,7 @@ function formatSuggestions(data, context) {
       return [{ value: data }];
   }
 }
-router102.post("/analyze-section", async (req2, res) => {
+router103.post("/analyze-section", async (req2, res) => {
   try {
     const { sectionType, content, prompt } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -83929,7 +85272,7 @@ function generateFallbackAnalysis(sectionType, content) {
     }
   };
 }
-router102.post("/optimize-seo", async (req2, res) => {
+router103.post("/optimize-seo", async (req2, res) => {
   try {
     const { content, sectionType } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -83969,7 +85312,7 @@ Format de r\xE9ponse : JSON avec { metaTitle, metaDescription, keywords: [], slu
     });
   }
 });
-router102.post("/improve-content", async (req2, res) => {
+router103.post("/improve-content", async (req2, res) => {
   try {
     const { content, instructions } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -84006,7 +85349,7 @@ Retourne le contenu am\xE9lior\xE9 au format JSON identique \xE0 l'original.`;
     });
   }
 });
-router102.post("/optimize-layout", async (req2, res) => {
+router103.post("/optimize-layout", async (req2, res) => {
   try {
     const { itemCount, sectionType, currentLayout } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -84061,7 +85404,7 @@ Format de r\xE9ponse : JSON array avec :
     });
   }
 });
-router102.post("/generate-palette", async (req2, res) => {
+router103.post("/generate-palette", async (req2, res) => {
   try {
     const { baseColor, mood, industry } = req2.body;
     if (!process.env.GEMINI_API_KEY) {
@@ -84201,7 +85544,7 @@ function generateFallbackPalettes(baseColor) {
   ];
 }
 var geminiMeasureService = getGeminiService();
-router102.post("/measure-image", async (req2, res) => {
+router103.post("/measure-image", async (req2, res) => {
   const startTime = Date.now();
   try {
     const {
@@ -84279,7 +85622,7 @@ router102.post("/measure-image", async (req2, res) => {
     });
   }
 });
-router102.post("/measure-image/apply", async (req2, res) => {
+router103.post("/measure-image/apply", async (req2, res) => {
   try {
     const {
       measurements,
@@ -84336,7 +85679,7 @@ router102.post("/measure-image/apply", async (req2, res) => {
     });
   }
 });
-router102.get("/measure-image/status", async (_req, res) => {
+router103.get("/measure-image/status", async (_req, res) => {
   try {
     const status = geminiMeasureService.getStatus();
     res.json({
@@ -84356,14 +85699,14 @@ router102.get("/measure-image/status", async (_req, res) => {
     });
   }
 });
-var ai_default2 = router102;
+var ai_default2 = router103;
 
 // src/routes/ai-field-generator.ts
-var import_express105 = __toESM(require("express"), 1);
+var import_express106 = __toESM(require("express"), 1);
 init_logger();
-var router103 = import_express105.default.Router();
+var router104 = import_express106.default.Router();
 var geminiService3 = getGeminiService();
-router103.use(authMiddleware);
+router104.use(authMiddleware);
 var SmartPromptBuilder = class {
   /**
    * Construit un prompt optimisé selon le type de champ
@@ -84746,7 +86089,7 @@ var QualityAnalyzer = class {
     }
   }
 };
-router103.post("/generate-field", async (req2, res) => {
+router104.post("/generate-field", async (req2, res) => {
   const startTime = Date.now();
   try {
     const { fieldId, fieldType, fieldLabel, currentValue, aiContext } = req2.body;
@@ -84833,7 +86176,7 @@ router103.post("/generate-field", async (req2, res) => {
     });
   }
 });
-router103.get("/status", async (_req, res) => {
+router104.get("/status", async (_req, res) => {
   try {
     const isAvailable = !!process.env.GOOGLE_API_KEY || !!process.env.GEMINI_API_KEY;
     res.json({
@@ -84850,10 +86193,10 @@ router103.get("/status", async (_req, res) => {
     });
   }
 });
-var ai_field_generator_default = router103;
+var ai_field_generator_default = router104;
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
-var import_express106 = require("express");
+var import_express107 = require("express");
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-blueprint-builder.ts
 init_logger();
@@ -85107,8 +86450,8 @@ async function filterExistingTemplateNodeIds(prisma50, repeaterNodeId, candidate
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-instantiator.ts
-function createInstantiationPlan(blueprint, options) {
-  const { suffix, perTemplateSuffixes } = options;
+function createInstantiationPlan(blueprint, options2) {
+  const { suffix, perTemplateSuffixes } = options2;
   const resolveSuffix = (templateNodeId) => {
     if (perTemplateSuffixes && perTemplateSuffixes[templateNodeId] !== void 0) {
       return perTemplateSuffixes[templateNodeId];
@@ -85137,7 +86480,7 @@ function createInstantiationPlan(blueprint, options) {
     };
   });
   let totalFieldPlan;
-  if (options.includeTotals && blueprint.totalField) {
+  if (options2.includeTotals && blueprint.totalField) {
     totalFieldPlan = {
       plannedSuffix: suffix,
       plannedVariableId: `${blueprint.totalField.targetVariableId ?? "total"}-${suffix}`,
@@ -85241,7 +86584,7 @@ var makeScopeId = (repeaterNodeId, suffix) => {
   const trimmedSuffix = typeof suffix === "string" ? suffix.trim() : String(suffix);
   return `${repeaterNodeId}:${trimmedSuffix}`;
 };
-async function planRepeatDuplication(prisma50, repeaterNodeId, options = {}) {
+async function planRepeatDuplication(prisma50, repeaterNodeId, options2 = {}) {
   if (!repeaterNodeId) {
     throw new RepeatOperationError("Missing repeaterNodeId in request path.", 400);
   }
@@ -85273,8 +86616,8 @@ async function planRepeatDuplication(prisma50, repeaterNodeId, options = {}) {
   }
   let actualSuffix;
   let perTemplateSuffixes;
-  if (options.suffix) {
-    const parsed = parseInt(String(options.suffix), 10);
+  if (options2.suffix) {
+    const parsed = parseInt(String(options2.suffix), 10);
     if (Number.isNaN(parsed)) {
       throw new RepeatOperationError("Repeat suffix must be numeric when provided.", 422);
     }
@@ -85298,12 +86641,12 @@ async function planRepeatDuplication(prisma50, repeaterNodeId, options = {}) {
       perTemplateSuffixes[templateId] = actualSuffix;
     }
   }
-  const scopeId = options.scopeId?.trim() || makeScopeId(repeaterNodeId, actualSuffix);
+  const scopeId = options2.scopeId?.trim() || makeScopeId(repeaterNodeId, actualSuffix);
   blueprint.templateNodeIds = cleanedTemplateIds;
   const plan = createInstantiationPlan(blueprint, {
     suffix: actualSuffix,
-    includeTotals: options.includeTotals ?? true,
-    targetParentId: options.targetParentId ?? null,
+    includeTotals: options2.includeTotals ?? true,
+    targetParentId: options2.targetParentId ?? null,
     perTemplateSuffixes
   });
   return {
@@ -85314,9 +86657,9 @@ async function planRepeatDuplication(prisma50, repeaterNodeId, options = {}) {
     plan
   };
 }
-async function executeRepeatDuplication(prisma50, repeaterNodeId, options = {}) {
+async function executeRepeatDuplication(prisma50, repeaterNodeId, options2 = {}) {
   try {
-    const planned = await planRepeatDuplication(prisma50, repeaterNodeId, options);
+    const planned = await planRepeatDuplication(prisma50, repeaterNodeId, options2);
     const operations = [
       ...planned.plan.nodes.map((nodePlan) => ({
         type: "node-copy",
@@ -85404,7 +86747,7 @@ function applySuffixToSourceRef2(sourceRef, suffix) {
   const newId = `${parsed.id}-${suffix}`;
   return `${parsed.prefix}${newId}`;
 }
-async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, prisma50, options = {}) {
+async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, prisma50, options2 = {}) {
   const {
     formulaIdMap = /* @__PURE__ */ new Map(),
     conditionIdMap = /* @__PURE__ */ new Map(),
@@ -85415,7 +86758,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
     displaySectionLabel = "Nouveau Section",
     linkToDisplaySection = false
     // displayNodeAlreadyCreated is not used anymore in this function; keep options API stable without reassigning
-  } = options;
+  } = options2;
   try {
     const cacheKey = `${originalVarId}|${newNodeId}`;
     let cachedVariable = null;
@@ -85576,7 +86919,7 @@ async function copyVariableWithCapacities2(originalVarId, suffix, newNodeId, pri
           }
         });
         if (originalOwnerNode) {
-          const isLinkedVariable = options.isFromRepeaterDuplication && originalVar.nodeId !== newNodeId;
+          const isLinkedVariable = options2.isFromRepeaterDuplication && originalVar.nodeId !== newNodeId;
           let displayParentId;
           if (isLinkedVariable) {
             displayParentId = newNodeId;
@@ -86280,7 +87623,7 @@ async function batchPostDuplicationProcessing(prisma50, copiedNodeIds) {
 }
 
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/services/table-lookup-duplication-service.ts
-var import_crypto36 = require("crypto");
+var import_crypto38 = require("crypto");
 init_logger();
 var TableLookupDuplicationService = class {
   /**
@@ -86321,7 +87664,7 @@ var TableLookupDuplicationService = class {
             const displayCol = firstColName;
             await prisma50.treeBranchLeafSelectConfig.create({
               data: {
-                id: (0, import_crypto36.randomUUID)(),
+                id: (0, import_crypto38.randomUUID)(),
                 nodeId: copiedNodeId,
                 tableReference: copiedTableId,
                 // 🔥 CRITICAL: Remplir TOUS les champs nécessaires (pas juste displayColumn)
@@ -86506,7 +87849,7 @@ var TableLookupDuplicationService = class {
                 const baseName = String(col.name ?? "");
                 const newName = baseName;
                 return {
-                  id: col.id ? `${col.id}${suffix}` : (0, import_crypto36.randomUUID)(),
+                  id: col.id ? `${col.id}${suffix}` : (0, import_crypto38.randomUUID)(),
                   // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
                   columnIndex: idx,
                   // ✅ FIX: Réassigner en séquence au lieu de copier
@@ -86522,7 +87865,7 @@ var TableLookupDuplicationService = class {
             // ✅ FIX 07/01/2026: Réassigner aussi les rowIndex en séquence pour préserver l'ordre
             tableRows: {
               create: originalTable.tableRows.map((row, idx) => ({
-                id: row.id ? `${row.id}${suffix}` : (0, import_crypto36.randomUUID)(),
+                id: row.id ? `${row.id}${suffix}` : (0, import_crypto38.randomUUID)(),
                 // ✅ FIX 11/01/2026: NE PAS inclure tableId dans nested create - Prisma le remplit automatiquement
                 rowIndex: idx,
                 // ✅ FIX: Réassigner en séquence
@@ -86539,7 +87882,7 @@ var TableLookupDuplicationService = class {
           const baseName = String(col.name ?? "");
           const newName = baseName;
           return {
-            id: col.id ? `${col.id}${suffix}` : (0, import_crypto36.randomUUID)(),
+            id: col.id ? `${col.id}${suffix}` : (0, import_crypto38.randomUUID)(),
             tableId: copiedTableId,
             columnIndex: idx,
             name: newName,
@@ -86566,7 +87909,7 @@ var TableLookupDuplicationService = class {
       if (!existingSelectConfig) {
         await prisma50.treeBranchLeafSelectConfig.create({
           data: {
-            id: (0, import_crypto36.randomUUID)(),
+            id: (0, import_crypto38.randomUUID)(),
             // 🔧 FIX: Générer l'id manuellement
             nodeId: copiedNodeId,
             tableReference: copiedTableId,
@@ -86965,17 +88308,17 @@ async function runRepeatExecution(prisma50, req2, execution) {
       };
       const attemptCopy = async (forcedSuffix) => {
         const context = forcedSuffix !== void 0 ? { ...baseContext, suffix: forcedSuffix } : { ...baseContext };
-        const options = {
+        const options2 = {
           preserveSharedReferences: true,
           repeatContext: context,
           preloadedTreeNodes: _preloadedTreeNodes
         };
         if (forcedSuffix !== void 0) {
-          options.forcedSuffix = forcedSuffix;
-          options.suffixNum = forcedSuffix;
+          options2.forcedSuffix = forcedSuffix;
+          options2.suffixNum = forcedSuffix;
         }
         try {
-          const result = await deepCopyNodeInternal(prisma50, req2, template.id, options);
+          const result = await deepCopyNodeInternal(prisma50, req2, template.id, options2);
           return { result, appliedSuffix: forcedSuffix };
         } catch (error) {
           if (forcedSuffix !== void 0 && isUniqueConstraintError(error)) {
@@ -87944,10 +89287,10 @@ async function syncMissingDisplayNodeChildren(prisma50, duplicatedNodeIds, origi
 // src/components/TreeBranchLeaf/treebranchleaf-new/api/repeat/repeat-routes.ts
 init_logger();
 function createRepeatRouter(prisma50) {
-  const router118 = (0, import_express106.Router)();
+  const router119 = (0, import_express107.Router)();
   const inFlightExecuteByRepeater = /* @__PURE__ */ new Set();
-  router118.use(authenticateToken);
-  router118.post("/:repeaterNodeId/instances", async (req2, res) => {
+  router119.use(authenticateToken);
+  router119.post("/:repeaterNodeId/instances", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     try {
@@ -87979,7 +89322,7 @@ function createRepeatRouter(prisma50) {
       });
     }
   });
-  router118.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
+  router119.post("/:repeaterNodeId/instances/execute", async (req2, res) => {
     const { repeaterNodeId } = req2.params;
     const body2 = req2.body || {};
     if (inFlightExecuteByRepeater.has(repeaterNodeId)) {
@@ -88032,7 +89375,7 @@ function createRepeatRouter(prisma50) {
       inFlightExecuteByRepeater.delete(repeaterNodeId);
     }
   });
-  router118.post("/:repeaterId/preload-copies", async (req2, res) => {
+  router119.post("/:repeaterId/preload-copies", async (req2, res) => {
     try {
       const { repeaterId } = req2.params;
       const { targetCount } = req2.body || {};
@@ -88168,7 +89511,7 @@ function createRepeatRouter(prisma50) {
       res.status(500).json({ error: "Erreur lors du pr\xE9-chargement des copies" });
     }
   });
-  return router118;
+  return router119;
 }
 async function deleteNodeWithCascade(prisma50, treeId, nodeId) {
   const allNodes = await prisma50.treeBranchLeafNode.findMany({
@@ -88208,10 +89551,10 @@ async function deleteNodeWithCascade(prisma50, treeId, nodeId) {
 }
 
 // src/api/cloud-run-domains.ts
-var import_express107 = require("express");
+var import_express108 = require("express");
 init_logger();
-var router104 = (0, import_express107.Router)();
-router104.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
+var router105 = (0, import_express108.Router)();
+router105.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     if (!user.isSuperAdmin) {
@@ -88252,7 +89595,7 @@ router104.get("/cloud-run-domains", authenticateToken, async (req2, res) => {
     });
   }
 });
-router104.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
+router105.post("/cloud-run-domains/verify", authenticateToken, async (req2, res) => {
   try {
     const user = req2.user;
     const { domain } = req2.body;
@@ -88283,14 +89626,14 @@ async function checkDomainReachability(domain) {
   try {
     const https = await import("https");
     return new Promise((resolve2) => {
-      const options = {
+      const options2 = {
         hostname: domain,
         port: 443,
         path: "/",
         method: "HEAD",
         timeout: 5e3
       };
-      const req2 = https.request(options, (res) => {
+      const req2 = https.request(options2, (res) => {
         resolve2(res.statusCode !== void 0 && res.statusCode < 500);
       });
       req2.on("error", () => resolve2(false));
@@ -88305,11 +89648,11 @@ async function checkDomainReachability(domain) {
     return false;
   }
 }
-var cloud_run_domains_default = router104;
+var cloud_run_domains_default = router105;
 
 // src/api/measurement-reference.ts
-var import_express108 = require("express");
-var sharpModule = __toESM(require("sharp"), 1);
+var import_express109 = require("express");
+var sharpModule2 = __toESM(require("sharp"), 1);
 
 // src/lib/apriltag-detector-server.ts
 init_logger();
@@ -88320,7 +89663,7 @@ async function loadApriltagModule() {
   }
   return apriltagModulePromise;
 }
-async function detectAprilTagsMetreA4(data, width, height, options = {}) {
+async function detectAprilTagsMetreA4(data, width, height, options2 = {}) {
   try {
     logger.debug(`\u{1F3AF} [APRILTAG] D\xE9tection AprilTags M\xE9tr\xE9 A4 V10...`);
     const { default: AprilTag, FAMILIES } = await loadApriltagModule();
@@ -88332,13 +89675,13 @@ async function detectAprilTagsMetreA4(data, width, height, options = {}) {
       grayscale[i] = Math.floor((r + g + b) / 3);
     }
     const detector = new AprilTag(FAMILIES.TAG36H11, {
-      quadDecimate: options.quadDecimate ?? 2,
+      quadDecimate: options2.quadDecimate ?? 2,
       // Accélération sur grandes images
-      quadSigma: options.quadSigma ?? 0,
+      quadSigma: options2.quadSigma ?? 0,
       // Pas de flou gaussien
-      refineEdges: options.refineEdges ?? true,
+      refineEdges: options2.refineEdges ?? true,
       // Meilleure précision des coins
-      decodeSharpening: options.decodeSharpening ?? 0.25
+      decodeSharpening: options2.decodeSharpening ?? 0.25
     });
     const detections = detector.detect(width, height, grayscale);
     logger.debug(`   \u{1F50D} ${detections.length} AprilTag(s) d\xE9tect\xE9(s)`);
@@ -89138,9 +90481,9 @@ function computeObjectDimensions(calibration, objectCorners) {
 
 // src/api/measurement-reference.ts
 init_logger();
-var sharp = sharpModule.default || sharpModule;
-var router105 = (0, import_express108.Router)();
-router105.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
+var sharp2 = sharpModule2.default || sharpModule2;
+var router106 = (0, import_express109.Router)();
+router106.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
   const startTime = Date.now();
   try {
     const { photos } = req2.body;
@@ -89158,25 +90501,25 @@ router105.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
     const photo = photos[0];
     const base64Clean = photo.base64.includes(",") ? photo.base64.split(",")[1] : photo.base64;
     const imageBuffer = Buffer.from(base64Clean, "base64");
-    const originalMetadata = await sharp(imageBuffer).metadata();
+    const originalMetadata = await sharp2(imageBuffer).metadata();
     const originalWidth = originalMetadata.width;
     const originalHeight = originalMetadata.height;
-    const resizedBuffer = await sharp(imageBuffer).resize({
+    const resizedBuffer = await sharp2(imageBuffer).resize({
       width: 1200,
       height: 1200,
       fit: "inside",
       withoutEnlargement: true
     }).toBuffer();
-    const metadata = await sharp(resizedBuffer).metadata();
+    const metadata = await sharp2(resizedBuffer).metadata();
     const width = metadata.width;
     const height = metadata.height;
     const scaleX = originalWidth / width;
     const scaleY = originalHeight / height;
-    const { data: basePixels } = await sharp(resizedBuffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const { data: basePixels } = await sharp2(resizedBuffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     let rgbaUsed = new Uint8ClampedArray(basePixels);
     let detection = await detectMetreA4V10(rgbaUsed, width, height);
     if (!detection) {
-      const { data: enhancedPixels } = await sharp(resizedBuffer).normalize().sharpen(1.2).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const { data: enhancedPixels } = await sharp2(resizedBuffer).normalize().sharpen(1.2).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
       rgbaUsed = new Uint8ClampedArray(enhancedPixels);
       detection = await detectMetreA4V10(rgbaUsed, width, height);
     }
@@ -89257,7 +90600,7 @@ router105.post("/ultra-fusion-detect", authenticateToken, async (req2, res) => {
     });
   }
 });
-router105.post("/compute-dimensions-simple", authenticateToken, async (req2, res) => {
+router106.post("/compute-dimensions-simple", authenticateToken, async (req2, res) => {
   try {
     if (!req2.user?.id) {
       return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -89347,15 +90690,15 @@ router105.post("/compute-dimensions-simple", authenticateToken, async (req2, res
     });
   }
 });
-var measurement_reference_default = router105;
+var measurement_reference_default = router106;
 
 // src/api/calendar.ts
-var import_express109 = require("express");
+var import_express110 = require("express");
 init_database();
 init_logger();
-var router106 = (0, import_express109.Router)();
+var router107 = (0, import_express110.Router)();
 var prisma48 = db;
-router106.get("/events", authMiddleware, async (req2, res) => {
+router107.get("/events", authMiddleware, async (req2, res) => {
   try {
     const { organizationId, userId } = req2.user;
     const {
@@ -89447,7 +90790,7 @@ router106.get("/events", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur lors de la r\xE9cup\xE9ration des \xE9v\xE9nements" });
   }
 });
-router106.post("/events", authMiddleware, async (req2, res) => {
+router107.post("/events", authMiddleware, async (req2, res) => {
   try {
     const { organizationId, userId } = req2.user;
     const {
@@ -89549,7 +90892,7 @@ router106.post("/events", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur lors de la cr\xE9ation de l'\xE9v\xE9nement" });
   }
 });
-router106.put("/events/:id", authMiddleware, async (req2, res) => {
+router107.put("/events/:id", authMiddleware, async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, userId } = req2.user;
@@ -89644,7 +90987,7 @@ router106.put("/events/:id", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur lors de la modification de l'\xE9v\xE9nement" });
   }
 });
-router106.delete("/events/:id", authMiddleware, async (req2, res) => {
+router107.delete("/events/:id", authMiddleware, async (req2, res) => {
   try {
     const { id } = req2.params;
     const { organizationId, userId } = req2.user;
@@ -89672,7 +91015,7 @@ router106.delete("/events/:id", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur lors de la suppression de l'\xE9v\xE9nement" });
   }
 });
-router106.get("/types", authMiddleware, async (_req, res) => {
+router107.get("/types", authMiddleware, async (_req, res) => {
   try {
     const types = [
       { value: "tache", label: "T\xE2che" },
@@ -89691,7 +91034,7 @@ router106.get("/types", authMiddleware, async (_req, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router106.get("/chantier-events", authMiddleware, async (req2, res) => {
+router107.get("/chantier-events", authMiddleware, async (req2, res) => {
   try {
     const { organizationId } = req2.user;
     const { startDate, endDate } = req2.query;
@@ -89777,7 +91120,7 @@ router106.get("/chantier-events", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router106.get("/telnyx-calls", authMiddleware, async (req2, res) => {
+router107.get("/telnyx-calls", authMiddleware, async (req2, res) => {
   try {
     const { organizationId } = req2.user;
     const { startDate, endDate } = req2.query;
@@ -89834,14 +91177,14 @@ router106.get("/telnyx-calls", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var calendar_default = router106;
+var calendar_default = router107;
 
 // src/routes/userFavoritesRoutes.ts
-var import_express110 = require("express");
+var import_express111 = require("express");
 init_database();
 init_logger();
-var router107 = (0, import_express110.Router)();
-router107.get("/", authMiddleware, async (req2, res) => {
+var router108 = (0, import_express111.Router)();
+router108.get("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -89871,7 +91214,7 @@ router107.get("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router107.post("/", authMiddleware, async (req2, res) => {
+router108.post("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -89910,7 +91253,7 @@ router107.post("/", authMiddleware, async (req2, res) => {
     });
   }
 });
-router107.delete("/:moduleKey", authMiddleware, async (req2, res) => {
+router108.delete("/:moduleKey", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     const organizationId = req2.user?.organizationId;
@@ -89940,14 +91283,14 @@ router107.delete("/:moduleKey", authMiddleware, async (req2, res) => {
     });
   }
 });
-var userFavoritesRoutes_default = router107;
+var userFavoritesRoutes_default = router108;
 
 // src/routes/userBookmarksRoutes.ts
-var import_express111 = require("express");
+var import_express112 = require("express");
 init_database();
 init_logger();
-var router108 = (0, import_express111.Router)();
-router108.get("/", authMiddleware, async (req2, res) => {
+var router109 = (0, import_express112.Router)();
+router109.get("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -89961,7 +91304,7 @@ router108.get("/", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des bookmarks" });
   }
 });
-router108.post("/", authMiddleware, async (req2, res) => {
+router109.post("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -90000,7 +91343,7 @@ router108.post("/", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de l'ajout du bookmark" });
   }
 });
-router108.delete("/:id", authMiddleware, async (req2, res) => {
+router109.delete("/:id", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -90016,7 +91359,7 @@ router108.delete("/:id", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression du bookmark" });
   }
 });
-router108.post("/remove-by-url", authMiddleware, async (req2, res) => {
+router109.post("/remove-by-url", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -90035,7 +91378,7 @@ router108.post("/remove-by-url", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la suppression du bookmark" });
   }
 });
-router108.put("/reorder", authMiddleware, async (req2, res) => {
+router109.put("/reorder", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -90057,14 +91400,14 @@ router108.put("/reorder", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors du r\xE9ordonnement" });
   }
 });
-var userBookmarksRoutes_default = router108;
+var userBookmarksRoutes_default = router109;
 
 // src/routes/honeycombRoutes.ts
-var import_express112 = require("express");
+var import_express113 = require("express");
 init_database();
 var import_rss_parser = __toESM(require("rss-parser"), 1);
 init_logger();
-var router109 = (0, import_express112.Router)();
+var router110 = (0, import_express113.Router)();
 var RSS_PARSER_TIMEOUT_MS = 15e3;
 var FETCH_TIMEOUT_MS = 12e3;
 var CACHE_SUCCESS_TTL_MS = 15 * 60 * 1e3;
@@ -90727,7 +92070,7 @@ function extractImageFromContent(html) {
   const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
   return match?.[1] || null;
 }
-router109.get("/feeds", authMiddleware, async (req2, res) => {
+router110.get("/feeds", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -90790,7 +92133,7 @@ router109.get("/feeds", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des flux" });
   }
 });
-router109.get("/feeds/:bookmarkId", authMiddleware, async (req2, res) => {
+router110.get("/feeds/:bookmarkId", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -90809,14 +92152,14 @@ router109.get("/feeds/:bookmarkId", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration du flux" });
   }
 });
-var honeycombRoutes_default = router109;
+var honeycombRoutes_default = router110;
 
 // src/routes/userPreferencesRoutes.ts
-var import_express113 = require("express");
+var import_express114 = require("express");
 init_database();
 init_logger();
-var router110 = (0, import_express113.Router)();
-router110.get("/", authMiddleware, async (req2, res) => {
+var router111 = (0, import_express114.Router)();
+router111.get("/", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -90834,7 +92177,7 @@ router110.get("/", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router110.get("/:key", authMiddleware, async (req2, res) => {
+router111.get("/:key", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -90850,7 +92193,7 @@ router110.get("/:key", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router110.put("/:key", authMiddleware, async (req2, res) => {
+router111.put("/:key", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -90870,7 +92213,7 @@ router110.put("/:key", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router110.delete("/:key", authMiddleware, async (req2, res) => {
+router111.delete("/:key", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -90882,7 +92225,7 @@ router110.delete("/:key", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router110.post("/batch", authMiddleware, async (req2, res) => {
+router111.post("/batch", authMiddleware, async (req2, res) => {
   try {
     const userId = req2.user?.userId;
     if (!userId) return res.status(401).json({ error: "Non authentifi\xE9" });
@@ -90909,18 +92252,18 @@ router110.post("/batch", authMiddleware, async (req2, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-var userPreferencesRoutes_default = router110;
+var userPreferencesRoutes_default = router111;
 
 // src/routes/wax.ts
-var import_express114 = require("express");
+var import_express115 = require("express");
 init_database();
 init_logger();
-var router111 = (0, import_express114.Router)();
-router111.use(authenticateToken);
+var router112 = (0, import_express115.Router)();
+router112.use(authenticateToken);
 function extractUser(req2) {
   return req2.user || req2.authUser || null;
 }
-router111.get("/locations", async (req2, res) => {
+router112.get("/locations", async (req2, res) => {
   try {
     const user = extractUser(req2);
     if (!user) return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -91029,7 +92372,7 @@ router111.get("/locations", async (req2, res) => {
     res.status(500).json({ success: false, message: "Error fetching locations" });
   }
 });
-router111.post("/location", async (req2, res) => {
+router112.post("/location", async (req2, res) => {
   try {
     const user = extractUser(req2);
     if (!user) return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -91050,7 +92393,7 @@ router111.post("/location", async (req2, res) => {
     res.status(500).json({ success: false, message: "Error updating location" });
   }
 });
-router111.put("/ghost-mode", async (req2, res) => {
+router112.put("/ghost-mode", async (req2, res) => {
   try {
     const user = extractUser(req2);
     if (!user) return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -91069,7 +92412,7 @@ router111.put("/ghost-mode", async (req2, res) => {
     res.status(500).json({ success: false, message: "Error updating ghost mode" });
   }
 });
-router111.get("/pins", async (req2, res) => {
+router112.get("/pins", async (req2, res) => {
   try {
     const user = extractUser(req2);
     if (!user) return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -91114,7 +92457,7 @@ router111.get("/pins", async (req2, res) => {
     res.status(500).json({ success: false, message: "Error fetching pins" });
   }
 });
-router111.post("/pins", async (req2, res) => {
+router112.post("/pins", async (req2, res) => {
   try {
     const user = extractUser(req2);
     if (!user) return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -91148,7 +92491,7 @@ router111.post("/pins", async (req2, res) => {
     res.status(500).json({ success: false, message: "Error creating pin" });
   }
 });
-router111.post("/pins/:id/view", async (req2, res) => {
+router112.post("/pins/:id/view", async (req2, res) => {
   try {
     const pin = await db.waxPin.update({
       where: { id: req2.params.id },
@@ -91159,7 +92502,7 @@ router111.post("/pins/:id/view", async (req2, res) => {
     res.status(404).json({ success: false, message: "Pin not found" });
   }
 });
-router111.delete("/pins/:id", async (req2, res) => {
+router112.delete("/pins/:id", async (req2, res) => {
   try {
     const user = extractUser(req2);
     if (!user) return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -91174,7 +92517,7 @@ router111.delete("/pins/:id", async (req2, res) => {
     res.status(500).json({ success: false, message: "Error deleting pin" });
   }
 });
-router111.post("/cleanup", async (_req, res) => {
+router112.post("/cleanup", async (_req, res) => {
   try {
     const now = /* @__PURE__ */ new Date();
     const deletedPins = await db.waxPin.deleteMany({
@@ -91205,7 +92548,7 @@ router111.post("/cleanup", async (_req, res) => {
     res.status(500).json({ success: false, message: "Cleanup error" });
   }
 });
-router111.get("/route", async (req2, res) => {
+router112.get("/route", async (req2, res) => {
   try {
     const user = extractUser(req2);
     if (!user) return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -91274,7 +92617,7 @@ router111.get("/route", async (req2, res) => {
     res.status(500).json({ success: false, message: "Error computing route" });
   }
 });
-router111.get("/geocode", async (req2, res) => {
+router112.get("/geocode", async (req2, res) => {
   try {
     const user = extractUser(req2);
     if (!user) return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -91404,19 +92747,19 @@ async function notifyNearbyUsers(pin, creator) {
     logger.info(`[wax] Proximity alerts: ${sent} user(s) notified for pin ${pin.id}`);
   }
 }
-var wax_default = router111;
+var wax_default = router112;
 
 // src/routes/website-forms.ts
-var import_express115 = require("express");
+var import_express116 = require("express");
 init_database();
 init_logger();
-var router112 = (0, import_express115.Router)();
+var router113 = (0, import_express116.Router)();
 var getOrgId4 = (req2) => {
   const orgId = req2.organizationId || req2.headers["x-organization-id"];
   if (!orgId) throw new Error("Organization ID manquant");
   return orgId;
 };
-router112.get("/", async (req2, res) => {
+router113.get("/", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { websiteId } = req2.query;
@@ -91460,7 +92803,7 @@ router112.get("/", async (req2, res) => {
     });
   }
 });
-router112.get("/by-website/:websiteId", async (req2, res) => {
+router113.get("/by-website/:websiteId", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { websiteId } = req2.params;
@@ -91502,7 +92845,7 @@ router112.get("/by-website/:websiteId", async (req2, res) => {
     });
   }
 });
-router112.get("/my-commercial-links", authMiddleware, async (req2, res) => {
+router113.get("/my-commercial-links", authMiddleware, async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const userId = req2.user.userId;
@@ -91574,7 +92917,7 @@ router112.get("/my-commercial-links", authMiddleware, async (req2, res) => {
     });
   }
 });
-router112.get("/:id", async (req2, res) => {
+router113.get("/:id", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -91616,7 +92959,7 @@ router112.get("/:id", async (req2, res) => {
     });
   }
 });
-router112.post("/", async (req2, res) => {
+router113.post("/", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { name, slug, description, treeId, settings, successTitle, successMessage, requiresCommercialTracking } = req2.body;
@@ -91654,7 +92997,7 @@ router112.post("/", async (req2, res) => {
     });
   }
 });
-router112.put("/:id", async (req2, res) => {
+router113.put("/:id", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -91706,7 +93049,7 @@ router112.put("/:id", async (req2, res) => {
     });
   }
 });
-router112.delete("/:id", async (req2, res) => {
+router113.delete("/:id", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -91728,7 +93071,7 @@ router112.delete("/:id", async (req2, res) => {
     });
   }
 });
-router112.post("/:id/steps", async (req2, res) => {
+router113.post("/:id/steps", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -91764,7 +93107,7 @@ router112.post("/:id/steps", async (req2, res) => {
     });
   }
 });
-router112.put("/steps/:stepId", async (req2, res) => {
+router113.put("/steps/:stepId", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const { title, subtitle, helpText, stepType, order, isRequired, condition, settings } = req2.body;
@@ -91791,7 +93134,7 @@ router112.put("/steps/:stepId", async (req2, res) => {
     });
   }
 });
-router112.delete("/steps/:stepId", async (req2, res) => {
+router113.delete("/steps/:stepId", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     await db.website_form_steps.delete({
@@ -91806,7 +93149,7 @@ router112.delete("/steps/:stepId", async (req2, res) => {
     });
   }
 });
-router112.put("/:id/steps/reorder", async (req2, res) => {
+router113.put("/:id/steps/reorder", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { stepIds } = req2.body;
@@ -91826,7 +93169,7 @@ router112.put("/:id/steps/reorder", async (req2, res) => {
     });
   }
 });
-router112.post("/steps/:stepId/fields", async (req2, res) => {
+router113.post("/steps/:stepId/fields", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const {
@@ -91882,7 +93225,7 @@ router112.post("/steps/:stepId/fields", async (req2, res) => {
     });
   }
 });
-router112.put("/fields/:fieldId", async (req2, res) => {
+router113.put("/fields/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     const {
@@ -91931,7 +93274,7 @@ router112.put("/fields/:fieldId", async (req2, res) => {
     });
   }
 });
-router112.delete("/fields/:fieldId", async (req2, res) => {
+router113.delete("/fields/:fieldId", async (req2, res) => {
   try {
     const { fieldId } = req2.params;
     await db.website_form_fields.delete({
@@ -91946,7 +93289,7 @@ router112.delete("/fields/:fieldId", async (req2, res) => {
     });
   }
 });
-router112.put("/steps/:stepId/fields/reorder", async (req2, res) => {
+router113.put("/steps/:stepId/fields/reorder", async (req2, res) => {
   try {
     const { stepId } = req2.params;
     const { fieldIds } = req2.body;
@@ -91966,7 +93309,7 @@ router112.put("/steps/:stepId/fields/reorder", async (req2, res) => {
     });
   }
 });
-router112.post("/:id/link-website", async (req2, res) => {
+router113.post("/:id/link-website", async (req2, res) => {
   try {
     const { id } = req2.params;
     const { websiteId, isDefault, urlPath } = req2.body;
@@ -91997,7 +93340,7 @@ router112.post("/:id/link-website", async (req2, res) => {
     });
   }
 });
-router112.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
+router113.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
   try {
     const { id, websiteId } = req2.params;
     await db.website_form_website.deleteMany({
@@ -92015,7 +93358,7 @@ router112.delete("/:id/unlink-website/:websiteId", async (req2, res) => {
     });
   }
 });
-router112.get("/:id/stats", async (req2, res) => {
+router113.get("/:id/stats", async (req2, res) => {
   try {
     const _organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -92052,7 +93395,7 @@ router112.get("/:id/stats", async (req2, res) => {
     });
   }
 });
-router112.get("/:id/submissions", async (req2, res) => {
+router113.get("/:id/submissions", async (req2, res) => {
   try {
     const { id } = req2.params;
     const submissions = await db.website_form_submissions.findMany({
@@ -92090,7 +93433,7 @@ router112.get("/:id/submissions", async (req2, res) => {
     res.status(500).json({ error: "Erreur lors de la r\xE9cup\xE9ration des soumissions" });
   }
 });
-router112.get("/:id/questions", async (req2, res) => {
+router113.get("/:id/questions", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -92113,7 +93456,7 @@ router112.get("/:id/questions", async (req2, res) => {
     });
   }
 });
-router112.post("/:id/questions", async (req2, res) => {
+router113.post("/:id/questions", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { id } = req2.params;
@@ -92124,7 +93467,7 @@ router112.post("/:id/questions", async (req2, res) => {
       subtitle,
       imageUrl,
       order,
-      options,
+      options: options2,
       navigation,
       defaultNextQuestionKey,
       isRequired,
@@ -92152,7 +93495,7 @@ router112.post("/:id/questions", async (req2, res) => {
         subtitle,
         imageUrl,
         order: order || 1,
-        options: options || null,
+        options: options2 || null,
         navigation: navigation || null,
         defaultNextQuestionKey,
         isRequired: isRequired !== false,
@@ -92169,7 +93512,7 @@ router112.post("/:id/questions", async (req2, res) => {
     });
   }
 });
-router112.put("/questions/:questionId", async (req2, res) => {
+router113.put("/questions/:questionId", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { questionId } = req2.params;
@@ -92179,7 +93522,7 @@ router112.put("/questions/:questionId", async (req2, res) => {
       subtitle,
       imageUrl,
       order,
-      options,
+      options: options2,
       navigation,
       defaultNextQuestionKey,
       isRequired,
@@ -92201,7 +93544,7 @@ router112.put("/questions/:questionId", async (req2, res) => {
         subtitle,
         imageUrl,
         order,
-        options: options !== void 0 ? options : void 0,
+        options: options2 !== void 0 ? options2 : void 0,
         navigation: navigation !== void 0 ? navigation : void 0,
         defaultNextQuestionKey,
         isRequired,
@@ -92218,7 +93561,7 @@ router112.put("/questions/:questionId", async (req2, res) => {
     });
   }
 });
-router112.delete("/questions/:questionId", async (req2, res) => {
+router113.delete("/questions/:questionId", async (req2, res) => {
   try {
     const organizationId = getOrgId4(req2);
     const { questionId } = req2.params;
@@ -92274,15 +93617,15 @@ var generateUserSlug2 = async (firstName, lastName, organizationId) => {
   }
   return slug;
 };
-var website_forms_default = router112;
+var website_forms_default = router113;
 
 // src/routes/public-forms.ts
-var import_express116 = require("express");
+var import_express117 = require("express");
 init_database();
 var import_uuid7 = require("uuid");
 var import_axios4 = __toESM(require("axios"), 1);
 init_crypto();
-var import_qrcode = __toESM(require("qrcode"), 1);
+var import_qrcode2 = __toESM(require("qrcode"), 1);
 init_storage();
 init_logger();
 async function sendSmsInternal(organizationId, to, text) {
@@ -92326,8 +93669,8 @@ async function sendSmsInternal(organizationId, to, text) {
     return false;
   }
 }
-var router113 = (0, import_express116.Router)();
-router113.get("/:slug", async (req2, res) => {
+var router114 = (0, import_express117.Router)();
+router114.get("/:slug", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { websiteSlug: _websiteSlug } = req2.query;
@@ -92435,7 +93778,7 @@ router113.get("/:slug", async (req2, res) => {
     });
   }
 });
-router113.get("/:slug/questions", async (req2, res) => {
+router114.get("/:slug/questions", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const form = await db.website_forms.findFirst({
@@ -92496,7 +93839,7 @@ router113.get("/:slug/questions", async (req2, res) => {
     });
   }
 });
-router113.get("/by-website/:websiteSlug", async (req2, res) => {
+router114.get("/by-website/:websiteSlug", async (req2, res) => {
   try {
     const { websiteSlug } = req2.params;
     const website = await db.websites.findFirst({
@@ -92569,7 +93912,7 @@ router113.get("/by-website/:websiteSlug", async (req2, res) => {
     });
   }
 });
-router113.post("/:slug/submit", async (req2, res) => {
+router114.post("/:slug/submit", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const {
@@ -93003,7 +94346,7 @@ router113.post("/:slug/submit", async (req2, res) => {
     });
   }
 });
-router113.post("/:slug/partial", async (req2, res) => {
+router114.post("/:slug/partial", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const { formData, currentStep, metadata } = req2.body;
@@ -93031,7 +94374,7 @@ router113.post("/:slug/partial", async (req2, res) => {
     res.status(500).json({ error: "Erreur" });
   }
 });
-router113.get("/:slug/qrcode", async (req2, res) => {
+router114.get("/:slug/qrcode", async (req2, res) => {
   try {
     const { slug } = req2.params;
     const format = req2.query.format || "png";
@@ -93044,12 +94387,12 @@ router113.get("/:slug/qrcode", async (req2, res) => {
     }
     const url = `https://www.zhiive.com/form/${slug}`;
     if (format === "svg") {
-      const svg = await import_qrcode.default.toString(url, { type: "svg", width: size, margin: 2 });
+      const svg = await import_qrcode2.default.toString(url, { type: "svg", width: size, margin: 2 });
       res.setHeader("Content-Type", "image/svg+xml");
       res.setHeader("Content-Disposition", `inline; filename="qr-${slug}.svg"`);
       return res.send(svg);
     }
-    const buffer = await import_qrcode.default.toBuffer(url, { width: size, margin: 2, type: "png" });
+    const buffer = await import_qrcode2.default.toBuffer(url, { width: size, margin: 2, type: "png" });
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Content-Disposition", `inline; filename="qr-${slug}.png"`);
     return res.send(buffer);
@@ -93058,10 +94401,10 @@ router113.get("/:slug/qrcode", async (req2, res) => {
     res.status(500).json({ error: "Erreur g\xE9n\xE9ration QR code" });
   }
 });
-var public_forms_default = router113;
+var public_forms_default = router114;
 
 // src/routes/peppol.ts
-var import_express118 = require("express");
+var import_express119 = require("express");
 init_database();
 var import_zod20 = require("zod");
 
@@ -93636,13 +94979,13 @@ var PeppolBridge = class _PeppolBridge {
   /**
    * Liste les factures fournisseur reçues via Peppol (vendor bills)
    */
-  async getIncomingInvoices(odooCompanyId, options) {
+  async getIncomingInvoices(odooCompanyId, options2) {
     const domain = [
       ["company_id", "=", odooCompanyId],
       ["move_type", "=", "in_invoice"]
     ];
-    if (options?.since) {
-      domain.push(["create_date", ">=", options.since]);
+    if (options2?.since) {
+      domain.push(["create_date", ">=", options2.since]);
     }
     const bills = await this.call("account.move", "search_read", [
       domain
@@ -93658,7 +95001,7 @@ var PeppolBridge = class _PeppolBridge {
         "state",
         "peppol_message_uuid"
       ],
-      limit: options?.limit || 200,
+      limit: options2?.limit || 200,
       order: "create_date desc"
     });
     const partnerIds = [...new Set(
@@ -93938,12 +95281,12 @@ async function checkPeppolStatus(vatNumber) {
 }
 
 // src/routes/invoices.ts
-var import_express117 = require("express");
+var import_express118 = require("express");
 init_database();
 var import_zod19 = require("zod");
 var import_pdfkit4 = __toESM(require("pdfkit"), 1);
 init_logger();
-var router114 = (0, import_express117.Router)();
+var router115 = (0, import_express118.Router)();
 function getOrganizationId(req2) {
   return req2.headers["x-organization-id"] || null;
 }
@@ -93951,7 +95294,7 @@ function getUserId(req2) {
   const user = req2.user;
   return user?.userId || user?.id || null;
 }
-router114.get("/stats", authenticateToken, async (req2, res) => {
+router115.get("/stats", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -93989,7 +95332,7 @@ router114.get("/stats", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router114.get("/", authenticateToken, async (req2, res) => {
+router115.get("/", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -94122,7 +95465,7 @@ router114.get("/", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router114.post("/clients/save", authenticateToken, async (req2, res) => {
+router115.post("/clients/save", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -94186,7 +95529,7 @@ router114.post("/clients/save", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: "Erreur interne" });
   }
 });
-router114.get("/clients/search", authenticateToken, async (req2, res) => {
+router115.get("/clients/search", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -94247,7 +95590,7 @@ async function getNextInvoiceNumber(organizationId) {
   const next = maxNum + 1;
   return { next, formatted: `${prefix}${String(next).padStart(3, "0")}` };
 }
-router114.get("/next-number", authenticateToken, async (req2, res) => {
+router115.get("/next-number", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -94278,7 +95621,7 @@ var createInvoiceSchema = import_zod19.z.object({
     taxRate: import_zod19.z.number().optional()
   })).min(1)
 });
-router114.post("/", authenticateToken, async (req2, res) => {
+router115.post("/", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     const userId = getUserId(req2);
@@ -94385,7 +95728,7 @@ router114.post("/", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router114.get("/:id", authenticateToken, async (req2, res) => {
+router115.get("/:id", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -94417,7 +95760,7 @@ var updateInvoiceSchema = import_zod19.z.object({
     taxRate: import_zod19.z.number().optional()
   })).optional()
 });
-router114.put("/:id", authenticateToken, async (req2, res) => {
+router115.put("/:id", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -94468,7 +95811,7 @@ router114.put("/:id", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router114.delete("/:id", authenticateToken, async (req2, res) => {
+router115.delete("/:id", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -94486,7 +95829,7 @@ router114.delete("/:id", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router114.post("/:id/mark-paid", authenticateToken, async (req2, res) => {
+router115.post("/:id/mark-paid", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -94516,7 +95859,7 @@ router114.post("/:id/mark-paid", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router114.post("/:id/mark-sent", authenticateToken, async (req2, res) => {
+router115.post("/:id/mark-sent", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -94539,7 +95882,7 @@ router114.post("/:id/mark-sent", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router114.post("/:id/mark-peppol-sent", authenticateToken, async (req2, res) => {
+router115.post("/:id/mark-peppol-sent", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -94819,7 +96162,7 @@ var orgSelectForPdf = {
   iban: true,
   bankAccountHolder: true
 };
-router114.get("/:id/pdf", authenticateToken, async (req2, res) => {
+router115.get("/:id/pdf", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -94847,7 +96190,7 @@ var sendEmailSchema = import_zod19.z.object({
   body: import_zod19.z.string().min(1),
   ccOrgEmail: import_zod19.z.boolean().optional()
 });
-router114.post("/:id/send-email", authenticateToken, async (req2, res) => {
+router115.post("/:id/send-email", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId(req2);
     const userId = getUserId(req2);
@@ -94905,12 +96248,12 @@ router114.post("/:id/send-email", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-var invoices_default = router114;
+var invoices_default = router115;
 
 // src/routes/peppol.ts
 init_PostalEmailService();
 init_logger();
-var router115 = (0, import_express118.Router)();
+var router116 = (0, import_express119.Router)();
 function getOrganizationId2(req2) {
   const fromHeader = req2.headers["x-organization-id"];
   if (fromHeader && fromHeader !== "all") return fromHeader;
@@ -95020,7 +96363,7 @@ async function notifyIncomingInvoices(organizationId, invoices, _triggeredByUser
     logger.error("[Peppol-Notify] \u274C Erreur envoi notifications:", err.message);
   }
 }
-router115.get("/config", authenticateToken, async (req2, res) => {
+router116.get("/config", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId2(req2);
     if (!organizationId) {
@@ -95063,7 +96406,7 @@ var configSchema = import_zod20.z.object({
   autoSendEnabled: import_zod20.z.boolean().optional(),
   autoReceiveEnabled: import_zod20.z.boolean().optional()
 });
-router115.put("/config", authenticateToken, isAdmin, async (req2, res) => {
+router116.put("/config", authenticateToken, isAdmin, async (req2, res) => {
   try {
     const organizationId = getOrganizationId2(req2);
     if (!organizationId) {
@@ -95102,7 +96445,7 @@ router115.put("/config", authenticateToken, isAdmin, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
-router115.post("/register", authenticateToken, isAdmin, async (req2, res) => {
+router116.post("/register", authenticateToken, isAdmin, async (req2, res) => {
   try {
     const organizationId = getOrganizationId2(req2);
     if (!organizationId) {
@@ -95182,7 +96525,7 @@ router115.post("/register", authenticateToken, isAdmin, async (req2, res) => {
     res.status(500).json({ success: false, message: `Erreur d'enregistrement Peppol: ${error.message}` });
   }
 });
-router115.get("/status", authenticateToken, async (req2, res) => {
+router116.get("/status", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId2(req2);
     if (!organizationId) {
@@ -95255,7 +96598,7 @@ router115.get("/status", authenticateToken, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
-router115.post("/send-verification-code", authenticateToken, isAdmin, async (req2, res) => {
+router116.post("/send-verification-code", authenticateToken, isAdmin, async (req2, res) => {
   try {
     const organizationId = getOrganizationId2(req2);
     if (!organizationId) {
@@ -95280,7 +96623,7 @@ router115.post("/send-verification-code", authenticateToken, isAdmin, async (req
 var verifyCodeSchema = import_zod20.z.object({
   code: import_zod20.z.string().min(4).max(10)
 });
-router115.post("/verify-code", authenticateToken, isAdmin, async (req2, res) => {
+router116.post("/verify-code", authenticateToken, isAdmin, async (req2, res) => {
   try {
     const organizationId = getOrganizationId2(req2);
     if (!organizationId) {
@@ -95323,7 +96666,7 @@ var sendInvoiceSchema = import_zod20.z.object({
   partnerPeppolEas: import_zod20.z.string().default("0208"),
   partnerPeppolEndpoint: import_zod20.z.string().optional()
 });
-router115.post("/send/:invoiceId", authenticateToken, isAdmin, async (req2, res) => {
+router116.post("/send/:invoiceId", authenticateToken, isAdmin, async (req2, res) => {
   const { invoiceId } = req2.params;
   let invoiceSource = "chantier";
   try {
@@ -95580,7 +96923,7 @@ router115.post("/send/:invoiceId", authenticateToken, isAdmin, async (req2, res)
     res.status(500).json({ success: false, message: `Erreur d'envoi Peppol: ${error.message}` });
   }
 });
-router115.get("/send/:invoiceId/status", authenticateToken, async (req2, res) => {
+router116.get("/send/:invoiceId/status", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId2(req2);
     if (!organizationId) {
@@ -95605,7 +96948,7 @@ router115.get("/send/:invoiceId/status", authenticateToken, async (req2, res) =>
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
-router115.post("/retry/:invoiceId", authenticateToken, isAdmin, async (req2, res) => {
+router116.post("/retry/:invoiceId", authenticateToken, isAdmin, async (req2, res) => {
   const { invoiceId } = req2.params;
   try {
     const organizationId = getOrganizationId2(req2);
@@ -95698,7 +97041,7 @@ router115.post("/retry/:invoiceId", authenticateToken, isAdmin, async (req2, res
     res.status(500).json({ success: false, message: `Erreur de retry: ${error.message}` });
   }
 });
-router115.post("/fetch-incoming", authenticateToken, isAdmin, async (req2, res) => {
+router116.post("/fetch-incoming", authenticateToken, isAdmin, async (req2, res) => {
   try {
     const organizationId = getOrganizationId2(req2);
     if (!organizationId) {
@@ -95765,7 +97108,7 @@ router115.post("/fetch-incoming", authenticateToken, isAdmin, async (req2, res) 
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
-router115.get("/incoming", authenticateToken, async (req2, res) => {
+router116.get("/incoming", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId2(req2);
     if (!organizationId) {
@@ -95789,7 +97132,7 @@ var incomingUpdateSchema = import_zod20.z.object({
   status: import_zod20.z.enum(["RECEIVED", "REVIEWED", "ACCEPTED", "REJECTED", "ARCHIVED"]),
   notes: import_zod20.z.string().optional()
 });
-router115.put("/incoming/:id", authenticateToken, isAdmin, async (req2, res) => {
+router116.put("/incoming/:id", authenticateToken, isAdmin, async (req2, res) => {
   try {
     const organizationId = getOrganizationId2(req2);
     if (!organizationId) {
@@ -95822,7 +97165,7 @@ router115.put("/incoming/:id", authenticateToken, isAdmin, async (req2, res) => 
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
-router115.post("/incoming/:id/accept", authenticateToken, isAdmin, async (req2, res) => {
+router116.post("/incoming/:id/accept", authenticateToken, isAdmin, async (req2, res) => {
   try {
     const organizationId = getOrganizationId2(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -95871,7 +97214,7 @@ var verifySchema = import_zod20.z.object({
   eas: import_zod20.z.string().default("0208"),
   endpoint: import_zod20.z.string().min(1)
 });
-router115.post("/verify-endpoint", authenticateToken, async (req2, res) => {
+router116.post("/verify-endpoint", authenticateToken, async (req2, res) => {
   try {
     const validation = verifySchema.safeParse(req2.body);
     if (!validation.success) {
@@ -95885,7 +97228,7 @@ router115.post("/verify-endpoint", authenticateToken, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur interne du serveur" });
   }
 });
-router115.get("/health", authenticateToken, async (_req, res) => {
+router116.get("/health", authenticateToken, async (_req, res) => {
   try {
     const bridge = getPeppolBridge();
     const health = await bridge.healthCheck();
@@ -95898,7 +97241,7 @@ router115.get("/health", authenticateToken, async (_req, res) => {
 var vatLookupSchema = import_zod20.z.object({
   vatNumber: import_zod20.z.string().min(8, "Num\xE9ro de TVA trop court").max(30)
 });
-router115.post("/vat-lookup", authenticateToken, async (req2, res) => {
+router116.post("/vat-lookup", authenticateToken, async (req2, res) => {
   try {
     const validation = vatLookupSchema.safeParse(req2.body);
     if (!validation.success) {
@@ -95932,7 +97275,7 @@ router115.post("/vat-lookup", authenticateToken, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur lors de la recherche" });
   }
 });
-router115.post("/peppol-check", authenticateToken, async (req2, res) => {
+router116.post("/peppol-check", authenticateToken, async (req2, res) => {
   try {
     const validation = vatLookupSchema.safeParse(req2.body);
     if (!validation.success) {
@@ -95952,7 +97295,7 @@ var autoRegisterSchema = import_zod20.z.object({
   contactPhone: import_zod20.z.string().min(6),
   migrationKey: import_zod20.z.string().optional()
 });
-router115.post("/auto-register", authenticateToken, isAdmin, async (req2, res) => {
+router116.post("/auto-register", authenticateToken, isAdmin, async (req2, res) => {
   try {
     const validation = autoRegisterSchema.safeParse(req2.body);
     if (!validation.success) {
@@ -96056,7 +97399,7 @@ router115.post("/auto-register", authenticateToken, isAdmin, async (req2, res) =
     res.status(500).json({ success: false, message: `Erreur d'enregistrement: ${error.message}` });
   }
 });
-router115.post("/deregister", authenticateToken, isAdmin, async (req2, res) => {
+router116.post("/deregister", authenticateToken, isAdmin, async (req2, res) => {
   try {
     const organizationId = getOrganizationId2(req2);
     if (!organizationId) {
@@ -96112,7 +97455,7 @@ router115.post("/deregister", authenticateToken, isAdmin, async (req2, res) => {
 var migrationSchema = import_zod20.z.object({
   migrationKey: import_zod20.z.string().min(1, "Cl\xE9 de migration requise")
 });
-router115.post("/complete-migration", authenticateToken, isAdmin, async (req2, res) => {
+router116.post("/complete-migration", authenticateToken, isAdmin, async (req2, res) => {
   try {
     const organizationId = getOrganizationId2(req2);
     if (!organizationId) {
@@ -96167,14 +97510,14 @@ router115.post("/complete-migration", authenticateToken, isAdmin, async (req2, r
     res.status(500).json({ success: false, message: `Erreur de migration: ${error.message}` });
   }
 });
-var peppol_default = router115;
+var peppol_default = router116;
 
 // src/routes/expenses.ts
-var import_express119 = require("express");
+var import_express120 = require("express");
 init_database();
 var import_zod21 = require("zod");
 init_logger();
-var router116 = (0, import_express119.Router)();
+var router117 = (0, import_express120.Router)();
 var getOrganizationId3 = (req2) => req2.organizationId || req2.headers["x-organization-id"] || null;
 var getUserId3 = (req2) => req2.userId || null;
 var EXPENSE_CATEGORIES = [
@@ -96190,10 +97533,10 @@ var EXPENSE_CATEGORIES = [
   { key: "maintenance", label: "Entretien / R\xE9paration", icon: "\u{1F529}", color: "#d35400" },
   { key: "other", label: "Autre", icon: "\u{1F4E6}", color: "#95a5a6" }
 ];
-router116.get("/categories", authenticateToken, (_req, res) => {
+router117.get("/categories", authenticateToken, (_req, res) => {
   res.json({ success: true, data: EXPENSE_CATEGORIES });
 });
-router116.get("/stats", authenticateToken, async (req2, res) => {
+router117.get("/stats", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId3(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -96244,7 +97587,7 @@ router116.get("/stats", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router116.get("/monthly", authenticateToken, async (req2, res) => {
+router117.get("/monthly", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId3(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -96278,7 +97621,7 @@ router116.get("/monthly", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router116.get("/export/csv", authenticateToken, async (req2, res) => {
+router117.get("/export/csv", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId3(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -96326,7 +97669,7 @@ router116.get("/export/csv", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router116.get("/overdue", authenticateToken, async (req2, res) => {
+router117.get("/overdue", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId3(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -96351,7 +97694,7 @@ router116.get("/overdue", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router116.get("/", authenticateToken, async (req2, res) => {
+router117.get("/", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId3(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -96381,7 +97724,7 @@ var scanSchema = import_zod21.z.object({
   imageBase64: import_zod21.z.string().min(100),
   mimeType: import_zod21.z.string().refine((v) => ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"].includes(v))
 });
-router116.post("/scan", authenticateToken, async (req2, res) => {
+router117.post("/scan", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId3(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -96499,7 +97842,7 @@ var createExpenseSchema = import_zod21.z.object({
   chantierId: import_zod21.z.string().optional(),
   notes: import_zod21.z.string().optional()
 });
-router116.post("/", authenticateToken, async (req2, res) => {
+router117.post("/", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId3(req2);
     const userId = getUserId3(req2);
@@ -96542,7 +97885,7 @@ router116.post("/", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router116.put("/:id", authenticateToken, async (req2, res) => {
+router117.put("/:id", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId3(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -96563,7 +97906,7 @@ router116.put("/:id", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router116.delete("/:id", authenticateToken, async (req2, res) => {
+router117.delete("/:id", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId3(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -96578,7 +97921,7 @@ router116.delete("/:id", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-router116.post("/:id/mark-paid", authenticateToken, async (req2, res) => {
+router117.post("/:id/mark-paid", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId3(req2);
     if (!organizationId) return res.status(400).json({ success: false, message: "Organisation requise" });
@@ -96597,10 +97940,10 @@ router116.post("/:id/mark-paid", authenticateToken, async (req2, res) => {
     return res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Erreur interne" });
   }
 });
-var expenses_default = router116;
+var expenses_default = router117;
 
 // src/routes/arena.ts
-var import_express120 = require("express");
+var import_express121 = require("express");
 init_database();
 
 // src/services/arena/tournamentEngine.ts
@@ -96767,6 +98110,9 @@ async function generateRound(tournamentId) {
       throw new Error("Aucun terrain configur\xE9. Veuillez d'abord configurer les terrains via 'Ajouter des terrains'.");
     }
     const nbRounds = tournament.nbRounds || 5;
+    const activeCourts = courts.filter((c) => c.teamType !== "IDLE");
+    const N = playerIds.length;
+    logger.info(`[ARENA] RANDOM_DRAW: ${N} joueurs, ${activeCourts.length} terrains actifs`);
     const result = await db.$transaction(async (tx) => {
       let firstRoundId = "";
       let totalMatches = 0;
@@ -96783,13 +98129,28 @@ async function generateRound(tournamentId) {
         if (r === 1) firstRoundId = round.id;
         let playerIdx = 0;
         let matchNumber = 1;
-        for (const court of courts) {
-          const teamSize = court.teamType === "TRIPLETTE" ? 3 : 2;
-          const playersNeeded = teamSize * 2;
-          if (playerIdx + playersNeeded > shuffled.length) break;
-          const team1Players = shuffled.slice(playerIdx, playerIdx + teamSize);
-          const team2Players = shuffled.slice(playerIdx + teamSize, playerIdx + playersNeeded);
-          playerIdx += playersNeeded;
+        for (const court of activeCourts) {
+          const courtType = court.teamType;
+          const baseTeamSize = courtType === "TRIPLETTE" ? 3 : 2;
+          const remaining = shuffled.length - playerIdx;
+          if (remaining < 2) break;
+          const idealNeeded = baseTeamSize * 2;
+          let team1Size;
+          let team2Size;
+          if (remaining >= idealNeeded) {
+            team1Size = baseTeamSize;
+            team2Size = baseTeamSize;
+          } else if (remaining >= baseTeamSize + 1) {
+            team1Size = baseTeamSize;
+            team2Size = remaining - baseTeamSize;
+          } else {
+            team1Size = Math.ceil(remaining / 2);
+            team2Size = remaining - team1Size;
+          }
+          if (team2Size < 1) break;
+          const team1Players = shuffled.slice(playerIdx, playerIdx + team1Size);
+          const team2Players = shuffled.slice(playerIdx + team1Size, playerIdx + team1Size + team2Size);
+          playerIdx += team1Size + team2Size;
           const team1 = await tx.arenaTeamEntry.create({
             data: { tournamentId, name: `M${r}-${court.name}-A`, status: "CONFIRMED" }
           });
@@ -97127,10 +98488,10 @@ async function createTeamsFromRandomDraw(tournamentId) {
 
 // src/routes/arena.ts
 init_logger();
-var router117 = (0, import_express120.Router)();
+var router118 = (0, import_express121.Router)();
 var getOrganizationId4 = (req2) => req2.user?.organizationId || req2.headers["x-organization-id"] || null;
 var getUserId4 = (req2) => req2.user?.id || req2.user?.userId || "";
-router117.get("/tournaments", authenticateToken, async (req2, res) => {
+router118.get("/tournaments", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId4(req2);
     const status = req2.query.status;
@@ -97167,7 +98528,7 @@ router117.get("/tournaments", authenticateToken, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.get("/tournaments/:id", authenticateToken, async (req2, res) => {
+router118.get("/tournaments/:id", authenticateToken, async (req2, res) => {
   try {
     const tournament = await db.arenaTournament.findUnique({
       where: { id: req2.params.id },
@@ -97221,7 +98582,7 @@ router117.get("/tournaments/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.post("/tournaments", authenticateToken, async (req2, res) => {
+router118.post("/tournaments", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId4(req2);
     const userId = getUserId4(req2);
@@ -97288,7 +98649,7 @@ router117.post("/tournaments", authenticateToken, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.put("/tournaments/:id", authenticateToken, async (req2, res) => {
+router118.put("/tournaments/:id", authenticateToken, async (req2, res) => {
   try {
     const userId = getUserId4(req2);
     const tournament = await db.arenaTournament.findUnique({ where: { id: req2.params.id } });
@@ -97344,7 +98705,7 @@ router117.put("/tournaments/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.delete("/tournaments/:id", authenticateToken, async (req2, res) => {
+router118.delete("/tournaments/:id", authenticateToken, async (req2, res) => {
   try {
     const userId = getUserId4(req2);
     const tournament = await db.arenaTournament.findUnique({ where: { id: req2.params.id } });
@@ -97364,7 +98725,7 @@ router117.delete("/tournaments/:id", authenticateToken, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.post("/tournaments/:id/start", authenticateToken, async (req2, res) => {
+router118.post("/tournaments/:id/start", authenticateToken, async (req2, res) => {
   try {
     const userId = getUserId4(req2);
     const tournament = await db.arenaTournament.findUnique({ where: { id: req2.params.id } });
@@ -97397,7 +98758,7 @@ router117.post("/tournaments/:id/start", authenticateToken, async (req2, res) =>
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.post("/tournaments/:id/generate-round", authenticateToken, async (req2, res) => {
+router118.post("/tournaments/:id/generate-round", authenticateToken, async (req2, res) => {
   try {
     const userId = getUserId4(req2);
     const tournament = await db.arenaTournament.findUnique({ where: { id: req2.params.id } });
@@ -97412,7 +98773,7 @@ router117.post("/tournaments/:id/generate-round", authenticateToken, async (req2
     res.status(400).json({ success: false, message: error.message });
   }
 });
-router117.post("/tournaments/:id/generate-teams", authenticateToken, async (req2, res) => {
+router118.post("/tournaments/:id/generate-teams", authenticateToken, async (req2, res) => {
   try {
     const userId = getUserId4(req2);
     const tournament = await db.arenaTournament.findUnique({ where: { id: req2.params.id } });
@@ -97434,7 +98795,7 @@ router117.post("/tournaments/:id/generate-teams", authenticateToken, async (req2
     res.status(400).json({ success: false, message: error.message });
   }
 });
-router117.get("/tournaments/:id/standings", authenticateToken, async (req2, res) => {
+router118.get("/tournaments/:id/standings", authenticateToken, async (req2, res) => {
   try {
     const standings = await db.arenaStanding.findMany({
       where: { tournamentId: req2.params.id },
@@ -97459,7 +98820,7 @@ router117.get("/tournaments/:id/standings", authenticateToken, async (req2, res)
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.get("/tournaments/:id/matches", authenticateToken, async (req2, res) => {
+router118.get("/tournaments/:id/matches", authenticateToken, async (req2, res) => {
   try {
     const roundId = req2.query.roundId;
     const where = { tournamentId: req2.params.id };
@@ -97481,7 +98842,7 @@ router117.get("/tournaments/:id/matches", authenticateToken, async (req2, res) =
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.put("/matches/:id/score", authenticateToken, async (req2, res) => {
+router118.put("/matches/:id/score", authenticateToken, async (req2, res) => {
   try {
     const userId = getUserId4(req2);
     const { score1, score2 } = req2.body;
@@ -97534,7 +98895,7 @@ router117.put("/matches/:id/score", authenticateToken, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.put("/matches/:id/validate", authenticateToken, async (req2, res) => {
+router118.put("/matches/:id/validate", authenticateToken, async (req2, res) => {
   try {
     const userId = getUserId4(req2);
     const match = await db.arenaMatch.findUnique({
@@ -97555,7 +98916,7 @@ router117.put("/matches/:id/validate", authenticateToken, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.post("/tournaments/:id/teams", authenticateToken, async (req2, res) => {
+router118.post("/tournaments/:id/teams", authenticateToken, async (req2, res) => {
   try {
     const userId = getUserId4(req2);
     const { name, memberIds } = req2.body;
@@ -97606,7 +98967,7 @@ router117.post("/tournaments/:id/teams", authenticateToken, async (req2, res) =>
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.post("/tournaments/:id/players", authenticateToken, async (req2, res) => {
+router118.post("/tournaments/:id/players", authenticateToken, async (req2, res) => {
   try {
     const userId = getUserId4(req2);
     const tournament = await db.arenaTournament.findUnique({ where: { id: req2.params.id } });
@@ -97642,7 +99003,7 @@ router117.post("/tournaments/:id/players", authenticateToken, async (req2, res) 
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.put("/entries/:id/status", authenticateToken, async (req2, res) => {
+router118.put("/entries/:id/status", authenticateToken, async (req2, res) => {
   try {
     const { status, type } = req2.body;
     if (!["CONFIRMED", "REJECTED"].includes(status)) {
@@ -97666,7 +99027,7 @@ router117.put("/entries/:id/status", authenticateToken, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.post("/tournaments/:id/courts", authenticateToken, async (req2, res) => {
+router118.post("/tournaments/:id/courts", authenticateToken, async (req2, res) => {
   try {
     const { courts } = req2.body;
     if (!Array.isArray(courts) || courts.length === 0) {
@@ -97692,38 +99053,48 @@ router117.post("/tournaments/:id/courts", authenticateToken, async (req2, res) =
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.get("/tournaments/:id/court-proposal", authenticateToken, async (req2, res) => {
+router118.get("/tournaments/:id/court-proposal", authenticateToken, async (req2, res) => {
   try {
     const tournament = await db.arenaTournament.findUnique({
       where: { id: req2.params.id },
       select: {
         id: true,
         courtsCount: true,
-        teamType: true,
-        playersPerTeam: true,
         _count: { select: { PlayerEntries: true } }
       }
     });
     if (!tournament) {
       return res.status(404).json({ success: false, message: "Tournoi introuvable" });
     }
-    const courtsCount = Number(req2.query.courts) || tournament.courtsCount || 4;
-    const playerCount = Number(req2.query.players) || tournament._count.PlayerEntries;
-    const C = courtsCount;
-    const N = playerCount;
-    let triplettes = Math.max(0, Math.floor((N - 4 * C) / 2));
-    if (triplettes > C) triplettes = C;
-    const doublettes = C - triplettes;
-    const playersUsed = doublettes * 4 + triplettes * 6;
+    const C = Number(req2.query.courts) || tournament.courtsCount || 4;
+    const N = Number(req2.query.players) || tournament._count.PlayerEntries;
+    let doublettes = Math.min(C, Math.floor(N / 4));
+    let triplettes = 0;
+    let playersUsed = doublettes * 4;
+    const leftover = N - playersUsed;
+    if (leftover >= 6 && doublettes + triplettes < C) {
+      const extraTriplettes = Math.min(Math.floor(leftover / 6), C - doublettes);
+      triplettes = extraTriplettes;
+      playersUsed += triplettes * 6;
+    }
+    const remaining2 = N - playersUsed;
+    if (remaining2 === 2 && doublettes > 0) {
+      doublettes--;
+      triplettes++;
+      playersUsed = doublettes * 4 + triplettes * 6;
+    }
+    const activeCount = doublettes + triplettes;
+    const idleCount = C - activeCount;
     const playersOut = N - playersUsed;
-    const proposal = [];
+    const courts = [];
     for (let i = 0; i < C; i++) {
-      const isTriplette = i >= doublettes;
-      proposal.push({
-        name: `Terrain ${i + 1}`,
-        teamType: isTriplette ? "TRIPLETTE" : "DOUBLETTE",
-        playersNeeded: isTriplette ? 6 : 4
-      });
+      if (i < doublettes) {
+        courts.push({ name: `Terrain ${i + 1}`, teamType: "DOUBLETTE", playersNeeded: 4, active: true });
+      } else if (i < doublettes + triplettes) {
+        courts.push({ name: `Terrain ${i + 1}`, teamType: "TRIPLETTE", playersNeeded: 6, active: true });
+      } else {
+        courts.push({ name: `Terrain ${i + 1}`, teamType: "IDLE", playersNeeded: 0, active: false });
+      }
     }
     res.json({
       success: true,
@@ -97732,9 +99103,11 @@ router117.get("/tournaments/:id/court-proposal", authenticateToken, async (req2,
         courtsCount: C,
         doublettes,
         triplettes,
+        idleCount,
+        activeCount,
         playersUsed,
         playersOut,
-        courts: proposal
+        courts
       }
     });
   } catch (error) {
@@ -97742,7 +99115,7 @@ router117.get("/tournaments/:id/court-proposal", authenticateToken, async (req2,
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.get("/tournaments/:id/courts", authenticateToken, async (req2, res) => {
+router118.get("/tournaments/:id/courts", authenticateToken, async (req2, res) => {
   try {
     const courts = await db.arenaCourt.findMany({
       where: { tournamentId: req2.params.id },
@@ -97761,7 +99134,61 @@ router117.get("/tournaments/:id/courts", authenticateToken, async (req2, res) =>
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.put("/matches/:id/reassign", authenticateToken, async (req2, res) => {
+router118.post("/tournaments/:id/courts/add", authenticateToken, async (req2, res) => {
+  try {
+    const { name, teamType, location } = req2.body;
+    if (!name) {
+      return res.status(400).json({ success: false, message: "Nom du terrain requis" });
+    }
+    const court = await db.arenaCourt.create({
+      data: {
+        tournamentId: req2.params.id,
+        name,
+        teamType: teamType || "DOUBLETTE",
+        location: location || null
+      }
+    });
+    const count = await db.arenaCourt.count({ where: { tournamentId: req2.params.id } });
+    await db.arenaTournament.update({ where: { id: req2.params.id }, data: { courtsCount: count } });
+    res.status(201).json({ success: true, data: court });
+  } catch (error) {
+    logger.error("[ARENA] POST /courts/add error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router118.patch("/courts/:courtId", authenticateToken, async (req2, res) => {
+  try {
+    const { name, teamType, location } = req2.body;
+    const data = {};
+    if (name !== void 0) data.name = name;
+    if (teamType !== void 0) data.teamType = teamType;
+    if (location !== void 0) data.location = location;
+    const court = await db.arenaCourt.update({
+      where: { id: req2.params.courtId },
+      data
+    });
+    res.json({ success: true, data: court });
+  } catch (error) {
+    logger.error("[ARENA] PATCH /courts/:courtId error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router118.delete("/courts/:courtId", authenticateToken, async (req2, res) => {
+  try {
+    const court = await db.arenaCourt.findUnique({ where: { id: req2.params.courtId } });
+    if (!court) {
+      return res.status(404).json({ success: false, message: "Terrain introuvable" });
+    }
+    await db.arenaCourt.delete({ where: { id: req2.params.courtId } });
+    const count = await db.arenaCourt.count({ where: { tournamentId: court.tournamentId } });
+    await db.arenaTournament.update({ where: { id: court.tournamentId }, data: { courtsCount: count } });
+    res.json({ success: true });
+  } catch (error) {
+    logger.error("[ARENA] DELETE /courts/:courtId error:", error.message);
+    res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+});
+router118.put("/matches/:id/reassign", authenticateToken, async (req2, res) => {
   try {
     const { courtId, team1Id, team2Id } = req2.body;
     const data = {};
@@ -97787,7 +99214,7 @@ router117.put("/matches/:id/reassign", authenticateToken, async (req2, res) => {
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.get("/tournaments/:id/my-registration", authenticateToken, async (req2, res) => {
+router118.get("/tournaments/:id/my-registration", authenticateToken, async (req2, res) => {
   try {
     const userId = getUserId4(req2);
     const tournamentId = req2.params.id;
@@ -97826,7 +99253,7 @@ router117.get("/tournaments/:id/my-registration", authenticateToken, async (req2
     res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 });
-router117.put("/teams/:id/members", authenticateToken, async (req2, res) => {
+router118.put("/teams/:id/members", authenticateToken, async (req2, res) => {
   try {
     const userId = getUserId4(req2);
     const teamEntryId = req2.params.id;
@@ -97908,7 +99335,7 @@ router117.put("/teams/:id/members", authenticateToken, async (req2, res) => {
     res.status(400).json({ success: false, message: error.message });
   }
 });
-router117.get("/tournaments/:id/available-players", authenticateToken, async (req2, res) => {
+router118.get("/tournaments/:id/available-players", authenticateToken, async (req2, res) => {
   try {
     const organizationId = getOrganizationId4(req2);
     const tournamentId = req2.params.id;
@@ -98065,7 +99492,7 @@ var TEAM_NAME_NOUNS = [
   "Vikings",
   "Samoura\xEFs"
 ];
-router117.post("/tournaments/:id/seed-fake-players", authenticateToken, async (req2, res) => {
+router118.post("/tournaments/:id/seed-fake-players", authenticateToken, async (req2, res) => {
   try {
     const userId = getUserId4(req2);
     const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
@@ -98164,7 +99591,7 @@ router117.post("/tournaments/:id/seed-fake-players", authenticateToken, async (r
     res.status(500).json({ success: false, message: error.message || "Erreur serveur" });
   }
 });
-router117.delete("/tournaments/:id/fake-players", authenticateToken, async (req2, res) => {
+router118.delete("/tournaments/:id/fake-players", authenticateToken, async (req2, res) => {
   try {
     const userId = getUserId4(req2);
     const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
@@ -98173,55 +99600,43 @@ router117.delete("/tournaments/:id/fake-players", authenticateToken, async (req2
     }
     const tournamentId = req2.params.id;
     const fakePlayerEntries = await db.arenaPlayerEntry.findMany({
-      where: {
-        tournamentId,
-        User: { email: { endsWith: "@arena-test.local" } }
-      },
+      where: { tournamentId, User: { email: { endsWith: "@arena-test.local" } } },
       select: { userId: true }
     });
     const fakeTeamMembers = await db.arenaTeamMember.findMany({
-      where: {
-        TeamEntry: { tournamentId },
-        User: { email: { endsWith: "@arena-test.local" } }
-      },
-      select: { userId: true, teamEntryId: true }
+      where: { TeamEntry: { tournamentId }, User: { email: { endsWith: "@arena-test.local" } } },
+      select: { userId: true }
     });
-    const fakeUserIds = /* @__PURE__ */ new Set([
+    const fakeUserIds = [.../* @__PURE__ */ new Set([
       ...fakePlayerEntries.map((p) => p.userId),
       ...fakeTeamMembers.map((m) => m.userId)
-    ]);
-    const fakeTeamEntryIds = new Set(fakeTeamMembers.map((m) => m.teamEntryId));
-    for (const teamId of fakeTeamEntryIds) {
-      const allMembers = await db.arenaTeamMember.findMany({
-        where: { teamEntryId: teamId },
-        select: { userId: true }
-      });
-      const allFake = allMembers.every((m) => fakeUserIds.has(m.userId));
-      if (allFake) {
-        await db.arenaTeamEntry.delete({ where: { id: teamId } });
+    ])];
+    await db.$transaction(async (tx) => {
+      await tx.arenaStanding.deleteMany({ where: { tournamentId } });
+      await tx.arenaMatch.deleteMany({ where: { tournamentId } });
+      await tx.arenaRound.deleteMany({ where: { tournamentId } });
+      await tx.arenaTeamMember.deleteMany({ where: { TeamEntry: { tournamentId } } });
+      await tx.arenaTeamEntry.deleteMany({ where: { tournamentId } });
+      await tx.arenaPlayerEntry.deleteMany({ where: { tournamentId } });
+      if (fakeUserIds.length > 0) {
+        await tx.user.deleteMany({ where: { id: { in: fakeUserIds } } });
       }
-    }
-    if (fakePlayerEntries.length > 0) {
-      await db.arenaPlayerEntry.deleteMany({
-        where: { tournamentId, userId: { in: Array.from(fakeUserIds) } }
+      await tx.arenaTournament.update({
+        where: { id: tournamentId },
+        data: { status: "DRAFT", currentRound: 0 }
       });
-    }
-    if (fakeUserIds.size > 0) {
-      await db.user.deleteMany({
-        where: { id: { in: Array.from(fakeUserIds) } }
-      });
-    }
-    logger.info(`[ARENA] Cleanup fake: ${fakeUserIds.size} fake users supprim\xE9s pour tournoi ${tournamentId}`);
+    });
+    logger.info(`[ARENA] Cleanup complet: rounds/matchs/\xE9quipes/joueurs supprim\xE9s pour tournoi ${tournamentId}, ${fakeUserIds.length} faux users supprim\xE9s`);
     res.json({
       success: true,
-      data: { usersDeleted: fakeUserIds.size }
+      data: { fakeUsersDeleted: fakeUserIds.length }
     });
   } catch (error) {
     logger.error("[ARENA] DELETE /fake-players error:", error.message);
     res.status(500).json({ success: false, message: error.message || "Erreur serveur" });
   }
 });
-var arena_default = router117;
+var arena_default = router118;
 
 // src/middleware/websiteRenderer.ts
 var fs10 = __toESM(require("fs"), 1);
@@ -98549,14 +99964,14 @@ function websiteInterceptor(req2, res, next) {
 
 // src/security/securityMiddleware.ts
 var import_express_rate_limit15 = __toESM(require("express-rate-limit"), 1);
-var import_crypto38 = __toESM(require("crypto"), 1);
+var import_crypto40 = __toESM(require("crypto"), 1);
 init_logger();
 var isCodespaces = process.env.CODESPACES === "true" || typeof process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN === "string";
 var isRateLimitEnabled = process.env.NODE_ENV === "production" && !isCodespaces;
 var noopMiddleware = (_req, _res, next) => next();
 var securityMonitoring = (req2, res, next) => {
   const startTime = Date.now();
-  const requestId = import_crypto38.default.randomUUID();
+  const requestId = import_crypto40.default.randomUUID();
   req2.requestId = requestId;
   const suspiciousPatterns = [
     /(\<script\>)/gi,
@@ -99462,6 +100877,13 @@ function startPeppolCronJobs() {
 // src/api-server-clean.ts
 init_logger();
 import_dotenv.default.config();
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV ?? "development",
+    tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1
+  });
+}
 if (process.env.NODE_ENV === "production") {
   const noop = () => {
   };
@@ -99479,7 +100901,7 @@ logSecurityEvent("SERVER_STARTUP", {
   environment: process.env.NODE_ENV || "development",
   securityLevel: "ENTERPRISE"
 }, "info");
-var app = (0, import_express121.default)();
+var app = (0, import_express122.default)();
 app.set("trust proxy", 1);
 var port = Number(process.env.PORT || 8080);
 logger.debug("\u{1F3AF} [BOOTSTRAP] Server will listen on port:", port);
@@ -99541,8 +100963,14 @@ app.use((0, import_helmet.default)({
     maxAge: 31536e3,
     includeSubDomains: true,
     preload: true
-  }
+  },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  permittedCrossDomainPolicies: { permittedPolicies: "none" }
 }));
+app.use((_req, res, next) => {
+  res.setHeader("Permissions-Policy", "camera=(self), microphone=(self), geolocation=(self), payment=()");
+  next();
+});
 app.use((0, import_compression.default)({
   level: 6,
   threshold: 1024,
@@ -99608,11 +101036,31 @@ app.use((0, import_cors.default)({
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "x-organization-id"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "x-organization-id", "X-CSRF-Protection"],
   exposedHeaders: ["X-Total-Count", "X-Rate-Limit-Remaining", "x-organization-id"]
 }));
+app.use((req2, res, next) => {
+  const safeMethods = ["GET", "HEAD", "OPTIONS"];
+  if (safeMethods.includes(req2.method)) return next();
+  if (req2.headers["authorization"] || req2.headers["x-csrf-protection"] || req2.headers["x-requested-with"]) {
+    return next();
+  }
+  if (req2.headers["content-type"]?.includes("multipart/form-data")) {
+    return next();
+  }
+  logger.warn(`\u{1F6AB} [CSRF] Requ\xEAte ${req2.method} ${req2.path} bloqu\xE9e \u2014 header CSRF manquant`);
+  return res.status(403).json({ message: "CSRF protection: custom header required" });
+});
+app.use("/api", (req2, res, next) => {
+  if (req2.method === "GET") {
+    res.set("Cache-Control", "private, no-cache, must-revalidate");
+  } else {
+    res.set("Cache-Control", "no-store");
+  }
+  next();
+});
 app.use(inputSanitization);
-app.use(import_express121.default.json({
+app.use(import_express122.default.json({
   limit: "50mb",
   verify: (req2, res, buf) => {
     try {
@@ -99626,7 +101074,7 @@ app.use(import_express121.default.json({
     }
   }
 }));
-app.use(import_express121.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express122.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use((0, import_cookie_parser.default)());
 app.use((0, import_express_fileupload.default)({
   limits: { fileSize: 100 * 1024 * 1024 },
@@ -99637,9 +101085,11 @@ app.use((0, import_express_fileupload.default)({
   responseOnLimit: "Fichier trop volumineux (max 100 Mo)"
 }));
 logger.debug("\u2705 [FileUpload] Middleware configur\xE9 (100MB max)");
-var sessionSecret = process.env.SESSION_SECRET || (process.env.NODE_ENV === "production" ? (() => {
-  throw new Error("SESSION_SECRET requis en production");
-})() : "crm-dev-secret-2024");
+if (!process.env.SESSION_SECRET && process.env.NODE_ENV === "production") {
+  logger.error("\u274C FATAL: SESSION_SECRET non d\xE9fini en production \u2014 arr\xEAt imm\xE9diat");
+  process.exit(1);
+}
+var sessionSecret = process.env.SESSION_SECRET || "crm-dev-session-only";
 var PgSession = (0, import_connect_pg_simple.default)(import_express_session.default);
 app.use((0, import_express_session.default)({
   secret: sessionSecret,
@@ -99718,10 +101168,32 @@ var repeatRouter = createRepeatRouter(db);
 app.use("/api/treebranchleaf/repeat", repeatRouter);
 app.use("/api/repeat", repeatRouter);
 logger.debug("\u2705 [API-SERVER-CLEAN] Routes configur\xE9es");
+if (process.env.NODE_ENV !== "production") {
+  Promise.resolve().then(() => (init_swagger(), swagger_exports)).then(({ generateSwaggerSpec: generateSwaggerSpec2 }) => {
+    import("swagger-ui-express").then((swaggerUi) => {
+      const spec = generateSwaggerSpec2();
+      app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(spec, {
+        customCss: ".swagger-ui .topbar { display: none }",
+        customSiteTitle: "Zhiive API Docs"
+      }));
+      logger.debug("\u{1F4D6} [SWAGGER] API docs available at /api/docs");
+    });
+  }).catch((err) => {
+    logger.warn("\u{1F4D6} [SWAGGER] Failed to load swagger:", err?.message);
+  });
+}
 app.get("/health", (_req, res) => {
+  const mem = process.memoryUsage();
   res.json({
     status: "OK",
-    timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    uptime: Math.round(process.uptime()),
+    memory: {
+      rss: Math.round(mem.rss / 1024 / 1024),
+      heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+      heapTotal: Math.round(mem.heapTotal / 1024 / 1024)
+    },
+    nodeVersion: process.version
   });
 });
 app.get("/api/health/db", async (_req, res) => {
@@ -99741,12 +101213,12 @@ if (process.env.NODE_ENV === "production") {
   if (import_fs8.default.existsSync(indexHtml)) {
     logger.debug("\u{1F5C2}\uFE0F [STATIC] Distribution front d\xE9tect\xE9e, activation du serveur statique");
     const assetsDir = import_path7.default.join(distDir, "assets");
-    app.use("/assets", import_express121.default.static(assetsDir, {
+    app.use("/assets", import_express122.default.static(assetsDir, {
       setHeaders: (res) => {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
     }));
-    app.use("/.well-known", import_express121.default.static(import_path7.default.join(distDir, ".well-known")));
+    app.use("/.well-known", import_express122.default.static(import_path7.default.join(distDir, ".well-known")));
     app.get(/^\/[^/]+\.(png|jpg|jpeg|gif|svg|ico|webp|js|css|woff|woff2|ttf|eot|json|webmanifest|html|txt|xml|mp3)$/i, (req2, res, next) => {
       const filePath = import_path7.default.join(distDir, req2.path);
       if (import_fs8.default.existsSync(filePath)) {
@@ -99913,6 +101385,9 @@ app.get("/api/debug/static-status", (_req, res) => {
     served: process.env.NODE_ENV === "production" && import_fs8.default.existsSync(indexHtml)
   });
 });
+if (process.env.SENTRY_DSN) {
+  app.use(Sentry.expressErrorHandler());
+}
 var errorHandler = (err, req2, res, next) => {
   logSecurityEvent("SERVER_ERROR", {
     error: err.message,
@@ -100028,8 +101503,15 @@ async function startServer() {
           const deletedPins = await db2.waxPin.deleteMany({
             where: { expiresAt: { lt: now } }
           });
-          if (expiredCount > 0 || deletedPins.count > 0) {
-            logger.debug(`\u{1F56F}\uFE0F [WAX-CLEANUP] ${expiredCount} messages expired, ${deletedPins.count} pins deleted`);
+          const deletedStories = await db2.story.deleteMany({
+            where: { expiresAt: { lt: now }, isHighlight: false }
+          });
+          try {
+            await db2.$executeRawUnsafe(`DELETE FROM "session" WHERE "expire" < NOW() - INTERVAL '1 day'`);
+          } catch {
+          }
+          if (expiredCount > 0 || deletedPins.count > 0 || deletedStories.count > 0) {
+            logger.debug(`\u{1F56F}\uFE0F [WAX-CLEANUP] ${expiredCount} messages expired, ${deletedPins.count} pins deleted, ${deletedStories.count} stories pruned`);
           }
         } catch (err) {
           logger.error("\u26A0\uFE0F [WAX-CLEANUP] Error:", err);

@@ -220,7 +220,7 @@ const AIAssistButton: React.FC<AIAssistButtonProps> = ({
           dataSource={suggestions}
           renderItem={(suggestion: unknown, index: number) => (
             <List.Item
-              key={index}
+              key={`item-${index}`}
               style={{
                 padding: '16px',
                 border: '1px solid #e8e8e8',

@@ -358,7 +358,7 @@ const DevenirPartenairePage: React.FC = () => {
         {/* Avantages */}
         <Row gutter={[24, 24]} className="mb-12">
           {avantages.map((avantage, index) => (
-            <Col key={index} xs={24} sm={12} lg={6}>
+            <Col key={`item-${index}`} xs={24} sm={12} lg={6}>
               <Card className="text-center h-full">
                 <div className="text-4xl mb-4 text-blue-600">
                   {avantage.icon}
@@ -375,7 +375,7 @@ const DevenirPartenairePage: React.FC = () => {
           <Steps current={currentStep} className="mb-8">
             {etapes.map((etape, index) => (
               <Step 
-                key={index} 
+                key={`item-${index}`} 
                 title={etape.titre} 
                 description={etape.description}
               />

@@ -176,7 +176,7 @@ export const ServicesRenderer: React.FC<ServicesRendererProps> = ({ content }) =
                 sm={24 / (grid.tablet || 2)} 
                 md={24 / (grid.tablet || 2)} 
                 lg={24 / (grid.desktop || 4)} 
-                key={index}
+                key={`item-${index}`}
               >
                 <Card
                   hoverable

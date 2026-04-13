@@ -220,7 +220,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
         <div style={{ background: bgColor || '#f9fafb', padding: '60px 24px' }}>
           <Row gutter={[24, 24]} justify="center" style={{ maxWidth: '1400px', margin: '0 auto' }}>
             {stats.map((stat: unknown, index: number) => (
-              <Col xs={12} sm={12} md={6} key={index}>
+              <Col xs={12} sm={12} md={6} key={`item-${index}`}>
                 <Card 
                   variant="borderless"
                   style={{ 
@@ -532,7 +532,7 @@ const SectionRenderer: React.FC<SectionRendererProps> = ({ section }) => {
 
             <Row gutter={[32, 32]}>
               {valuesCards.map((value, index) => (
-                <Col xs={24} sm={12} md={6} key={index}>
+                <Col xs={24} sm={12} md={6} key={`item-${index}`}>
                   <Card 
                     variant="borderless"
                     style={{ 

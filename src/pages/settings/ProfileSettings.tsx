@@ -197,7 +197,7 @@ const ProfileSettings: React.FC = () => {
               border: '4px solid ' + FB.white, boxShadow: FB.shadow,
             }}>
               {avatarUrl ? (
-                <img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img loading="lazy" src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 <span style={{ fontSize: 28, fontWeight: 700, color: FB.white }}>{initials}</span>
               )}

@@ -216,7 +216,7 @@ export const EmailSetupWizard: React.FC<EmailSetupWizardProps> = ({
           >
             {instructions.setupSteps.map((step, index) => (
               <Steps.Step
-                key={index}
+                key={`item-${index}`}
                 title={
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>{step}</span>

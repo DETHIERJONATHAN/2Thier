@@ -421,7 +421,7 @@ export const ArrayFieldEditor: React.FC<ArrayFieldEditorProps> = (props) => {
         <Space direction="vertical" style={{ width: '100%' }} size="small">
           {items.map((item, index) => (
             <Card
-              key={index}
+              key={`item-${index}`}
               size="small"
               title={`Item ${index + 1}`}
               extra={

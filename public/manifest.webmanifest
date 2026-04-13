@@ -34,5 +34,45 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "scope": "/",
+  "start_url": "/?source=pwa",
+  "share_target": {
+    "action": "/share-target",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+zhiive",
+      "url": "/?proto=%s"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nouveau Buzz",
+      "short_name": "Buzz",
+      "description": "Créer un nouveau post",
+      "url": "/?action=new-post",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Messenger",
+      "short_name": "Whispers",
+      "description": "Ouvrir les messages",
+      "url": "/messenger",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Carte Wax",
+      "short_name": "Wax",
+      "description": "Ouvrir la carte interactive",
+      "url": "/wax",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    }
   ]
 }

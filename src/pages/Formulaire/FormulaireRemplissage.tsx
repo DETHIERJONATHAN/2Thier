@@ -132,11 +132,11 @@ const FormulaireRemplissage: React.FC<FormulaireRemplissageProps> = ({ formDefin
       }
     }
     try {
-      // eslint-disable-next-line no-eval
+       
       // On limite l’éval à des cas simples (pas de fonctions, pas d’accès global)
       // Pour la prod, utiliser un parser dédié !
-      // eslint-disable-next-line no-new-func
-      // @ts-ignore
+       
+      // @ts-expect-error dynamic expression evaluation
       return Function('return (' + expr + ')')();
     } catch {
       return '';
@@ -376,8 +376,7 @@ const FormulaireRemplissage: React.FC<FormulaireRemplissageProps> = ({ formDefin
                         )}
 
                         {['image_admin','image_user'].includes(field.type) && ((field as any).advancedConfig?.imageUrl) && (
-                          <img
-                            src={(field as any).advancedConfig.imageUrl}
+                          <img loading="lazy" src={(field as any).advancedConfig.imageUrl}
                             alt={field.label}
                             style={{
                               objectFit: 'contain',

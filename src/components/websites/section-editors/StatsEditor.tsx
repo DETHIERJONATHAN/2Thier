@@ -125,7 +125,7 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onSave, onCan
           Statistiques (4 max recommandé)
         </label>
         {stats.map((stat, index) => (
-          <Space key={index} style={{ display: 'flex', marginBottom: 12 }} align="baseline">
+          <Space key={`item-${index}`} style={{ display: 'flex', marginBottom: 12 }} align="baseline">
             <Input
               placeholder="Icône"
               value={stat.icon}

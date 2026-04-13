@@ -122,6 +122,9 @@ export function useAuthenticatedApi() {
       if (impersonatedUserId) headers.set('x-impersonate-user-id', impersonatedUserId);
       if (impersonatedOrgId) headers.set('x-impersonate-org-id', impersonatedOrgId);
 
+      // #8 CSRF protection — custom header on all requests
+      headers.set('X-Requested-With', 'XMLHttpRequest');
+
       if (['POST', 'PUT', 'PATCH'].includes((fetchOptions.method || '').toUpperCase()) &&
           !(fetchOptions.body instanceof FormData)) {
         headers.set('Content-Type', 'application/json');

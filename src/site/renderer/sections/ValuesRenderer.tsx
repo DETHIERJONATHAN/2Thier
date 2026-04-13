@@ -92,7 +92,7 @@ export const ValuesRenderer: React.FC<ValuesRendererProps> = ({ content }) => {
         {/* Grille de valeurs avec configuration grid */}
         <Row gutter={[parseInt(gap), parseInt(gap)]} justify={justifyContent as unknown}>
           {items.map((item, index) => (
-            <Col {...getColSpan()} key={index}>
+            <Col {...getColSpan()} key={`item-${index}`}>
               <Card 
                 bordered={false} 
                 style={{ 

@@ -88,7 +88,7 @@ const GoogleWorkspaceSection: React.FC<{ organizationId: string }> = ({ organiza
     setTesting(true);
     try {
       const r = await api.post(`/api/organizations/${organizationId}/google-workspace/test`);
-      r.success ? message.success('Connexion réussie !') : message.error(r.message || 'Échec');
+      if (r.success) { message.success('Connexion réussie !'); } else { message.error(r.message || 'Échec'); }
     } catch { message.error('Erreur lors du test'); }
     finally { setTesting(false); }
   };
@@ -383,7 +383,7 @@ const OrganizationSettings: React.FC = () => {
             title={isAdmin ? 'Cliquer pour changer le logo' : undefined}
           >
             {orgLogo ? (
-              <img src={orgLogo} alt={currentOrganization.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+              <img loading="lazy" src={orgLogo} alt={currentOrganization.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
             ) : (
               <BankOutlined style={{ fontSize: 28, color: FB.white }} />
             )}

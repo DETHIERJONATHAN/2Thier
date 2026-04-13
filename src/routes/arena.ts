@@ -747,13 +747,19 @@ router.post('/tournaments/:id/courts', authenticateToken, async (req: Request, r
 // ═══════════════════════════════════════════════════════════
 // GET /tournaments/:id/court-proposal — Proposition de configuration des terrains
 // ═══════════════════════════════════════════════════════════
+// Algo : N joueurs, C terrains disponibles (1 terrain = 1 match)
+// Doublette = 2v2 = 4 joueurs/terrain. Triplette = 3v3 = 6 joueurs/terrain.
+// On maximise le nombre de joueurs qui jouent en minimisant les BYE.
+// t = triplettes, d = doublettes, x = terrains inactifs
+// Contraintes : d+t+x=C, 4d+6t ≤ N, maximiser 4d+6t
+// Stratégie : d'abord remplir en doublettes (plus efficace), puis convertir si reste ≥ 2 joueurs
 
 router.get('/tournaments/:id/court-proposal', authenticateToken, async (req: Request, res: Response) => {
   try {
     const tournament = await db.arenaTournament.findUnique({
       where: { id: req.params.id },
       select: {
-        id: true, courtsCount: true, teamType: true, playersPerTeam: true,
+        id: true, courtsCount: true,
         _count: { select: { PlayerEntries: true } },
       },
     });
@@ -762,30 +768,45 @@ router.get('/tournaments/:id/court-proposal', authenticateToken, async (req: Req
       return res.status(404).json({ success: false, message: 'Tournoi introuvable' });
     }
 
-    const courtsCount = Number(req.query.courts) || tournament.courtsCount || 4;
-    const playerCount = Number(req.query.players) || tournament._count.PlayerEntries;
+    const C = Number(req.query.courts) || tournament.courtsCount || 4;
+    const N = Number(req.query.players) || tournament._count.PlayerEntries;
 
-    // Algorithme : N joueurs, C terrains
-    // Chaque terrain = 1 match : doublette (2v2=4 joueurs) ou triplette (3v3=6 joueurs)
-    // d + t = C, et 4d + 6t = N => t = (N - 4C) / 2
-    const C = courtsCount;
-    const N = playerCount;
+    // Phase 1 : remplir au max avec doublettes
+    let doublettes = Math.min(C, Math.floor(N / 4));
+    let triplettes = 0;
+    let playersUsed = doublettes * 4;
+    const leftover = N - playersUsed;
 
-    let triplettes = Math.max(0, Math.floor((N - 4 * C) / 2));
-    if (triplettes > C) triplettes = C;
-    const doublettes = C - triplettes;
-    const playersUsed = doublettes * 4 + triplettes * 6;
-    const playersOut = N - playersUsed; // joueurs qui ne jouent pas cette manche
+    // Phase 2 : si reste ≥ 6 et terrains libres, ajouter triplettes
+    if (leftover >= 6 && doublettes + triplettes < C) {
+      const extraTriplettes = Math.min(Math.floor(leftover / 6), C - doublettes);
+      triplettes = extraTriplettes;
+      playersUsed += triplettes * 6;
+    }
+
+    // Phase 3 : si reste = 2 (pas assez pour triplette), convertir 1 doublette en triplette
+    // 1 doublette (4j) + 2 restants = 6j = 1 triplette
+    const remaining2 = N - playersUsed;
+    if (remaining2 === 2 && doublettes > 0) {
+      doublettes--;
+      triplettes++;
+      playersUsed = doublettes * 4 + triplettes * 6;
+    }
+
+    const activeCount = doublettes + triplettes;
+    const idleCount = C - activeCount;
+    const playersOut = N - playersUsed;
 
     // Construire la proposition par terrain
-    const proposal: { name: string; teamType: string; playersNeeded: number }[] = [];
+    const courts: { name: string; teamType: string; playersNeeded: number; active: boolean }[] = [];
     for (let i = 0; i < C; i++) {
-      const isTriplette = i >= doublettes; // les derniers terrains sont triplettes
-      proposal.push({
-        name: `Terrain ${i + 1}`,
-        teamType: isTriplette ? 'TRIPLETTE' : 'DOUBLETTE',
-        playersNeeded: isTriplette ? 6 : 4,
-      });
+      if (i < doublettes) {
+        courts.push({ name: `Terrain ${i + 1}`, teamType: 'DOUBLETTE', playersNeeded: 4, active: true });
+      } else if (i < doublettes + triplettes) {
+        courts.push({ name: `Terrain ${i + 1}`, teamType: 'TRIPLETTE', playersNeeded: 6, active: true });
+      } else {
+        courts.push({ name: `Terrain ${i + 1}`, teamType: 'IDLE', playersNeeded: 0, active: false });
+      }
     }
 
     res.json({
@@ -795,9 +816,11 @@ router.get('/tournaments/:id/court-proposal', authenticateToken, async (req: Req
         courtsCount: C,
         doublettes,
         triplettes,
+        idleCount,
+        activeCount,
         playersUsed,
         playersOut,
-        courts: proposal,
+        courts,
       },
     });
   } catch (error: any) {
@@ -827,6 +850,77 @@ router.get('/tournaments/:id/courts', authenticateToken, async (req: Request, re
     res.json({ success: true, data: courts });
   } catch (error: any) {
     logger.error('[ARENA] GET /courts error:', error.message);
+    res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// POST /tournaments/:id/courts/add — Ajouter UN terrain
+// ═══════════════════════════════════════════════════════════
+
+router.post('/tournaments/:id/courts/add', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { name, teamType, location } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Nom du terrain requis' });
+    }
+    const court = await db.arenaCourt.create({
+      data: {
+        tournamentId: req.params.id,
+        name,
+        teamType: teamType || 'DOUBLETTE',
+        location: location || null,
+      },
+    });
+    // Mettre à jour courtsCount
+    const count = await db.arenaCourt.count({ where: { tournamentId: req.params.id } });
+    await db.arenaTournament.update({ where: { id: req.params.id }, data: { courtsCount: count } });
+    res.status(201).json({ success: true, data: court });
+  } catch (error: any) {
+    logger.error('[ARENA] POST /courts/add error:', error.message);
+    res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// PATCH /courts/:courtId — Modifier un terrain
+// ═══════════════════════════════════════════════════════════
+
+router.patch('/courts/:courtId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { name, teamType, location } = req.body;
+    const data: Record<string, unknown> = {};
+    if (name !== undefined) data.name = name;
+    if (teamType !== undefined) data.teamType = teamType;
+    if (location !== undefined) data.location = location;
+    const court = await db.arenaCourt.update({
+      where: { id: req.params.courtId },
+      data,
+    });
+    res.json({ success: true, data: court });
+  } catch (error: any) {
+    logger.error('[ARENA] PATCH /courts/:courtId error:', error.message);
+    res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// DELETE /courts/:courtId — Supprimer un terrain
+// ═══════════════════════════════════════════════════════════
+
+router.delete('/courts/:courtId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const court = await db.arenaCourt.findUnique({ where: { id: req.params.courtId } });
+    if (!court) {
+      return res.status(404).json({ success: false, message: 'Terrain introuvable' });
+    }
+    await db.arenaCourt.delete({ where: { id: req.params.courtId } });
+    // Mettre à jour courtsCount
+    const count = await db.arenaCourt.count({ where: { tournamentId: court.tournamentId } });
+    await db.arenaTournament.update({ where: { id: court.tournamentId }, data: { courtsCount: count } });
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('[ARENA] DELETE /courts/:courtId error:', error.message);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -1226,7 +1320,7 @@ router.post('/tournaments/:id/seed-fake-players', authenticateToken, async (req:
 });
 
 // ═══════════════════════════════════════════════════════════
-// DELETE /tournaments/:id/fake-players — Nettoyer les faux joueurs (SUPER ADMIN ONLY)
+// DELETE /tournaments/:id/fake-players — Nettoyer TOUT le tournoi + faux joueurs (SUPER ADMIN ONLY)
 // ═══════════════════════════════════════════════════════════
 
 router.delete('/tournaments/:id/fake-players', authenticateToken, async (req: Request, res: Response) => {
@@ -1239,60 +1333,54 @@ router.delete('/tournaments/:id/fake-players', authenticateToken, async (req: Re
 
     const tournamentId = req.params.id;
 
-    // Trouver tous les faux utilisateurs liés à ce tournoi
+    // Trouver les faux utilisateurs liés à ce tournoi (par PlayerEntry ou TeamMember)
     const fakePlayerEntries = await db.arenaPlayerEntry.findMany({
-      where: {
-        tournamentId,
-        User: { email: { endsWith: '@arena-test.local' } },
-      },
+      where: { tournamentId, User: { email: { endsWith: '@arena-test.local' } } },
       select: { userId: true },
     });
-
     const fakeTeamMembers = await db.arenaTeamMember.findMany({
-      where: {
-        TeamEntry: { tournamentId },
-        User: { email: { endsWith: '@arena-test.local' } },
-      },
-      select: { userId: true, teamEntryId: true },
+      where: { TeamEntry: { tournamentId }, User: { email: { endsWith: '@arena-test.local' } } },
+      select: { userId: true },
     });
-
-    const fakeUserIds = new Set([
+    const fakeUserIds = [...new Set([
       ...fakePlayerEntries.map(p => p.userId),
       ...fakeTeamMembers.map(m => m.userId),
-    ]);
+    ])];
 
-    // Supprimer les équipes dont TOUS les membres sont fake
-    const fakeTeamEntryIds = new Set(fakeTeamMembers.map(m => m.teamEntryId));
-    for (const teamId of fakeTeamEntryIds) {
-      const allMembers = await db.arenaTeamMember.findMany({
-        where: { teamEntryId: teamId },
-        select: { userId: true },
-      });
-      const allFake = allMembers.every(m => fakeUserIds.has(m.userId));
-      if (allFake) {
-        await db.arenaTeamEntry.delete({ where: { id: teamId } });
+    await db.$transaction(async (tx) => {
+      // 1. Supprimer les scores/standings
+      await tx.arenaStanding.deleteMany({ where: { tournamentId } });
+
+      // 2. Supprimer tous les matchs
+      await tx.arenaMatch.deleteMany({ where: { tournamentId } });
+
+      // 3. Supprimer tous les rounds
+      await tx.arenaRound.deleteMany({ where: { tournamentId } });
+
+      // 4. Supprimer membres d'équipes + équipes
+      await tx.arenaTeamMember.deleteMany({ where: { TeamEntry: { tournamentId } } });
+      await tx.arenaTeamEntry.deleteMany({ where: { tournamentId } });
+
+      // 5. Supprimer inscriptions individuelles
+      await tx.arenaPlayerEntry.deleteMany({ where: { tournamentId } });
+
+      // 6. Supprimer les faux utilisateurs
+      if (fakeUserIds.length > 0) {
+        await tx.user.deleteMany({ where: { id: { in: fakeUserIds } } });
       }
-    }
 
-    // Supprimer les inscriptions joueurs fake
-    if (fakePlayerEntries.length > 0) {
-      await db.arenaPlayerEntry.deleteMany({
-        where: { tournamentId, userId: { in: Array.from(fakeUserIds) } },
+      // 7. Remettre le tournoi en état initial
+      await tx.arenaTournament.update({
+        where: { id: tournamentId },
+        data: { status: 'DRAFT', currentRound: 0 },
       });
-    }
+    });
 
-    // Supprimer les faux utilisateurs
-    if (fakeUserIds.size > 0) {
-      await db.user.deleteMany({
-        where: { id: { in: Array.from(fakeUserIds) } },
-      });
-    }
-
-    logger.info(`[ARENA] Cleanup fake: ${fakeUserIds.size} fake users supprimés pour tournoi ${tournamentId}`);
+    logger.info(`[ARENA] Cleanup complet: rounds/matchs/équipes/joueurs supprimés pour tournoi ${tournamentId}, ${fakeUserIds.length} faux users supprimés`);
 
     res.json({
       success: true,
-      data: { usersDeleted: fakeUserIds.size },
+      data: { fakeUsersDeleted: fakeUserIds.length },
     });
   } catch (error: any) {
     logger.error('[ARENA] DELETE /fake-players error:', error.message);

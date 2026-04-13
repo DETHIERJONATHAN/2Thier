@@ -225,7 +225,7 @@ const OptionsEditor: React.FC<OptionsEditorProps> = ({ value = [], onChange, for
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {value.map((option, index) => (
             <Card 
-              key={index} 
+              key={`item-${index}`} 
               size="small" 
               style={{ background: 'white' }}
               styles={{ body: { padding: '12px' } }}
@@ -450,7 +450,7 @@ const NavigationEditor: React.FC<NavigationEditorProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {value.map((rule, index) => (
             <Card 
-              key={index} 
+              key={`item-${index}`} 
               size="small" 
               style={{ background: 'white' }}
               styles={{ body: { padding: '8px 12px' } }}

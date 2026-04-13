@@ -12,6 +12,7 @@ import { GoogleWorkspaceIntegrationService } from "../services/GoogleWorkspaceIn
 import { notify } from '../services/NotificationHelper';
 import { getPostalService } from '../services/PostalEmailService.js';
 import { logger } from '../lib/logger';
+import { validatePassword } from '../lib/password-policy';
 
 const router = Router();
 
@@ -560,8 +561,7 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
                         user.lastName || ''
                     );
                     
-                    if (workspaceResult.success) {
-                    } else {
+                    if (!workspaceResult.success) {
                         logger.error(`⚠️ [Invitation] Échec création workspace pour ${user.email}:`, workspaceResult.error);
                     }
                 } catch (wsError) {
@@ -587,6 +587,13 @@ router.post('/accept', async (req: Request, res: Response): Promise<void> => {
 
         // Scénario 2: L'invitation est pour un nouvel utilisateur (logique existante)
         const { firstName, lastName, password } = acceptInvitationSchema.parse(req.body);
+
+        // #24 Password policy
+        const pwCheck = validatePassword(password);
+        if (!pwCheck.valid) {
+            res.status(400).json({ message: pwCheck.errors.join('. ') });
+            return;
+        }
 
         const existingUser = await prisma.user.findUnique({ where: { email: invitation.email } });
         if (existingUser) {

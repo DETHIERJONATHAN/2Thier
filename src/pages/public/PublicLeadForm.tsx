@@ -442,7 +442,7 @@ export default function PublicLeadForm() {
           <div className="flex justify-center">
             <Steps current={currentStep} size="small" className="w-full max-w-md">
               {steps.map((step, index) => (
-                <Step key={index} title={step.title} icon={step.icon} />
+                <Step key={`item-${index}`} title={step.title} icon={step.icon} />
               ))}
             </Steps>
           </div>

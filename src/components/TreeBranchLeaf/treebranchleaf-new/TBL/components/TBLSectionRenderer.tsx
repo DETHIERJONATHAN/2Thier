@@ -4593,10 +4593,6 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         // (selon si elles viennent de metadataCapabilities.datas ou de data_instances)
         const instanceData = dataInstance?.metadata || dataInstance;
         
-        // 🔥 DEBUG TEMPORAIRE - à supprimer après fix
-        if (field.label === 'GRD') {
-        }
-        
         if (instanceData && (instanceData.sourceType || instanceData.sourceRef)) {
           const { sourceType: configSourceType, sourceRef: configSourceRef, fixedValue } = instanceData as { sourceType?: string; sourceRef?: string; fixedValue?: unknown };
           
@@ -4903,8 +4899,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
         const explicitValue = String(explicit);
         if (/^data:image\//.test(explicitValue) || /^https?:\/\//.test(explicitValue)) {
           return (
-            <img
-              src={explicitValue}
+            <img loading="lazy" src={explicitValue}
               alt="Icône"
               style={{ width: 22, height: 22, borderRadius: 4 }}
             />

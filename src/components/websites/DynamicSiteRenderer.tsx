@@ -149,14 +149,14 @@ const HeaderSection: React.FC<SectionProps> = ({ content, style }) => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         {/* Logo */}
         {content.logo && (
-          <img src={content.logo} alt="Logo" style={{ height: '50px' }} />
+          <img loading="lazy" src={content.logo} alt="Logo" style={{ height: '50px' }} />
         )}
         
         {/* Menu */}
         <nav style={{ display: 'flex', gap: '30px' }}>
           {content.menuItems?.map((item: unknown, index: number) => (
             <a 
-              key={index} 
+              key={`item-${index}`} 
               href={item.url} 
               style={{ 
                 color: style.color || '#333', 
@@ -230,7 +230,7 @@ const HeroSection: React.FC<SectionProps> = ({ content, style }) => {
         <div style={{ display: 'flex', gap: '15px', justifyContent: content.alignment || 'center' }}>
           {content.buttons?.map((button: unknown, index: number) => (
             <a
-              key={index}
+              key={`item-${index}`}
               href={button.url}
               style={{
                 backgroundColor: button.backgroundColor || WEBSITE_DEFAULTS.primaryColor,
@@ -262,7 +262,7 @@ const StatsSection: React.FC<SectionProps> = ({ content, style }) => {
         margin: '0 auto'
       }}>
         {content.stats?.map((stat: unknown, index: number) => (
-          <div key={index} style={{ textAlign: 'center' }}>
+          <div key={`item-${index}`} style={{ textAlign: 'center' }}>
             {stat.icon && (
               <div style={{ fontSize: '3rem', marginBottom: '15px' }}>{stat.icon}</div>
             )}
@@ -303,10 +303,9 @@ const ContentSection: React.FC<SectionProps> = ({ content, style }) => {
         margin: '0 auto'
       }}>
         {content.columns?.map((col: unknown, index: number) => (
-          <div key={index} style={{ textAlign: 'center' }}>
+          <div key={`item-${index}`} style={{ textAlign: 'center' }}>
             {col.image && (
-              <img 
-                src={col.image} 
+              <img loading="lazy" src={col.image} 
                 alt={col.title} 
                 style={{ 
                   width: '100%', 
@@ -365,7 +364,7 @@ const CTASection: React.FC<SectionProps> = ({ content, style }) => {
         <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
           {content.buttons?.map((button: unknown, index: number) => (
             <a
-              key={index}
+              key={`item-${index}`}
               href={button.url}
               style={{
                 backgroundColor: button.backgroundColor || 'white',
@@ -399,7 +398,7 @@ const FooterSection: React.FC<SectionProps> = ({ content, style }) => {
         {/* Logo et description */}
         {content.logo && (
           <div>
-            <img src={content.logo} alt="Logo" style={{ height: '40px', marginBottom: '15px' }} />
+            <img loading="lazy" src={content.logo} alt="Logo" style={{ height: '40px', marginBottom: '15px' }} />
             {content.description && (
               <p style={{ color: style.color || '#666', fontSize: '0.9rem' }}>
                 {content.description}
@@ -410,7 +409,7 @@ const FooterSection: React.FC<SectionProps> = ({ content, style }) => {
 
         {/* Groupes de liens */}
         {content.linkGroups?.map((group: unknown, index: number) => (
-          <div key={index}>
+          <div key={`item-${index}`}>
             <h4 style={{ marginBottom: '15px', color: style.color }}>{group.title}</h4>
             <ul style={{ listStyle: 'none', padding: 0 }}>
               {group.links?.map((link: unknown, linkIndex: number) => (
@@ -441,7 +440,7 @@ const FooterSection: React.FC<SectionProps> = ({ content, style }) => {
         }}>
           {content.socialLinks.map((social: unknown, index: number) => (
             <a 
-              key={index}
+              key={`item-${index}`}
               href={social.url}
               target="_blank"
               rel="noopener noreferrer"

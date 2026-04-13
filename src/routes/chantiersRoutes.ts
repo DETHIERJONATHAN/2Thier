@@ -1236,32 +1236,32 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
             ? Math.round((Number(chantierAmount) * tpl.percentage / 100) * 100) / 100
             : (tpl as any).fixedAmount || 0;
 
-          await db.chantierInvoice.create({
-            data: {
-              id: crypto.randomUUID(),
-              chantierId: id,
-              organizationId,
-              type: tpl.type,
-              label: tpl.label,
-              amount,
-              percentage: tpl.percentage,
-              status: 'DRAFT',
-              order: tpl.order,
-              updatedAt: new Date(),
-            },
-          });
-
-          // Historique
-          await db.chantierHistory.create({
-            data: {
-              id: crypto.randomUUID(),
-              chantierId: id,
-              action: 'INVOICE_CREATED',
-              toValue: tpl.label,
-              userId: user?.userId || user?.id,
-              data: { autoCreated: true, templateId: tpl.id, type: tpl.type, amount },
-            },
-          });
+          await db.$transaction([
+            db.chantierInvoice.create({
+              data: {
+                id: crypto.randomUUID(),
+                chantierId: id,
+                organizationId,
+                type: tpl.type,
+                label: tpl.label,
+                amount,
+                percentage: tpl.percentage,
+                status: 'DRAFT',
+                order: tpl.order,
+                updatedAt: new Date(),
+              },
+            }),
+            db.chantierHistory.create({
+              data: {
+                id: crypto.randomUUID(),
+                chantierId: id,
+                action: 'INVOICE_CREATED',
+                toValue: tpl.label,
+                userId: user?.userId || user?.id,
+                data: { autoCreated: true, templateId: tpl.id, type: tpl.type, amount },
+              },
+            }),
+          ]);
         }
       }
     } catch (autoInvErr) {

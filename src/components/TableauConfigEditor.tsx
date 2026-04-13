@@ -794,7 +794,7 @@ ${dataCount} cellules avec données importées.`);
         ) : (
           <div className="space-y-3">
             {templates.map((template, index) => (
-              <div key={index} className="border border-gray-200 rounded p-3 bg-white">
+              <div key={`item-${index}`} className="border border-gray-200 rounded p-3 bg-white">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">

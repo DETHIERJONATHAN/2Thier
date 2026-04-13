@@ -403,7 +403,14 @@ router.post('/upload', async (req: Request, res: Response): Promise<void> => {
     const urls: string[] = [];
     let detectedMediaType = 'file';
 
+    // #7 MIME type whitelist
+    const ALLOWED_MIME = /^(image|video|audio)\//;
+    const ALLOWED_DOC_MIME = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+
     for (const file of fileList) {
+      if (!ALLOWED_MIME.test(file.mimetype) && !ALLOWED_DOC_MIME.includes(file.mimetype)) {
+        continue; // skip non-allowed types
+      }
       const safeName = file.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_.-]/g, '');
       const filename = `${Date.now()}_${safeName}`;
       const key = `messenger/${user.id}/${filename}`;

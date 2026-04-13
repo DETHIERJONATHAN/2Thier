@@ -501,8 +501,7 @@ const PublicFormRenderer: React.FC = () => {
                       <span style={styles.optionIcon}>{option.icon}</span>
                     )}
                     {option.image && (
-                      <img 
-                        src={option.image} 
+                      <img loading="lazy" src={option.image} 
                         alt={option.label}
                         style={{ width: '56px', height: '56px', marginBottom: '8px', objectFit: 'contain' }}
                       />

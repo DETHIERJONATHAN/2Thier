@@ -191,7 +191,7 @@ const TemplatePreviewModal: React.FC<{
           }}>
             {template.modules.map((module, index) => (
               <div 
-                key={index}
+                key={`item-${index}`}
                 style={{ 
                   padding: '8px 12px', 
                   marginBottom: 4,

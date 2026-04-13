@@ -83,8 +83,7 @@ export const FlexibleTooltip: React.FC<{
       
       {/* Contenu image */}
       {(content.type === 'image' || content.type === 'both') && content.imageUrl && (
-        <img 
-          src={content.imageUrl}
+        <img loading="lazy" src={content.imageUrl}
           alt={content.imageAlt || 'Image explicative'}
           style={{ 
             width: '100%', 

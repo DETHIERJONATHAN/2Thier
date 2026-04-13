@@ -480,7 +480,7 @@ const GoogleTokenMonitor: React.FC<GoogleTokenMonitorProps> = ({ organizationId 
           description={
             <div className="space-y-2">
               {schedulerStatus.errors.slice(0, 3).map((error, index) => (
-                <div key={index} className="text-sm">
+                <div key={`item-${index}`} className="text-sm">
                   <Text type="secondary">{new Date(error.timestamp).toLocaleString('fr-FR')}:</Text>
                   <Text className="ml-2">{error.message}</Text>
                 </div>

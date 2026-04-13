@@ -27,6 +27,7 @@ import { ActiveIdentityProvider, useActiveIdentity } from '../../contexts/Active
 import { SocialIdentityProvider, useSocialIdentity } from '../../contexts/SocialIdentityContext';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import PWAInstallPrompt from '../../components/PWAInstallPrompt';
+import OnboardingTour from '../../components/OnboardingTour';
 import { logger } from '../../lib/logger';
 
 const { Header, Content } = Layout;
@@ -342,6 +343,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
         return (
           <div
             key={tab.id}
+            data-tour={tab.id === 'mur' ? 'wall' : tab.id}
             ref={(el) => { if (el) tabRefs.current.set(tab.id, el); }}
             draggable={!isMobile}
             onDragStart={() => setDragId(tab.id)}
@@ -355,8 +357,10 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
             style={{
               display: 'flex', flexDirection: isMobile ? 'column' : 'row',
               alignItems: 'center', gap: isMobile ? 0 : 5,
-              padding: isMobile ? '4px 6px' : '5px 12px', borderRadius: 8,
+              padding: isMobile ? '6px 8px' : '5px 12px', borderRadius: 8,
               cursor: 'pointer', flexShrink: 0,
+              minWidth: isMobile ? 44 : undefined, minHeight: isMobile ? 44 : undefined,
+              justifyContent: 'center',
               fontSize: isMobile ? 9 : 13, fontWeight: isActive ? 700 : 500, whiteSpace: 'nowrap',
               background: (isActive || hoveredTab === tab.id) ? SF.overlayLightest : 'transparent',
               transition: 'all 0.2s',
@@ -381,7 +385,9 @@ const MessengerChatGated: React.FC = () => {
   if (!isAppEnabled('messenger')) return null;
   return (
     <Suspense fallback={null}>
-      <MessengerChat />
+      <div data-tour="messenger">
+        <MessengerChat />
+      </div>
     </Suspense>
   );
 };
@@ -543,10 +549,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             color: 'white',
             letterSpacing: '0.5px'
           }}
-          role="button" tabIndex={0} onClick={() => { navigate('/dashboard'); setCenterApp(null); setWallViewUrl(null); setWallSearchQuery(null); setSearchParams({}, { replace: true }); }}
+          role="button" tabIndex={0} aria-label="Accueil Zhiive" onClick={() => { navigate('/dashboard'); setCenterApp(null); setWallViewUrl(null); setWallSearchQuery(null); setSearchParams({}, { replace: true }); }}
         >
-          <img src="/zhiive-logo.png" alt="Zhiive" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} />
-          {!isMobile && <img src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 20, objectFit: 'contain' }} />}
+          <img loading="lazy" src="/zhiive-logo.png" alt="Zhiive" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} />
+          {!isMobile && <img loading="lazy" src="/zhiive-ecrit.png" alt="Zhiive" style={{ height: 20, objectFit: 'contain' }} />}
         </div>
 
         {/* ── Zhiive Navigation Tabs (centré dans header) ── */}
@@ -556,12 +562,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '6px' : '8px', marginLeft: isMobile ? '8px' : 'auto', flexShrink: 0 }}>
 
           {/* Notifications */}
-          <NotificationsBell />
+          <div data-tour="notifications">
+            <NotificationsBell />
+          </div>
 
           {/* Profil utilisateur — avatar avec photo (ou logo org si feedMode=org) */}
           <Dropdown menu={userProfileMenu} trigger={['click']}>
             <div
               className="header-2thier-item"
+              data-tour="profile-menu"
               style={{ 
                 cursor: 'pointer',
                 display: 'flex',
@@ -598,6 +607,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         </ErrorBoundary>
       </Content>
       <MessengerChatGated />
+
+      {/* 🐝 Onboarding tour pour les nouveaux utilisateurs */}
+      <OnboardingTour />
 
       {/* 🌐 In-app browser overlay — plein écran au-dessus de tout */}
       {wallViewUrl && (

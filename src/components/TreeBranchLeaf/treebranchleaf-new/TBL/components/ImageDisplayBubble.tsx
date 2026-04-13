@@ -269,8 +269,7 @@ export const ImageDisplayBubble: React.FC<ImageDisplayBubbleProps> = ({
 
     return (
       <>
-        <img
-          src={imageUrl}
+        <img loading="lazy" src={imageUrl}
           alt={label}
           style={{
             width: '100%',

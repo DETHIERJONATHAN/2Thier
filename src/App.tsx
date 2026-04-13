@@ -42,6 +42,9 @@ const ReceptionPage = lazy(() => import('./pages/ReceptionPage'));
 // Page publique signature électronique
 const PublicSignaturePage = lazy(() => import('./pages/public/PublicSignaturePage'));
 
+// Pages légales (CGU, CGV, mentions légales, confidentialité)
+const LegalPages = lazy(() => import('./pages/LegalPages'));
+
 
 // Composant Loading
 const LoadingSpinner = () => {
@@ -305,6 +308,16 @@ const App: React.FC = () => {
         element={
           <Suspense fallback={<LoadingSpinner />}>
             <VerifyEmailPage />
+          </Suspense>
+        } 
+      />
+
+      {/* Pages légales publiques */}
+      <Route 
+        path="/legal" 
+        element={
+          <Suspense fallback={<LoadingSpinner />}>
+            <LegalPages />
           </Suspense>
         } 
       />

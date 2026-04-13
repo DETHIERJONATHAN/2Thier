@@ -4,6 +4,7 @@ import { authMiddleware } from '../middlewares/auth';
 import { impersonationMiddleware } from '../middlewares/impersonation';
 import { encrypt } from '../utils/crypto';
 import { logger } from '../lib/logger';
+import { validatePassword } from '../lib/password-policy';
 
 const router = Router();
 const prisma = db;
@@ -352,6 +353,14 @@ router.post('/unified-password', async (req, res) => {
       });
     }
 
+    // #24 Password policy
+    const pwCheck = validatePassword(password);
+    if (!pwCheck.valid) {
+      return res.status(400).json({
+        success: false,
+        message: pwCheck.errors.join('. ')
+      });
+    }
 
     // Importer bcrypt pour le hachage du mot de passe CRM
     const bcrypt = await import('bcrypt');

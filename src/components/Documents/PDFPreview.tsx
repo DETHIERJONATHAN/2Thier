@@ -419,8 +419,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                     />
                   </>
                 )}
-                <img 
-                  src={config.companyImage} 
+                <img loading="lazy" src={config.companyImage} 
                   alt="Logo" 
                   onLoad={() => {
                     logger.debug('[PDFPreview] ✅ Logo chargé avec succès:', config.companyImage);
@@ -814,8 +813,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
                     config._fieldStyles?.companyImage?.y
                   )
                 }}>
-                  <img 
-                    src={config.companyImage} 
+                  <img loading="lazy" src={config.companyImage} 
                     alt="Entreprise" 
                     style={{ 
                       maxWidth: config._fieldStyles?.companyImage?.maxWidth || '100%',
@@ -1402,7 +1400,7 @@ const PDFPreview = ({ sections, theme, globalTheme }: PDFPreviewProps) => {
     <div style={{ padding: '20px', backgroundColor: '#525659', minHeight: '100vh' }}>
       {sections.map((section, index) => (
         <div
-          key={index}
+          key={`item-${index}`}
           style={{
             width: '210mm',
             minHeight: '297mm',

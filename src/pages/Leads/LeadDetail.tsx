@@ -440,7 +440,7 @@ export default function LeadDetail({
         {/* Statistiques rapides */}
         <Row gutter={16} className="mb-6">
           {leadStats.map((stat, index) => (
-            <Col span={6} key={index}>
+            <Col span={6} key={`item-${index}`}>
               <Card>
                 <Statistic
                   title={stat.title}

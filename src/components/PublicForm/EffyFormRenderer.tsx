@@ -666,7 +666,7 @@ const EffyFormRenderer: React.FC = () => {
                   <CheckCircleOutlined style={styles.selectedCheck} />
                 )}
                 {option.imageUrl ? (
-                  <img src={option.imageUrl} alt={option.label} style={styles.optionImage} />
+                  <img loading="lazy" src={option.imageUrl} alt={option.label} style={styles.optionImage} />
                 ) : option.icon ? (
                   <span style={styles.optionIcon}>{option.icon}</span>
                 ) : null}

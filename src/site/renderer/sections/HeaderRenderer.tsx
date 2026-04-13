@@ -452,7 +452,7 @@ export const HeaderRenderer: React.FC<HeaderRendererProps> = ({ content }) => {
             
             return (
               <motion.a
-                key={index}
+                key={`item-${index}`}
                 href={href}
                 onClick={(e) => handleMenuLinkClick(e, href)}  // 🔥 Smooth scroll
                 initial={{ opacity: 0, y: -20 }}
@@ -591,7 +591,7 @@ export const HeaderRenderer: React.FC<HeaderRendererProps> = ({ content }) => {
             const iconColor = item.iconColor || menuStyle.iconColor || menuStyle.color || style.color || '#000';
             
             return (
-              <Menu.Item key={index} style={{ minHeight: '48px' }}>
+              <Menu.Item key={`item-${index}`} style={{ minHeight: '48px' }}>
                 <motion.a
                   href={item.href || item.url || '#'}
                   initial={{ x: -50, opacity: 0 }}

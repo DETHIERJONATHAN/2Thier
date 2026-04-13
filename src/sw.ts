@@ -1,8 +1,9 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
-import { registerRoute } from 'workbox-routing';
-import { NetworkOnly, CacheFirst } from 'workbox-strategies';
+import { registerRoute, setCatchHandler } from 'workbox-routing';
+import { NetworkOnly, CacheFirst, NetworkFirst } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
+import { BackgroundSyncPlugin } from 'workbox-background-sync';
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -22,6 +23,67 @@ registerRoute(
   new NetworkOnly()
 );
 
+// ═══════════════════════════════════════════════════════════════
+// #50 — BACKGROUND SYNC for mutations (POST/PUT/DELETE)
+// Queues failed mutation requests and replays them when online
+// ═══════════════════════════════════════════════════════════════
+const bgSyncPlugin = new BackgroundSyncPlugin('zhiive-mutation-queue', {
+  maxRetentionTime: 24 * 60, // Retry for max 24 hours (in minutes)
+  onSync: async ({ queue }) => {
+    let entry;
+    while ((entry = await queue.shiftRequest())) {
+      try {
+        await fetch(entry.request.clone());
+      } catch (error) {
+        // Put the entry back in the queue and re-throw to signal retry
+        await queue.unshiftRequest(entry);
+        throw error;
+      }
+    }
+    // Notify client that sync completed
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach(client => {
+      client.postMessage({ type: 'BACKGROUND_SYNC_COMPLETE' });
+    });
+  },
+});
+
+// API mutation routes (POST/PUT/PATCH/DELETE) → NetworkOnly with background sync
+registerRoute(
+  ({ url, request }) =>
+    url.pathname.startsWith('/api/') &&
+    ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) &&
+    // Exclude auth routes (can't replay login/logout)
+    !url.pathname.includes('/auth/') &&
+    !url.pathname.includes('/push/'),
+  new NetworkOnly({
+    plugins: [bgSyncPlugin],
+  }),
+  'POST' // This matches POST, PUT, PATCH, DELETE via the route callback
+);
+
+// Also register for other mutation methods
+registerRoute(
+  ({ url, request }) =>
+    url.pathname.startsWith('/api/') &&
+    ['PUT', 'PATCH', 'DELETE'].includes(request.method) &&
+    !url.pathname.includes('/auth/') &&
+    !url.pathname.includes('/push/'),
+  new NetworkOnly({
+    plugins: [bgSyncPlugin],
+  }),
+  'PUT'
+);
+
+// Navigation (HTML pages) → Network First, fallback vers /offline.html
+registerRoute(
+  ({ request }) => request.mode === 'navigate',
+  new NetworkFirst({
+    cacheName: 'pages-cache',
+    plugins: [new ExpirationPlugin({ maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 })],
+  })
+);
+
 // Google Fonts → cache first
 registerRoute(
   /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -39,6 +101,18 @@ registerRoute(
     plugins: [new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 })],
   })
 );
+
+// ═══════════════════════════════════════════════════════════════
+// OFFLINE FALLBACK — retourner /offline.html si navigation échoue
+// ═══════════════════════════════════════════════════════════════
+setCatchHandler(async ({ request }) => {
+  if (request.destination === 'document') {
+    const offlineCache = await caches.open('offline-fallback');
+    const cached = await offlineCache.match('/offline.html');
+    return cached ?? Response.error();
+  }
+  return Response.error();
+});
 
 // ═══════════════════════════════════════════════════════════════
 // PUSH NOTIFICATIONS (migrated from public/sw.js)
@@ -129,5 +203,39 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  }
+});
+
+// ─── INSTALL: pré-cacher la page offline ─────────────────────
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open('offline-fallback').then(cache => cache.add('/offline.html'))
+  );
+});
+
+// ─── DEEP LINK: intercepter les web+zhiive:// links ──────────
+// et les share_target GET params
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  
+  // share_target: /share-target?url=...&title=...&text=...
+  if (url.pathname === '/share-target' && event.request.method === 'GET') {
+    const shareUrl = url.searchParams.get('url') ?? '';
+    const shareTitle = url.searchParams.get('title') ?? '';
+    const shareText = url.searchParams.get('text') ?? '';
+    const redirectUrl = `/?shared_url=${encodeURIComponent(shareUrl)}&shared_title=${encodeURIComponent(shareTitle)}&shared_text=${encodeURIComponent(shareText)}`;
+    event.respondWith(Response.redirect(redirectUrl, 302));
+    return;
+  }
+  
+  // protocole web+zhiive://path → redirected to /path
+  if (url.pathname === '/' && url.searchParams.has('proto')) {
+    const proto = url.searchParams.get('proto') ?? '';
+    try {
+      const target = new URL(proto.replace('web+zhiive://', 'https://zhiive.app/'));
+      event.respondWith(Response.redirect(target.pathname + target.search, 302));
+    } catch {
+      // ignore invalid proto
+    }
   }
 });

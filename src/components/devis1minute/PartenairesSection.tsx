@@ -140,7 +140,7 @@ const PartenairesSection: React.FC = () => {
         {/* Grille des partenaires */}
         <Row gutter={[24, 24]}>
           {partenaires.map((partenaire, index) => (
-            <Col key={index} xs={24} md={12} lg={8}>
+            <Col key={`item-${index}`} xs={24} md={12} lg={8}>
               <Card 
                 className="h-full hover:shadow-lg transition-shadow duration-300"
                 actions={[

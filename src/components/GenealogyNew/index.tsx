@@ -97,7 +97,7 @@ const DragPalette: React.FC<{
       {/* Sections OPTION 1, OPTION 2, etc. comme ton schéma */}
       <div className="flex-1">
         {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="h-24 border-b border-dashed border-gray-400 flex items-center justify-center">
+          <div key={`item-${index}`} className="h-24 border-b border-dashed border-gray-400 flex items-center justify-center">
             <div className="transform rotate-90 text-xs font-bold text-gray-600">
               OPTION {index + 1}
             </div>

@@ -663,8 +663,7 @@ const MomentDetailModal: React.FC<MomentDetailModalProps> = ({
                     style={{ width: '100%', maxHeight: 400, objectFit: 'contain', background: SF.black }}
                   />
                 ) : (
-                  <img
-                    src={m.url}
+                  <img loading="lazy" src={m.url}
                     alt={m.caption || moment.title}
                     style={{ width: '100%', maxHeight: 400, objectFit: 'contain', background: SF.black }}
                   />
@@ -1072,8 +1071,7 @@ const MomentFormModal: React.FC<MomentFormModalProps> = ({
                       <PlayCircleFilled style={{ fontSize: 32, color: SF.overlayPlayBtn }} />
                     </div>
                   ) : (
-                    <img
-                      src={item.preview}
+                    <img loading="lazy" src={item.preview}
                       alt=""
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />

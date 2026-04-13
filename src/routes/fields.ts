@@ -64,7 +64,8 @@ router.get("/", requireRole(['admin', 'super_admin']), async (req: Authenticated
             where: whereClause,
             orderBy: {
                 label: 'asc'
-            }
+            },
+            take: 500,
         });
         res.json(fields);
     } catch (error) {
@@ -156,7 +157,6 @@ router.post('/:fieldId/options', requireRole(['admin', 'super_admin']), async (r
                     fieldId
                 }
             });
-        } else {
         }
         // Toujours renvoyer le champ complet mis à jour avec ses options
         const updatedField = await prisma.field.findUnique({

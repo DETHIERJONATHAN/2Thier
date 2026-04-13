@@ -8,6 +8,7 @@ import { impersonationMiddleware } from "../middlewares/impersonation"; // Impor
 import type { AuthenticatedRequest } from "../middlewares/auth";
 import { JWT_SECRET } from "../config";
 import { prisma } from '../lib/prisma';
+import { validatePassword } from '../lib/password-policy';
 import { randomUUID, randomBytes } from 'crypto';
 import { emailService } from '../services/EmailService';
 import { getPostalService } from '../services/PostalEmailService.js';
@@ -55,6 +56,12 @@ router.post("/register", async (req: Request, res: Response) => {
   // Validation de base
   if (!email || !password || !firstName) {
     return res.status(400).json({ error: "Email, mot de passe et prénom sont requis" });
+  }
+
+  // #24 Password policy
+  const pwCheck = validatePassword(password);
+  if (!pwCheck.valid) {
+    return res.status(400).json({ error: pwCheck.errors.join('. ') });
   }
 
   // Validation selon le type

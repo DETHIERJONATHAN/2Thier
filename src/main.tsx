@@ -1,5 +1,9 @@
+import { initSentry } from './lib/sentry';
+initSentry();
+
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+import { HelmetProvider } from 'react-helmet-async'
 // Ant Design reset avant nos styles pour harmoniser l'UI
 import 'antd/dist/reset.css'
 import './index.css'
@@ -32,6 +36,7 @@ const Root = () => {
   const antdLocale = antdLocales[i18nInstance.language?.substring(0, 2)] || frFR;
 
   return (
+    <HelmetProvider>
     <BrowserRouter>
       <AuthProvider>
         <ErrorBoundary>
@@ -59,9 +64,13 @@ const Root = () => {
         </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
+    </HelmetProvider>
   );
 };
 
 createRoot(document.getElementById('root')!).render(
   <Root />
 )
+
+// Report Web Vitals (CLS, FCP, INP, LCP, TTFB)
+import('./lib/webVitals').then(({ reportWebVitals }) => reportWebVitals());

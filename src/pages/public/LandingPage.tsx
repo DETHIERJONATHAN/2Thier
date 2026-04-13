@@ -404,7 +404,7 @@ export default function LandingPage() {
 
           <Row gutter={[24, 24]}>
             {testimonials.map((testimonial, index) => (
-              <Col xs={24} md={8} key={index}>
+              <Col xs={24} md={8} key={`item-${index}`}>
                 <Card className="h-full border-0 shadow-md">
                   <div className="flex items-center mb-4">
                     <Avatar size="large" className="bg-blue-500 mr-3">

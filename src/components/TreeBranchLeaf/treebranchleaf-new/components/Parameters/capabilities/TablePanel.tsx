@@ -2426,7 +2426,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                             
                             <Space direction="vertical" style={{ width: '100%' }} size={12}>
                               {(lookupConfig.columnSourceOption?.filters || []).map((filter: unknown, index: number) => (
-                                <div key={index} style={{ background: '#fff', padding: 16, borderRadius: 6, border: '1px solid #d9d9d9' }}>
+                                <div key={`item-${index}`} style={{ background: '#fff', padding: 16, borderRadius: 6, border: '1px solid #d9d9d9' }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                                     <Text strong style={{ fontSize: 12 }}>Filtre {index + 1}</Text>
                                     <Button
@@ -4021,7 +4021,7 @@ const TablePanel: React.FC<TablePanelProps> = ({ treeId: initialTreeId, nodeId, 
                           
                           <Space direction="vertical" style={{ width: '100%' }} size={12}>
                             {(lookupConfig.rowSourceOption?.filters || []).map((filter: unknown, index: number) => (
-                              <div key={index} style={{ background: '#fff', padding: 16, borderRadius: 6, border: '1px solid #ffd591' }}>
+                              <div key={`item-${index}`} style={{ background: '#fff', padding: 16, borderRadius: 6, border: '1px solid #ffd591' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                                   <Text strong style={{ fontSize: 12 }}>Filtre {index + 1}</Text>
                                   <Button

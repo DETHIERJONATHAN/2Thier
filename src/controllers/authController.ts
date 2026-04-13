@@ -5,6 +5,45 @@ import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import { logger } from '../lib/logger';
 
+// ── #23 Login Lockout — brute-force protection ──
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+const failedAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
+function checkLockout(key: string): { locked: boolean; remainingSeconds?: number } {
+  const record = failedAttempts.get(key);
+  if (!record) return { locked: false };
+  if (Date.now() > record.lockedUntil) {
+    failedAttempts.delete(key);
+    return { locked: false };
+  }
+  if (record.count >= MAX_FAILED_ATTEMPTS) {
+    return { locked: true, remainingSeconds: Math.ceil((record.lockedUntil - Date.now()) / 1000) };
+  }
+  return { locked: false };
+}
+
+function recordFailedAttempt(key: string): void {
+  const record = failedAttempts.get(key) || { count: 0, lockedUntil: 0 };
+  record.count += 1;
+  if (record.count >= MAX_FAILED_ATTEMPTS) {
+    record.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+    logger.warn(`[AUTH] 🔒 Compte verrouillé pour ${key} — ${MAX_FAILED_ATTEMPTS} tentatives échouées`);
+  }
+  failedAttempts.set(key, record);
+}
+
+function clearFailedAttempts(key: string): void {
+  failedAttempts.delete(key);
+}
+// Clean stale lockout entries every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of failedAttempts) {
+    if (now > record.lockedUntil) failedAttempts.delete(key);
+  }
+}, 30 * 60 * 1000);
+
 // Helper pour lire JWT_SECRET dynamiquement (amélioration pour la production)
 // En local: utilise la valeur par défaut ou .env
 // En production Cloud Run: lit depuis /run/secrets/JWT_SECRET
@@ -42,6 +81,16 @@ export const login = async (req: Request, res: Response) => {
     const stripInvisible = (s: string) => s.trim().replace(/[\u200B-\u200D\uFEFF\u00A0\u2060]/g, '');
     const email = typeof rawEmail === 'string' ? stripInvisible(rawEmail).toLowerCase() : rawEmail;
     const password = typeof rawPassword === 'string' ? stripInvisible(rawPassword) : rawPassword;
+
+    // ── #23 Lockout check ──
+    const lockoutKey = typeof email === 'string' ? email : 'unknown';
+    const lockout = checkLockout(lockoutKey);
+    if (lockout.locked) {
+      logger.warn(`[AUTH] 🔒 Tentative bloquée pour ${lockoutKey} — verrouillé ${lockout.remainingSeconds}s`);
+      return res.status(429).json({ 
+        message: `Trop de tentatives échouées. Réessayez dans ${Math.ceil((lockout.remainingSeconds || 0) / 60)} minutes.` 
+      });
+    }
 
     logger.debug('[AUTH] 🔐 Tentative de connexion', {
       email,
@@ -111,9 +160,13 @@ export const login = async (req: Request, res: Response) => {
     logger.debug(`[AUTH] 🔑 Comparaison mot de passe: ${isPasswordValid ? '✅ VALIDE' : '❌ INVALIDE'}`);
     
     if (!isPasswordValid) {
+      recordFailedAttempt(lockoutKey);
       logger.debug(`[AUTH] ❌ Mot de passe incorrect pour: ${email}`);
       return res.status(401).json({ message: 'Identifiants invalides' });
     }
+
+    // ── #23 Clear lockout on successful login ──
+    clearFailedAttempts(lockoutKey);
 
     // Vérifier que l'email est activé (sauf pour les super_admin)
     if (!user.emailVerified && user.role !== 'super_admin') {
@@ -186,6 +239,16 @@ export const login = async (req: Request, res: Response) => {
       maxAge: 24 * 60 * 60 * 1000, // 24 heures
       path: '/',
     });
+
+    // ── #26 Session rotation — prevent session fixation ──
+    if (req.session) {
+      await new Promise<void>((resolve, reject) => {
+        req.session.regenerate((err) => {
+          if (err) { logger.warn('[AUTH] Session regeneration failed:', err); }
+          resolve();
+        });
+      });
+    }
 
     logger.debug(`[AUTH] ✅ Connexion réussie pour ${email} (cookie secure=${cookieSecure}, sameSite=${cookieSameSite})`);
     res.status(200).json(response);

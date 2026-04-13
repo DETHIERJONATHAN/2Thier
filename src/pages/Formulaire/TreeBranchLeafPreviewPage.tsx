@@ -339,7 +339,7 @@ const TreeBranchLeafPreviewPage: React.FC = () => {
                   onChange={(e) => handleValueChange(node.id, e.target.value)}
                 >
                   {node.fieldConfig?.options?.map((option, index) => (
-                    <Radio key={index} value={option}>
+                    <Radio key={`item-${index}`} value={option}>
                       {option}
                     </Radio>
                   ))}

@@ -543,8 +543,7 @@ const GridPagePreview = ({
           }}
         >
           {isImageBackground ? (
-            <img
-              src={rawBackgroundImage}
+            <img loading="lazy" src={rawBackgroundImage}
               alt="Background"
               style={{
                 position: 'absolute',

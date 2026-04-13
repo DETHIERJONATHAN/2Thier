@@ -58,7 +58,7 @@ export const StatsRenderer: React.FC<StatsRendererProps> = ({ content }) => {
           }) || <CheckCircleOutlined style={{ fontSize: ensureUnit(style.iconSize, '48px'), color: style.iconColor }} />;
 
           return (
-            <Col xs={24} sm={12} md={mdSpan} key={index}>
+            <Col xs={24} sm={12} md={mdSpan} key={`item-${index}`}>
               <Card
                 bordered={false}
                 style={{

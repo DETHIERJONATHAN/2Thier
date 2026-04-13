@@ -36,7 +36,7 @@ export const LeadsNotifications: React.FC = () => {
       <Space direction="vertical" size="small" className="w-full">
         {notifications.map((notification, index) => (
           <Alert
-            key={index}
+            key={`item-${index}`}
             message={notification.message}
             type={notification.type}
             icon={notification.icon}

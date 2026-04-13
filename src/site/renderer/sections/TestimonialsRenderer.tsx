@@ -58,7 +58,7 @@ export const TestimonialsRenderer: React.FC<TestimonialsRendererProps> = ({ cont
         {/* CAROUSEL */}
         <Carousel autoplay={autoplay} autoplaySpeed={autoplaySpeed} dots={{ className: 'custom-dots' }}>
           {items.map((testimonial: unknown, index: number) => (
-            <div key={index}>
+            <div key={`item-${index}`}>
               <Card
                 style={{
                   maxWidth: '800px',

@@ -465,8 +465,7 @@ const ModuleConfigPanel = ({
                   backgroundColor: '#2d2d2d',
                   border: '1px solid #444',
                 }}>
-                  <img 
-                    src={currentImageUrl} 
+                  <img loading="lazy" src={currentImageUrl} 
                     alt="Aperçu" 
                     style={{ 
                       width: '100%', 

@@ -2002,8 +2002,7 @@ export default function DevisPage() {
 
                   {/* Image statique (admin) */}
                   {f.type === 'image_admin' && (f.advancedConfig && (f.advancedConfig as Record<string, unknown>).imageUrl) && (
-                    <img
-                      src={(f.advancedConfig as Record<string, unknown>).imageUrl as string}
+                    <img loading="lazy" src={(f.advancedConfig as Record<string, unknown>).imageUrl as string}
                       alt={f.label}
                       className="mt-2 max-h-56 object-contain border rounded"
                     />
@@ -2048,14 +2047,14 @@ export default function DevisPage() {
                           return (
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1">
                               {arr.map((it, idx) => (
-                                <img key={idx} src={it.dataUrl} alt={it.name} className="max-h-40 object-contain border rounded" />
+                                <img loading="lazy" key={idx} src={it.dataUrl} alt={it.name} className="max-h-40 object-contain border rounded" />
                               ))}
                             </div>
                           );
                         }
                         if (isUploadedFileValue(val) && val.dataUrl) {
                           return (
-                            <img src={val.dataUrl} alt={val.name} className="mt-2 max-h-56 object-contain border rounded" />
+                            <img loading="lazy" src={val.dataUrl} alt={val.name} className="mt-2 max-h-56 object-contain border rounded" />
                           );
                         }
                         return null;

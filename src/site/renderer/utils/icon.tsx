@@ -103,8 +103,7 @@ export const renderIconNode = (
     case 'image':
       if (!resolved.image) return null;
       return (
-        <img
-          src={resolved.image}
+        <img loading="lazy" src={resolved.image}
           alt="icône"
           className={options?.className}
           style={{

@@ -720,8 +720,7 @@ export const ImageMeasurementPreview: React.FC<ImageMeasurementPreviewProps> = (
           {/* Image avec points */}
           <Card size="small" style={{ marginBottom: 16 }}>
             <div style={{ position: 'relative', display: 'inline-block' }}>
-              <img
-                src={annotatedImageSrc}
+              <img loading="lazy" src={annotatedImageSrc}
                 alt="Preview"
                 style={{
                   maxWidth: '100%',

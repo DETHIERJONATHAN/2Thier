@@ -357,7 +357,7 @@ export const GoogleConnectionCard: React.FC<GoogleConnectionCardProps> = ({ orga
               <div style={{ marginTop: 8 }}>
                 <Space wrap>
                   {(connectionStatus.scopes || connectionStatus.organizationInfo?.scopes || []).map((scope, index) => (
-                    <Tag key={index} color="blue">
+                    <Tag key={`item-${index}`} color="blue">
                       {getScopeLabel(scope)}
                     </Tag>
                   )) || (

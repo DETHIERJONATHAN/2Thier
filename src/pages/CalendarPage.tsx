@@ -1,3 +1,4 @@
+import { PageHelmet } from '../components/common/PageHelmet';
 import { useAuth } from '../auth/useAuth';
 import { Alert } from 'antd';
 import AgendaPage from '../plugins/ModuleAgenda/AgendaPage';
@@ -38,6 +39,7 @@ function CalendarPage() {
 
   return (
     <div className="calendar-page-wrapper">
+      <PageHelmet title="Agenda" description="Votre calendrier et vos rendez-vous" noIndex />
       <AgendaPage />
     </div>
   );

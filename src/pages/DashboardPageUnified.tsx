@@ -1,4 +1,6 @@
-import { SF, FB } from '../components/zhiive/ZhiiveTheme';
+import { PageHelmet } from '../components/common/PageHelmet';
+import { Virtuoso } from 'react-virtuoso';
+import { SF, FB, COLORS } from '../components/zhiive/ZhiiveTheme';
 import { SIDEBAR_LEFT_WIDTH, SIDEBAR_RIGHT_WIDTH, TOP_NAV_HEIGHT } from '../lib/constants';
 import React, { useEffect, useState, useMemo, useCallback, useRef, Suspense } from "react";
 import { useTranslation } from 'react-i18next';
@@ -108,7 +110,7 @@ const MODULE_COMPONENTS: Record<string, React.LazyExoticComponent<any>> = {
 
 /** Routes that should NOT be embedded (navigate normally) */
 const FULL_PAGE_ROUTES = ['/premium-test', '/diagnostic-complet'];
-import { Avatar, Spin, Tooltip as AntTooltip, Select, Modal, Input } from "antd";
+import { Avatar, Spin, Skeleton, Tooltip as AntTooltip, Select, Modal, Input } from "antd";
 import {
   UserOutlined,
   TeamOutlined,
@@ -908,7 +910,7 @@ export const WallPostCard: React.FC<{
             onMouseEnter={e => (e.currentTarget.style.color = COLORS.grayLight)}
             onMouseLeave={e => (e.currentTarget.style.color = "#fff")}
           >
-            <span role="button" tabIndex={0} onClick={() => setLightboxUrl(null)}>✕</span>
+            <span role="button" tabIndex={0} aria-label={t('common.close')} onClick={() => setLightboxUrl(null)}>✕</span>
           </div>
           {/\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(lightboxUrl) ? (
             <video src={lightboxUrl} controls autoPlay
@@ -1262,12 +1264,12 @@ export const WallPostCard: React.FC<{
                         />
                         <div role="button" tabIndex={0} onClick={() => handleComment(comment.id)}
                           style={{
-                            width: 24, height: 24, borderRadius: "50%", display: "flex",
+                            width: 36, height: 36, minWidth: 44, minHeight: 44, borderRadius: "50%", display: "flex",
                             alignItems: "center", justifyContent: "center",
                             cursor: replyText.trim() ? "pointer" : "default",
                             color: replyText.trim() ? FB.blue : FB.textSecondary,
                           }}>
-                          <SendOutlined style={{ fontSize: 12 }} />
+                          <SendOutlined style={{ fontSize: 14 }} />
                         </div>
                       </div>
                     </div>
@@ -1301,11 +1303,11 @@ export const WallPostCard: React.FC<{
               />
               <div role="button" tabIndex={0} onClick={() => handleComment()}
                 style={{
-                  width: 28, height: 28, borderRadius: "50%", display: "flex",
+                  width: 36, height: 36, minWidth: 44, minHeight: 44, borderRadius: "50%", display: "flex",
                   alignItems: "center", justifyContent: "center", cursor: commentText.trim() ? "pointer" : "default",
                   color: commentText.trim() ? FB.blue : FB.textSecondary,
                 }}>
-                <SendOutlined style={{ fontSize: 14 }} />
+                <SendOutlined style={{ fontSize: 16 }} />
               </div>
             </div>
           </div>
@@ -2253,8 +2255,13 @@ export default function DashboardPageUnified() {
 
   if (loading && !isFreeUser) {
     return (
-      <div style={{ minHeight: "100vh", background: FB.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Spin size="large" />
+      <div style={{ minHeight: "100vh", background: FB.bg, padding: 24 }}>
+        <div style={{ maxWidth: 680, margin: '0 auto' }}>
+          <Skeleton avatar active paragraph={{ rows: 2 }} style={{ marginBottom: 24 }} />
+          <Skeleton active paragraph={{ rows: 4 }} style={{ marginBottom: 16 }} />
+          <Skeleton active paragraph={{ rows: 4 }} style={{ marginBottom: 16 }} />
+          <Skeleton active paragraph={{ rows: 3 }} />
+        </div>
       </div>
     );
   }
@@ -3247,11 +3254,15 @@ export default function DashboardPageUnified() {
       {/* Wall Posts (real API data) */}
       {wallPosts.length > 0 ? (
         <>
-          {wallPosts.map(post => (
-            <WallPostCard key={post.id} post={post} isMobile={isMobile}
-              currentUserId={user?.id || ""} currentUser={user} api={api} onUpdate={() => fetchWallFeed(true)}
-              feedMode={feedMode} currentOrganization={currentOrganization} />
-          ))}
+          <Virtuoso
+            useWindowScroll
+            data={wallPosts}
+            itemContent={(_index, post) => (
+              <WallPostCard key={post.id} post={post} isMobile={isMobile}
+                currentUserId={user?.id || ""} currentUser={user} api={api} onUpdate={() => fetchWallFeed(true)}
+                feedMode={feedMode} currentOrganization={currentOrganization} />
+            )}
+          />
           {wallCursor && (
             <div style={{ textAlign: "center", padding: "12px 0" }}>
               <button onClick={() => fetchWallFeed(false)} disabled={wallLoading}
@@ -3379,6 +3390,7 @@ export default function DashboardPageUnified() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: FB.bg, minHeight: 0 }}>
+      <PageHelmet title="Accueil" description="Votre fil d'actualité Zhiive" />
       <style>{`.mobile-swipe::-webkit-scrollbar { display: none; }
         .sf-sidebar::-webkit-scrollbar { display: none; }
         .sf-sidebar-panel::-webkit-scrollbar { display: none; }
