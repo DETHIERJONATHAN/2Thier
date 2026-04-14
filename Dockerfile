@@ -40,6 +40,9 @@ FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 
+# Augmenter le heap Node pour absorber le build frontend Vite sur gros bundle.
+ENV NODE_OPTIONS=--max-old-space-size=6144
+
 # Installer TOUTES les dépendances (y compris devDependencies pour le build)
 RUN npm ci --legacy-peer-deps
 

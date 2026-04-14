@@ -106,6 +106,7 @@ catch {
 Write-Host "==> Building container image with Cloud Build..." -ForegroundColor Cyan
 & gcloud builds submit `
   --project $ProjectId `
+  --machine-type E2_HIGHCPU_8 `
   --tag $imageUrl `
   .
 
