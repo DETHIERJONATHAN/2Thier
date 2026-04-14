@@ -56,12 +56,21 @@ get_public_url() {
 
 # 1. Arrêt de TOUS les processus existants (proxy, serveur, vite)
 echo "🛑 Arrêt des processus existants..."
+# WSL: pkill pour les processus bash/linux
 pkill -f "cloud-sql-proxy" 2>/dev/null
 pkill -f "npm run dev" 2>/dev/null
 pkill -f "vite" 2>/dev/null
 pkill -f "tsx" 2>/dev/null
 pkill -f "node.*api-server" 2>/dev/null
 pkill -f "prisma studio" 2>/dev/null
+# Windows: tuer via les ports (taskkill) pour les processus node Windows
+kill_port() {
+    local port=$1
+    cmd.exe /c "for /f \"tokens=5\" %a in ('netstat -ano 2^>nul ^| findstr \":${port} \" ^| findstr LISTENING') do taskkill /F /PID %a" >/dev/null 2>&1 || true
+}
+kill_port 4000
+kill_port 5173
+kill_port 5555
 sleep 2
 echo "✅ Processus arrêtés"
 
@@ -207,11 +216,29 @@ fi
 
 # 3. Démarrage du proxy
 echo "🔌 Démarrage du Cloud SQL Proxy..."
-# Utiliser cloud-sql-proxy depuis le PATH (installé via gcloud components ou à la racine)
-PROXY_CMD="cloud-sql-proxy"
+# Utiliser cloud-sql-proxy - détection automatique Git Bash / WSL / PATH
+PROXY_CMD=""
 if [ -f "./cloud-sql-proxy" ]; then
     PROXY_CMD="./cloud-sql-proxy"
+elif [ -f "/c/Users/dethi/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin/cloud-sql-proxy.exe" ]; then
+    # Git Bash (MINGW64) - Windows .exe
+    PROXY_CMD="/c/Users/dethi/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin/cloud-sql-proxy.exe"
+elif [ -f "/c/Users/dethi/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin/cloud-sql-proxy" ]; then
+    # Git Bash (MINGW64) - sans .exe
+    PROXY_CMD="/c/Users/dethi/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin/cloud-sql-proxy"
+elif [ -f "/mnt/c/Users/dethi/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin/cloud-sql-proxy.exe" ]; then
+    # WSL - Windows .exe
+    PROXY_CMD="/mnt/c/Users/dethi/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin/cloud-sql-proxy.exe"
+else
+    # Dernier recours: chercher dans le PATH
+    PROXY_CMD="$(command -v cloud-sql-proxy 2>/dev/null || true)"
 fi
+
+if [ -z "$PROXY_CMD" ]; then
+    echo "❌ cloud-sql-proxy introuvable. Installe-le via: gcloud components install cloud-sql-proxy"
+    exit 1
+fi
+echo "🔍 cloud-sql-proxy trouvé: $PROXY_CMD"
 # Ne PAS passer --token (expirant). Le proxy utilisera ADC et rafraîchira automatiquement.
 PROXY_LOG_FILE="/tmp/cloud-sql-proxy.log"
 rm -f "$PROXY_LOG_FILE" >/dev/null 2>&1 || true
@@ -367,4 +394,10 @@ if [ -n "$CODESPACES" ] || [ -n "$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN" ]; t
 fi
 echo ""
 echo "📝 Pour modifier le code: éditez puis relancez 'bash scripts/start-local.sh'"
-echo "Pour fermer tout: pkill -f 'npm run dev' && pkill -f 'cloud-sql-proxy'"
+echo "Pour fermer tout: Ctrl+C ici, ou: pkill -f 'npm run dev' && pkill -f 'cloud-sql-proxy'"
+echo ""
+
+# Garder le script vivant pour que les processus background restent actifs
+# Ctrl+C arrêtera tout proprement
+trap 'echo ""; echo "🛑 Arrêt..."; pkill -f "npm run dev" 2>/dev/null; pkill -f "cloud-sql-proxy" 2>/dev/null; exit 0' INT TERM
+wait
