@@ -1,6 +1,14 @@
 import { initSentry } from './lib/sentry';
 initSentry();
 
+// Auto-reload when a Vite chunk fails to load (stale deployment / hash mismatch)
+window.addEventListener('unhandledrejection', (event) => {
+  const msg: string = (event.reason as Error)?.message ?? '';
+  if (msg.includes('Failed to fetch dynamically imported module') || msg.includes('ChunkLoadError')) {
+    window.location.reload();
+  }
+});
+
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'

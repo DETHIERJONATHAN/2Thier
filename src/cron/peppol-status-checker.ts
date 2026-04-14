@@ -21,6 +21,7 @@ import { sendPushToUser } from '../routes/push';
 import UniversalNotificationService from '../services/UniversalNotificationService';
 import { getPostalService } from '../services/PostalEmailService.js';
 import { logger } from '../lib/logger';
+import { getPeppolRuntimeConfigurationError, syncIncomingPeppolInvoices } from '../services/peppolIncomingSync';
 
 const LOG_PREFIX = '🔄 [PEPPOL-CRON]';
 
@@ -191,6 +192,12 @@ export const checkActiveStatuses = cron.schedule('0 */6 * * *', async () => {
  */
 export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
   try {
+    const runtimeConfigError = getPeppolRuntimeConfigurationError();
+    if (runtimeConfigError) {
+      logger.error(`${LOG_PREFIX} ${runtimeConfigError}`);
+      return;
+    }
+
     const configs = await db.peppolConfig.findMany({
       where: {
         registrationStatus: 'ACTIVE',
@@ -210,65 +217,13 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
     for (const config of configs) {
       try {
         const orgName = config.Organization?.name || config.organizationId;
-        const bridge = getPeppolBridge();
-
-        // 1. Tenter de déclencher le fetch dans Odoo (non-bloquant — Odoo 17 bloque les méthodes privées via RPC)
-        await bridge.fetchIncomingDocuments(config.odooCompanyId!);
-
-        // 2. Récupérer les nouvelles factures depuis Odoo (toujours exécuté, même si étape 1 échoue)
-        const lastFetch = await db.peppolIncomingInvoice.findFirst({
-          where: { organizationId: config.organizationId },
-          orderBy: { createdAt: 'desc' },
-          select: { createdAt: true },
+        const syncResult = await syncIncomingPeppolInvoices({
+          organizationId: config.organizationId,
+          odooCompanyId: config.odooCompanyId!,
         });
 
-        const incomingBills = await bridge.getIncomingInvoices(config.odooCompanyId!, {
-          since: lastFetch?.createdAt.toISOString(),
-        });
-
-        // 3. Importer dans Zhiive DB
-        let imported = 0;
-        interface CronImportedInvoice { invoiceNumber: string | null; senderName: string | null; totalAmount: number | null; currency: string; }
-        const newlyImported: CronImportedInvoice[] = [];
-        for (const bill of incomingBills) {
-          if (!bill.peppolMessageId) continue;
-          // Skip Odoo demo/test bills (e.g. "2_demo_vendor_bill")
-          if (bill.peppolMessageId.toLowerCase().includes('demo')) continue;
-
-          const exists = await db.peppolIncomingInvoice.findUnique({
-            where: { peppolMessageId: bill.peppolMessageId },
-          });
-
-          if (!exists) {
-            await db.peppolIncomingInvoice.create({
-              data: {
-                organizationId: config.organizationId,
-                peppolMessageId: bill.peppolMessageId,
-                senderEas: bill.partnerVat?.startsWith('BE') ? '0208' : '0208',
-                senderEndpoint: bill.partnerVat?.replace(/^BE/, '').replace(/[\s.\-]/g, '') || bill.partnerName || '',
-                senderName: bill.partnerName,
-                senderVat: bill.partnerVat || null,
-                invoiceNumber: bill.name,
-                invoiceDate: bill.invoiceDate ? new Date(bill.invoiceDate) : null,
-                dueDate: bill.dueDate ? new Date(bill.dueDate) : null,
-                totalAmount: bill.amountTotal,
-                taxAmount: bill.amountTax,
-                currency: bill.currency,
-                status: 'RECEIVED',
-              },
-            });
-            imported++;
-            newlyImported.push({
-              invoiceNumber: bill.name || null,
-              senderName: bill.partnerName || null,
-              totalAmount: bill.amountTotal ?? null,
-              currency: bill.currency || 'EUR',
-            });
-          }
-        }
-
-        if (imported > 0) {
-          logger.debug(`${LOG_PREFIX} 📥 ${orgName}: ${imported} nouvelle(s) facture(s) importée(s)`);
+        if (syncResult.imported > 0) {
+          logger.debug(`${LOG_PREFIX} 📥 ${orgName}: ${syncResult.imported} nouvelle(s) facture(s) importée(s)`);
 
           // 4. Notifications (push + in-app + email)
           try {
@@ -284,13 +239,13 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
               },
             });
 
-            const title = imported === 1
+            const title = syncResult.imported === 1
               ? `🧾 Nouvelle facture Peppol reçue`
-              : `🧾 ${imported} nouvelles factures Peppol reçues`;
+              : `🧾 ${syncResult.imported} nouvelles factures Peppol reçues`;
 
-            const shortBody = imported === 1
-              ? `${newlyImported[0].invoiceNumber || 'Facture'} de ${newlyImported[0].senderName || 'Fournisseur'} (${newlyImported[0].totalAmount?.toFixed(2) || '0.00'}€)`
-              : `${imported} factures reçues via Peppol`;
+            const shortBody = syncResult.imported === 1
+              ? `${syncResult.newlyImported[0].invoiceNumber || 'Facture'} de ${syncResult.newlyImported[0].senderName || 'Fournisseur'} (${syncResult.newlyImported[0].totalAmount?.toFixed(2) || '0.00'}€)`
+              : `${syncResult.imported} factures reçues via Peppol`;
 
             const notifService = UniversalNotificationService.getInstance();
 
@@ -305,7 +260,7 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
                 priority: 'high',
                 actionUrl: '/facture?tab=incoming',
                 tags: ['peppol', 'incoming', 'cron'],
-                metadata: { count: imported, invoices: newlyImported.map(i => i.invoiceNumber) },
+                metadata: { count: syncResult.imported, invoices: syncResult.newlyImported.map(i => i.invoiceNumber) },
               }).catch(err => logger.error(`${LOG_PREFIX} Erreur notification in-app:`, err.message));
 
               // Push notification
@@ -343,13 +298,17 @@ export const fetchIncomingInvoices = cron.schedule('0 */1 * * *', async () => {
                 subject: `${title} — ${orgName}`,
                 body: htmlEmail,
                 isHtml: true,
-              }).catch(err => logger.error(`${LOG_PREFIX} Erreur email colony ${org.email}:`, err.message));
+                }).catch(err => logger.error(`${LOG_PREFIX} Erreur email colony ${org.email}:`, err.message));
             }
 
-            logger.debug(`${LOG_PREFIX} 🔔 Notifications envoyées: ${imported} facture(s), ${orgAdmins.length} admin(s)`);
+            logger.debug(`${LOG_PREFIX} 🔔 Notifications envoyées: ${syncResult.imported} facture(s), ${orgAdmins.length} admin(s)`);
           } catch (notifyErr) {
             logger.error(`${LOG_PREFIX} ❌ Erreur notifications:`, (notifyErr as Error).message);
           }
+        } else if (syncResult.total > 0) {
+          logger.debug(`${LOG_PREFIX} 📥 ${orgName}: ${syncResult.total} facture(s) entrante(s), aucune nouvelle importation`);
+        } else {
+          logger.debug(`${LOG_PREFIX} 📭 ${orgName}: aucune facture entrante trouvée`);
         }
       } catch (err) {
         logger.error(`${LOG_PREFIX} ❌ Erreur fetch incoming org ${config.organizationId}:`, (err as Error).message);

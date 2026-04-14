@@ -88,6 +88,7 @@ const PeppolSettings: React.FC = () => {
   const [registering, setRegistering] = useState(false);
   const [checkingHealth, setCheckingHealth] = useState(false);
   const [serviceHealthy, setServiceHealthy] = useState<boolean | null>(null);
+  const [serviceHealthMessage, setServiceHealthMessage] = useState<string | null>(null);
   const [config, setConfig] = useState<PeppolConfigData>({
     enabled: false,
     peppolEas: '0208',
@@ -259,9 +260,13 @@ const PeppolSettings: React.FC = () => {
     try {
       setCheckingHealth(true);
       const result = await api.get<ApiResponse<{ ok: boolean }>>('/api/peppol/health');
-      setServiceHealthy(result?.success && result.data?.ok);
-    } catch {
+      const isHealthy = Boolean(result?.success && result.data?.ok);
+      setServiceHealthy(isHealthy);
+      setServiceHealthMessage(isHealthy ? null : (result?.message || 'Service Peppol non disponible'));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Service Peppol non disponible';
       setServiceHealthy(false);
+      setServiceHealthMessage(errorMessage);
     } finally {
       setCheckingHealth(false);
     }
@@ -461,6 +466,11 @@ const PeppolSettings: React.FC = () => {
               <div style={{ fontSize: 12, color: FB.textSecondary }}>
                 {checkingHealth ? 'Vérification...' : serviceHealthy ? 'Connecté' : 'Non disponible'}
               </div>
+              {!checkingHealth && serviceHealthy === false && serviceHealthMessage && (
+                <div style={{ fontSize: 12, color: FB.danger, marginTop: 4, maxWidth: 440 }}>
+                  {serviceHealthMessage}
+                </div>
+              )}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

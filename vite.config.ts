@@ -6,6 +6,7 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import viteCompression from 'vite-plugin-compression';
 
 export default defineConfig({
+  base: '/',
   define: {
     'import.meta.env.VITE_BACKEND_URL': JSON.stringify(''),
     'import.meta.env.VITE_API_BASE_URL': JSON.stringify(''),

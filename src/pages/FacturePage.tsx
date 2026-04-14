@@ -272,6 +272,8 @@ const FacturePage: React.FC = () => {
   const [peppolModalInvoice, setPeppolModalInvoice] = useState<UnifiedInvoice | null>(null);
   const [peppolEndpoint, setPeppolEndpoint] = useState('');
   const [peppolSending, setPeppolSending] = useState(false);
+  const [peppolServiceHealthy, setPeppolServiceHealthy] = useState<boolean | null>(null);
+  const [peppolServiceHealthMessage, setPeppolServiceHealthMessage] = useState<string | null>(null);
 
   // Email preview modal
   const [emailPreviewInvoice, setEmailPreviewInvoice] = useState<UnifiedInvoice | null>(null);
@@ -316,6 +318,21 @@ const FacturePage: React.FC = () => {
   const [rejectingInvoiceId, setRejectingInvoiceId] = useState<string | null>(null);
   const [fetchingIncoming, setFetchingIncoming] = useState(false);
 
+  const refreshPeppolHealth = useCallback(async (): Promise<boolean> => {
+    try {
+      const healthRes = await api.get<{ success: boolean; data: { ok: boolean }; message?: string }>('/api/peppol/health');
+      const ok = Boolean(healthRes?.success && healthRes.data?.ok);
+      setPeppolServiceHealthy(ok);
+      setPeppolServiceHealthMessage(ok ? null : healthRes?.message || 'Service Peppol/Odoo non disponible');
+      return ok;
+    } catch (err) {
+      const messageText = err instanceof Error ? err.message : 'Service Peppol/Odoo non disponible';
+      setPeppolServiceHealthy(false);
+      setPeppolServiceHealthMessage(messageText);
+      return false;
+    }
+  }, [api]);
+
   // ── Data fetching ──
   const loadData = useCallback(async () => {
     try {
@@ -333,12 +350,13 @@ const FacturePage: React.FC = () => {
       } catch {
         setPeppolActive(false);
       }
+      await refreshPeppolHealth();
     } catch (err) {
       logger.error('Erreur chargement factures:', err);
     } finally {
       setLoading(false);
     }
-  }, [api, activeTab, search]);
+  }, [api, activeTab, refreshPeppolHealth, search]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -444,6 +462,11 @@ const FacturePage: React.FC = () => {
   const handleFetchIncoming = useCallback(async () => {
     try {
       setFetchingIncoming(true);
+      const healthOk = await refreshPeppolHealth();
+      if (!healthOk) {
+        message.warning(peppolServiceHealthMessage || 'Odoo n’est pas disponible. Vérifiez docker compose ou la variable ODOO_URL. Tentative de récupération quand même...');
+      }
+
       const res = await api.post<{ success: boolean; message?: string }>('/api/peppol/fetch-incoming', {});
       if (res.success) {
         message.success(res.message || 'Factures récupérées');
@@ -451,11 +474,12 @@ const FacturePage: React.FC = () => {
       }
     } catch (err) {
       logger.error('Erreur fetch incoming:', err);
-      message.error('Erreur lors de la récupération des factures');
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la récupération des factures';
+      message.error(errorMessage);
     } finally {
       setFetchingIncoming(false);
     }
-  }, [api, message, loadData]);
+  }, [api, loadData, message, peppolServiceHealthMessage, peppolServiceHealthy, refreshPeppolHealth]);
 
   // ── Mark expense as paid ──
   const handleMarkExpensePaid = useCallback(async (expenseId: string) => {
@@ -1504,18 +1528,26 @@ const FacturePage: React.FC = () => {
                 : 'Créez votre première facture pour commencer'}
             </div>
             {activeTab === 'incoming' && peppolActive && (
-              <button
-                onClick={handleFetchIncoming}
-                disabled={fetchingIncoming}
-                style={{
-                  padding: '10px 24px', background: FB.purple, color: '#fff', border: 'none',
-                  borderRadius: FB.radius, fontSize: 15, fontWeight: 600, cursor: fetchingIncoming ? 'not-allowed' : 'pointer',
-                  opacity: fetchingIncoming ? 0.7 : 1,
-                }}
-              >
-                {fetchingIncoming ? <Spin size="small" style={{ marginRight: 8 }} /> : <CloudDownloadOutlined style={{ marginRight: 8 }} />}
-                {fetchingIncoming ? 'Récupération...' : 'Récupérer les factures'}
-              </button>
+              <>
+                <button
+                  onClick={handleFetchIncoming}
+                  disabled={fetchingIncoming}
+                  title={peppolServiceHealthy === false ? 'Odoo est indisponible. Vérifiez docker compose ou ODOO_URL.' : undefined}
+                  style={{
+                    padding: '10px 24px', background: FB.purple, color: '#fff', border: 'none',
+                    borderRadius: FB.radius, fontSize: 15, fontWeight: 600, cursor: fetchingIncoming ? 'not-allowed' : 'pointer',
+                    opacity: fetchingIncoming ? 0.7 : 1,
+                  }}
+                >
+                  {fetchingIncoming ? <Spin size="small" style={{ marginRight: 8 }} /> : <CloudDownloadOutlined style={{ marginRight: 8 }} />}
+                  {fetchingIncoming ? 'Récupération...' : 'Récupérer les factures'}
+                </button>
+                {peppolServiceHealthy === false && (
+                  <div style={{ marginTop: 12, color: FB.red, fontSize: 13, maxWidth: 560 }}>
+                    Service Peppol/Odoo indisponible : {peppolServiceHealthMessage || 'Lancez docker compose -f docker-compose.peppol.yml up -d ou configurez ODOO_URL.'}
+                  </div>
+                )}
+              </>
             )}
             {activeTab !== 'incoming' && (
               <button
@@ -1533,10 +1565,11 @@ const FacturePage: React.FC = () => {
           /* ── Invoice Feed ── */
           <>
           {activeTab === 'incoming' && peppolActive && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, marginBottom: 12 }}>
               <button
                 onClick={handleFetchIncoming}
                 disabled={fetchingIncoming}
+                title={peppolServiceHealthy === false ? 'Odoo est indisponible. Vérifiez docker compose ou ODOO_URL.' : undefined}
                 style={{
                   padding: '8px 18px', background: FB.purple, color: '#fff', border: 'none',
                   borderRadius: FB.radius, fontSize: 14, fontWeight: 600, cursor: fetchingIncoming ? 'not-allowed' : 'pointer',
@@ -1546,6 +1579,11 @@ const FacturePage: React.FC = () => {
                 {fetchingIncoming ? <Spin size="small" /> : <CloudDownloadOutlined />}
                 {fetchingIncoming ? 'Récupération...' : 'Récupérer les factures'}
               </button>
+              {peppolServiceHealthy === false && (
+                <div style={{ color: FB.red, fontSize: 13, maxWidth: 560, textAlign: 'right' }}>
+                  Service Peppol/Odoo indisponible : {peppolServiceHealthMessage || 'Lancez docker compose -f docker-compose.peppol.yml up -d ou configurez ODOO_URL.'}
+                </div>
+              )}
             </div>
           )}
           {invoices.map(inv => {

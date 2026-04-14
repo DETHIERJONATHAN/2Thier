@@ -29,6 +29,12 @@ import { sendPushToUser } from './push';
 import UniversalNotificationService from '../services/UniversalNotificationService';
 import { getPostalService } from '../services/PostalEmailService.js';
 import { logger } from '../lib/logger';
+import {
+  ImportedInvoiceInfo,
+  getPeppolFetchErrorDetails,
+  getPeppolRuntimeConfigurationError,
+  syncIncomingPeppolInvoices,
+} from '../services/peppolIncomingSync';
 
 const router = Router();
 
@@ -50,13 +56,6 @@ function getUserId(req: Request): string | null {
 }
 
 // ── Notification helper pour factures entrantes Peppol ──
-
-interface ImportedInvoiceInfo {
-  invoiceNumber: string | null;
-  senderName: string | null;
-  totalAmount: number | null;
-  currency: string;
-}
 
 async function notifyIncomingInvoices(
   organizationId: string,
@@ -1058,79 +1057,34 @@ router.post('/fetch-incoming', authenticateToken, isAdmin, async (req: Request, 
       return res.status(400).json({ success: false, message: 'Peppol n\'est pas configuré' });
     }
 
-    const bridge = getPeppolBridge();
-
-    // 1. Tenter de déclencher le fetch dans Odoo (non-bloquant — les crons Odoo 17 gèrent le download)
-    await bridge.fetchIncomingDocuments(config.odooCompanyId);
-
-    // 2. Récupérer les nouvelles factures depuis Odoo (toujours exécuté, même si étape 1 échoue)
-    const lastFetch = await db.peppolIncomingInvoice.findFirst({
-      where: { organizationId },
-      orderBy: { createdAt: 'desc' },
-      select: { createdAt: true },
-    });
-
-    const incomingBills = await bridge.getIncomingInvoices(config.odooCompanyId, {
-      since: lastFetch?.createdAt.toISOString(),
-    });
-
-    // 3. Importer dans Zhiive DB (filtrer les factures démo d'Odoo)
-    let imported = 0;
-    const newlyImported: ImportedInvoiceInfo[] = [];
-    for (const bill of incomingBills) {
-      if (!bill.peppolMessageId) continue;
-      // Skip Odoo demo/test bills (e.g. "2_demo_vendor_bill")
-      if (bill.peppolMessageId.toLowerCase().includes('demo')) continue;
-
-      const exists = await db.peppolIncomingInvoice.findUnique({
-        where: { peppolMessageId: bill.peppolMessageId },
-      });
-
-      if (!exists) {
-        await db.peppolIncomingInvoice.create({
-          data: {
-            organizationId,
-            peppolMessageId: bill.peppolMessageId,
-            senderEas: bill.partnerVat?.startsWith('BE') ? '0208' : '0208',
-            senderEndpoint: bill.partnerVat?.replace(/^BE/, '').replace(/[\s.\-]/g, '') || bill.partnerName || '',
-            senderName: bill.partnerName,
-            senderVat: bill.partnerVat || null,
-            invoiceNumber: bill.name,
-            invoiceDate: bill.invoiceDate ? new Date(bill.invoiceDate) : null,
-            dueDate: bill.dueDate ? new Date(bill.dueDate) : null,
-            totalAmount: bill.amountTotal,
-            taxAmount: bill.amountTax,
-            currency: bill.currency,
-            status: 'RECEIVED',
-          },
-        });
-        imported++;
-        newlyImported.push({
-          invoiceNumber: bill.name || null,
-          senderName: bill.partnerName || null,
-          totalAmount: bill.amountTotal ?? null,
-          currency: bill.currency || 'EUR',
-        });
-      }
+    const runtimeConfigError = getPeppolRuntimeConfigurationError();
+    if (runtimeConfigError) {
+      return res.status(503).json({ success: false, message: runtimeConfigError });
     }
+
+    const syncResult = await syncIncomingPeppolInvoices({
+      organizationId,
+      odooCompanyId: config.odooCompanyId,
+    });
 
     // 4. Envoyer notifications pour les nouvelles factures
     const userId = getUserId(req);
-    await notifyIncomingInvoices(organizationId, newlyImported, userId);
+    await notifyIncomingInvoices(organizationId, syncResult.newlyImported, userId);
 
 
     res.json({
       success: true,
-      data: { imported, total: incomingBills.length },
-      message: imported > 0
-        ? `${imported} nouvelle(s) facture(s) importée(s)`
-        : incomingBills.length > 0
+      data: { imported: syncResult.imported, total: syncResult.total, skipped: syncResult.skipped },
+      message: syncResult.imported > 0
+        ? `${syncResult.imported} nouvelle(s) facture(s) importée(s)`
+        : syncResult.total > 0
           ? 'Aucune nouvelle facture (déjà importées)'
           : 'Aucune facture entrante trouvée',
     });
   } catch (error) {
+    const details = getPeppolFetchErrorDetails(error);
     logger.error('[Peppol] Erreur POST /fetch-incoming:', error);
-    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+    res.status(details.statusCode).json({ success: false, message: details.message });
   }
 });
 
@@ -1294,13 +1248,27 @@ router.post('/verify-endpoint', authenticateToken, async (req: Request, res: Res
 
 router.get('/health', authenticateToken, async (_req: Request, res: Response) => {
   try {
+    const runtimeConfigError = getPeppolRuntimeConfigurationError();
+    if (runtimeConfigError) {
+      return res.status(503).json({
+        success: false,
+        message: runtimeConfigError,
+        data: { ok: false, misconfigured: true },
+      });
+    }
+
     const bridge = getPeppolBridge();
     const health = await bridge.healthCheck();
 
     res.json({ success: true, data: health });
   } catch (error) {
+    const details = getPeppolFetchErrorDetails(error);
     logger.error('[Peppol] Erreur GET /health:', error);
-    res.status(500).json({ success: false, message: 'Erreur interne du serveur' });
+    res.status(details.statusCode).json({
+      success: false,
+      message: details.message,
+      data: { ok: false },
+    });
   }
 });
 

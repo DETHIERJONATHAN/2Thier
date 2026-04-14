@@ -33,6 +33,11 @@ export function usePushNotifications() {
     registeredRef.current = true;
 
     const registerPush = async () => {
+      if (import.meta.env.DEV) {
+        logger.debug('[SW] Skip service worker registration in local development');
+        return;
+      }
+
       try {
         // 1. Enregistrer le Service Worker
         const registration = await navigator.serviceWorker.register('/sw.js');

@@ -370,6 +370,10 @@ const MessengerChat: React.FC = () => {
   // ─── SERVICE WORKER + WEB PUSH REGISTRATION ────────────────
   useEffect(() => {
     if (!user || !('serviceWorker' in navigator)) return;
+    if (import.meta.env.DEV) {
+      logger.debug('[SW] Skip service worker registration in local development');
+      return;
+    }
 
     const registerSW = async () => {
       try {

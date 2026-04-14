@@ -20,6 +20,8 @@
     "prisma:export:compact": "tsx -- scripts/prisma-export.ts --compact",
     "prisma:import": "tsx -- scripts/prisma-import.ts",
     "check:google-config": "tsx -- scripts/check-google-config.ts",
+    "peppol:health": "node peppol/scripts/health-monitor.mjs",
+    "peppol:password": "node peppol/scripts/change-odoo-password.mjs",
     "lint": "eslint \"src/hooks/**/*.{ts,tsx}\" \"src/routes/**/*.{ts,tsx}\" \"src/services/**/*.{ts,tsx}\" \"src/utils/**/*.{ts,tsx}\"",
     "test": "vitest run",
     "test:watch": "vitest",
