@@ -1,171 +1,141 @@
-# 2Thier CRM/ERP – Plateforme de gestion énergétique évolutive
+# Zhiive
 
-## 🚀 Présentation
-2Thier est un CRM/ERP nouvelle génération dédié à la rénovation énergétique, pensé pour être totalement pilotable, personnalisable et évolutif. Il s’agit d’un écosystème complet de gestion client/chantier, bien au-delà d’un simple CRM ou logiciel de devis. L’objectif : permettre à tout utilisateur de créer, modifier et faire évoluer son propre outil sans jamais avoir besoin de coder.
+## The Living Hive
 
-## 🧩 Fonctionnalités principales
+Zhiive is a living digital ecosystem where users and companies interact through social activity, messaging, geolocation, navigation, visibility, events, client transparency and business workflows.
 
-### 1. Modules Bâtiment (Blocs duplicables)
-- Gestion de blocs représentant chaque partie d’un chantier (maison, annexe, garage, etc.)
-- Blocs duplicables, modifiables, supprimables, activables pour différents métiers
-- Formulaires dynamiques ultra-complets (texte, nombre, listes, cases à cocher, choix multiples, conditions d’apparition, calculs, etc.)
-- Calculs automatiques (ex : puissance, coût annuel, ROI, etc.)
+This repository contains the current full-stack application behind that vision: a React 19 + Vite 6 frontend, an Express 5 API, a Prisma/PostgreSQL data layer, a PWA setup, and a growing set of social, spatial and operational modules.
 
-### 2. Générateur de formulaires avancé
-- Création de formulaires personnalisés par l’utilisateur (no-code)
-- Champs conditionnels (apparition/disparition selon valeurs, opérateurs logiques, etc.)
-- Calculs entre champs (additions, multiplications, conditions complexes)
-- Interface “Excel-like” pour la logique et la visualisation
+The project still carries part of its historical 2Thier CRM/ERP foundation, especially on the business and workflow side. Zhiive builds on that base to move toward a broader product: social-first, spatially aware, operationally powerful.
 
-### 3. Pages modulaires & Sidebar dynamique
-- Ajout/suppression de pages par l’admin
-- Ajout de modules sur chaque page (tableaux, formulaires, graphiques, etc.)
-- Personnalisation totale de l’interface
+## Product Overview
 
-### 4. Intégrations & modules fonctionnels
-- Leads & attribution (Bobex, Solvari)
-- Téléphonie (Telnyx)
-- Messagerie (One.com)
-- Calendrier partagé & gestion des rôles
-- Génération automatique de devis/factures (PDF, e-mail)
-- Brochure interactive & signature électronique
-- Espace client sécurisé
-- Suivi de chantier (photos, statuts, validations)
-- Tableau de bord analytique (CA, taux de conversion, satisfaction, etc.)
-- IA d’aide à la saisie et recommandations (cross-selling, rappels, etc.)
-- Gestion admin (modification des champs, types de travaux, utilisateurs, exports)
+Zhiive brings together capabilities that are usually split across separate tools:
 
-## 🖥️ Technologies utilisées
-- **React** (dernier standard)
-- **Vite** (build ultra-rapide)
-- **TypeScript**
-- **TailwindCSS** (UI moderne et responsive)
-- **State management** (Zustand, Redux ou équivalent)
-- **API REST/GraphQL** (pour la persistance et l’intégration)
-- **Authentification sécurisée**
-- **PDF generation** (pour devis/factures)
-- **Intégration IA** (pour l’aide utilisateur et recommandations)
+- Social activity: wall, stories, reels, follows, reactions, Hive Live
+- Communication: messenger, calls, notifications, real-time interactions
+- Spatial presence: Wax map, proximity, pins, navigation, geolocated activity
+- Events and participation: Arena, tournaments, local interactions
+- Business operations: leads, quotes, documents, signatures, chantier tracking, invoices, expenses, websites, forms, AI-assisted workflows
 
-## 🎨 Design & UX
-- Interface inspirée d’Excel (tableaux, logique conditionnelle, calculs visuels)
-- Sidebar dynamique pour la navigation et la création de pages
-- UI moderne, épurée, responsive (voir [exemple visuel](https://01c371dd-f4ad-4898-83e9-08201e55df1b-00-3a114fpxeenmr.kirk.replit.dev/))
-- Expérience no-code : tout utilisateur peut créer ses propres formulaires, pages, modules et calculs
+The product ambition is simple: create a living hive where user activity creates density, density creates visibility, and visibility creates value for companies.
 
-## 🛠️ Installation & démarrage
-```powershell
-# Cloner le projet
-git clone <repo-url>
-cd crm2thier-vite
+## Stack
 
-# Installer les dépendances
+| Layer | Technology |
+| --- | --- |
+| Frontend | React 19 + TypeScript + Vite 6 |
+| UI | Ant Design 5 + Tailwind CSS |
+| Backend | Express 5 on Node.js 20 |
+| Database | PostgreSQL + Prisma ORM |
+| Auth | JWT + Google OAuth 2.0 |
+| Realtime | Socket.IO |
+| i18n | react-i18next (FR/EN) |
+| Tests | Vitest |
+| PWA | vite-plugin-pwa / Workbox |
+| CI/CD | GitHub Actions -> Cloud Build -> Cloud Run |
+
+## Repository Snapshot
+
+- Unified full-stack app: one repo, one frontend, one backend, one Prisma schema
+- Express serves both the API and the production frontend build
+- PWA-ready frontend with manual code splitting, gzip/brotli compression and dynamic manifest handling
+- Domain-rich backend covering social, messaging, websites, AI, documents, invoices, expenses, calendar, Peppol and more
+- Strong code conventions around database access, authenticated API usage, identity handling, logging and theming
+
+## Quick Start
+
+Prerequisites:
+
+- Node.js 20
+- npm
+- PostgreSQL / Cloud SQL access depending on your environment
+
+Install dependencies:
+
+```bash
 npm install
+```
 
-# Lancer le projet en développement
+Recommended local startup:
+
+```bash
+bash scripts/start-local.sh
+```
+
+This script is the preferred entry point when you need the full local environment, including the database proxy and the API/client pair.
+
+If your environment is already configured, you can also run:
+
+```bash
 npm run dev
 ```
 
-## 📌 Priorités de développement
-1. Intégration complète du formulaire bloc bâtiment
-2. Système de leads + attribution + Telnyx
-3. Connexion mails One.com
-4. Générateur de devis automatique + brochure
-5. Signature électronique
-6. Espace client
-7. Suivi de chantier + photos
-8. Facturation
-9. IA cross-selling
-10. Statistiques globales
+Expected local URLs:
 
-## 🤝 Contribution
-Toute contribution est la bienvenue ! Merci de proposer vos idées, corrections ou améliorations via issues ou pull requests.
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:4000`
 
-## 🛠️ Stack Technique
+For local connection details, Cloud Run deployment notes and troubleshooting, see [CONNECTION-GENERALE.md](./CONNECTION-GENERALE.md).
 
-| Couche | Technologie |
-|--------|-------------|
-| Frontend | React 19 + TypeScript + Vite 6 |
-| UI | Ant Design 5 + Tailwind CSS |
-| Backend | Express 5 (Node.js) |
-| Base de données | PostgreSQL (Google Cloud SQL) + Prisma ORM |
-| Auth | JWT + Google OAuth 2.0 |
-| i18n | react-i18next (FR/EN) |
-| Tests | Vitest + 1210+ tests |
-| CI/CD | GitHub Actions → Cloud Build → Cloud Run |
-| PWA | vite-plugin-pwa (Workbox) |
-
-## 📂 Structure du projet
-
-```
-src/
-├── api-server-clean.ts   # Serveur API Express
-├── auth/                 # Authentification (useAuth, JWT)
-├── components/           # Composants React réutilisables
-├── contexts/             # Contexts React (ActiveIdentity, etc.)
-├── hooks/                # Hooks personnalisés (useAuthenticatedApi, etc.)
-├── i18n/                 # Internationalisation (fr.json, en.json)
-├── lib/                  # Utilitaires (database.ts, logger.ts)
-├── pages/                # Pages de l'application
-├── routes/               # Routes API Express
-├── services/             # Services métier
-└── utils/                # Utilitaires partagés
-prisma/
-├── schema.prisma         # Schéma de la base de données
-├── migrations/           # Migrations Prisma
-└── seed.ts               # Données de seed
-tests/                    # Tests Vitest
-```
-
-## 🚀 Démarrage rapide
+## Key Commands
 
 ```bash
-# Prérequis : Node.js 20+, accès Cloud SQL proxy
-# 1. Installer les dépendances
-npm install
+# Development
+npm run dev
+npm run dev:server
+npm run dev:client
 
-# 2. Lancer l'environnement complet (proxy DB + frontend + backend)
-bash scripts/start-local.sh
+# Quality
+npm run test
+npm run lint
 
-# 3. Résultat :
-#   🌐 Frontend: http://localhost:5173
-#   🔧 Backend:  http://localhost:4000
-```
-
-## 🧪 Tests
-
-```bash
-# Lancer tous les tests
-npx vitest run
-
-# Mode watch
-npx vitest
-
-# Couverture
-npx vitest run --coverage
-```
-
-## 📦 Build & Déploiement
-
-```bash
-# Build frontend + backend
+# Build
 npm run build
-
-# Le déploiement se fait automatiquement via GitHub Actions
-# sur push vers main → Cloud Build → Cloud Run
+npm run start
 ```
 
-## 🔑 Conventions de code
+## Project Structure
 
-- **DB** : Toujours utiliser `import { db } from '@/lib/database'` (jamais `new PrismaClient()`)
-- **API** : Toujours utiliser `useAuthenticatedApi()` (jamais `fetch` directement)
-- **Identité** : Toujours utiliser `useActiveIdentity()` (jamais calculer `isOrgMode` localement)
-- **Logs** : Toujours utiliser `import { logger } from '@/lib/logger'` (jamais `console.log`)
-- **i18n** : Toujours utiliser `t('clé')` (jamais de texte français en dur)
-- **Thème** : Toujours utiliser `SF.*`, `FB.*` depuis ZhiiveTheme (jamais de hex en dur)
+```text
+src/
+├── api-server-clean.ts     # Unified Express API/server entry point
+├── auth/                   # Authentication and identity handling
+├── components/             # Shared UI components and large feature systems
+├── contexts/               # React contexts
+├── hooks/                  # Custom hooks and API access patterns
+├── i18n/                   # FR/EN translations
+├── lib/                    # Core infrastructure utilities
+├── pages/                  # Application pages
+├── routes/                 # Express route modules
+├── services/               # Domain services
+└── utils/                  # Shared helpers
+prisma/
+├── schema.prisma           # Main data model
+├── migrations/             # Database migrations
+└── seed.ts                 # Seed entry points
+tests/                      # Vitest test suite
+scripts/                    # Tooling, DB scripts, diagnostics and helpers
+```
 
-## 🧠 Philosophie
-Le but est de rendre Zhiive totalement évolutif, scalable et modulable, pour que chaque utilisateur puisse l'adapter à ses besoins sans jamais dépendre d'un développeur. L'intelligence artificielle viendra en support pour guider, automatiser et optimiser l'expérience.
+## Engineering Conventions
+
+- Database: always import `db` from `@/lib/database`; never instantiate `new PrismaClient()` in feature code
+- API access: prefer `useAuthenticatedApi()` over direct `fetch`
+- Identity: use the shared identity helpers and context instead of duplicating local role/mode logic
+- Logging: use `logger` from `@/lib/logger`
+- i18n: use `t('key')` instead of hardcoded UI text
+- Theme: use shared theme tokens such as `SF.*` and `FB.*`
+
+## Documentation
+
+- Product and positioning: [ZHIIVE-PRESENTATION.md](./ZHIIVE-PRESENTATION.md)
+- Local setup and deployment: [CONNECTION-GENERALE.md](./CONNECTION-GENERALE.md)
+
+## Status
+
+Zhiive is an active, ambitious codebase with a strong historical business core and an expanding product surface. Some repository areas still reflect the older 2Thier naming and architecture, but the direction is now clearly centered on Zhiive as a living social and operational platform.
 
 ---
 
-© 2025-2026 Zhiive (2Thier) – Tous droits réservés.
+© 2025-2026 Zhiive (2Thier)

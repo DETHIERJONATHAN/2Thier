@@ -90,7 +90,7 @@ Solution rapide: `CLOUD_SQL_AUTH_MODE=gcloud bash scripts/start-local.sh` (si tu
 
 Le déploiement se fait automatiquement via GitHub Actions lors d'un push sur `main`.
 
-**Fichier**: `.github/workflows/deploy.yml`
+**Fichier**: `.github/workflows/deploy-cloud-run.yml`
 
 ### Déploiement manuel
 
@@ -115,6 +115,24 @@ gcloud run deploy crm-api \
   --set-env-vars "NODE_ENV=production,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://app.2thier.be,BACKEND_URL=https://app.2thier.be" \
   --update-secrets "PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=JWT_SECRET:latest,SESSION_SECRET=SESSION_SECRET:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest"
 ```
+
+### Mode temporaire sans GitHub Actions
+
+Si GitHub Actions est indisponible temporairement, un mode manuel plus securise est documente dans:
+
+`scripts/deploy/README.md`
+
+Scripts disponibles:
+
+- `scripts/deploy/manual-cloud-run.ps1`
+- `scripts/deploy/rollback-cloud-run.ps1`
+
+Principe recommande:
+1. commit local propre
+2. deploiement manuel Cloud Run
+3. health check
+4. rollback par revision si besoin
+5. push vers GitHub plus tard quand le billing revient
 
 ### Fichiers critiques pour le déploiement
 
