@@ -112,9 +112,15 @@ gcloud run deploy crm-api \
   --command="" \
   --args="" \
   --add-cloudsql-instances "thiernew:europe-west1:crm-postgres-prod" \
-  --set-env-vars "NODE_ENV=production,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://app.2thier.be,BACKEND_URL=https://app.2thier.be" \
-  --update-secrets "PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=JWT_SECRET:latest,SESSION_SECRET=SESSION_SECRET:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest"
+  --set-env-vars "NODE_ENV=production,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://app.2thier.be,BACKEND_URL=https://app.2thier.be,ODOO_URL=http://46.225.180.8:8069,ODOO_DB_NAME=odoo_peppol,ODOO_USER=admin" \
+  --update-secrets "PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=JWT_SECRET:latest,SESSION_SECRET=SESSION_SECRET:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,ODOO_PASSWORD=ODOO_PASSWORD:latest"
 ```
+
+### Configuration Peppol/Odoo indispensable en production
+
+- Cloud Run doit recevoir `ODOO_URL`, `ODOO_DB_NAME` et `ODOO_USER`.
+- Le mot de passe Odoo doit venir de Secret Manager via `ODOO_PASSWORD=ODOO_PASSWORD:latest`.
+- Ne jamais laisser la prod retomber sur les valeurs de fallback locales (`localhost`, `admin/admin`), sinon `POST /api/peppol/fetch-incoming` finit en erreur 500.
 
 ### Mode temporaire sans GitHub Actions
 

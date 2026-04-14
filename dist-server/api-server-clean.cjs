@@ -96253,6 +96253,198 @@ var invoices_default = router115;
 // src/routes/peppol.ts
 init_PostalEmailService();
 init_logger();
+
+// src/services/peppolIncomingSync.ts
+init_database();
+init_logger();
+var LOCALHOST_URL_REGEX = /^https?:\/\/(?:localhost|127(?:\.\d+){3})(?::\d+)?(?:\/|$)/i;
+function getCurrentOdooUrl() {
+  return process.env.ODOO_URL?.trim() || "http://localhost:8069";
+}
+function isLocalhostOdooUrl(url) {
+  return LOCALHOST_URL_REGEX.test(url);
+}
+function getPeppolRuntimeConfigurationError() {
+  if (process.env.NODE_ENV !== "production") {
+    return null;
+  }
+  const requiredEnvVars = ["ODOO_URL", "ODOO_DB_NAME", "ODOO_USER", "ODOO_PASSWORD"];
+  const missing = requiredEnvVars.filter((name) => !process.env[name]?.trim());
+  if (missing.length > 0) {
+    return `Peppol Odoo n'est pas configure en production (${missing.join(", ")} manquant(s)).`;
+  }
+  const odooUrl = process.env.ODOO_URL.trim();
+  if (isLocalhostOdooUrl(odooUrl)) {
+    return "Peppol Odoo pointe vers localhost en production. Configurez une URL Odoo accessible depuis Cloud Run.";
+  }
+  return null;
+}
+function getPeppolFetchErrorDetails(error) {
+  const runtimeConfigError = getPeppolRuntimeConfigurationError();
+  if (runtimeConfigError) {
+    return {
+      statusCode: 503,
+      message: runtimeConfigError
+    };
+  }
+  const rawMessage = error instanceof Error ? error.message : String(error ?? "Erreur inconnue");
+  const odooUrl = getCurrentOdooUrl();
+  const odooDb = process.env.ODOO_DB_NAME?.trim() || "odoo_peppol";
+  const odooUser = process.env.ODOO_USER?.trim() || "admin";
+  if (/authentication failed|access denied|invalid credentials|login/i.test(rawMessage)) {
+    return {
+      statusCode: 503,
+      message: `Connexion Odoo refusee pour ${odooUrl}. Verifiez ODOO_DB_NAME (${odooDb}), ODOO_USER (${odooUser}) et ODOO_PASSWORD.`
+    };
+  }
+  if (/fetch failed|ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|ETIMEDOUT|network/i.test(rawMessage)) {
+    if (isLocalhostOdooUrl(odooUrl)) {
+      return {
+        statusCode: 503,
+        message: `Aucun service Odoo local ne repond sur ${odooUrl}. Lancez docker compose -f docker-compose.peppol.yml up -d, ou configurez ODOO_URL vers votre instance distante.`
+      };
+    }
+    return {
+      statusCode: 503,
+      message: `Service Odoo Peppol inaccessible sur ${odooUrl}. Verifiez ODOO_URL et la connectivite reseau.`
+    };
+  }
+  if (/invalid field|unknown field|does not exist|traceback|rpc error/i.test(rawMessage)) {
+    return {
+      statusCode: 502,
+      message: "Odoo a rejete la lecture des factures entrantes. Verifiez la version et les modules Peppol de l'instance Odoo."
+    };
+  }
+  return {
+    statusCode: 502,
+    message: `Erreur Peppol Odoo: ${rawMessage}`
+  };
+}
+function toOptionalDate(value) {
+  if (!value) {
+    return null;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+function toOptionalNumber(value) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+function sanitizeSenderEndpoint(bill) {
+  const vatEndpoint = typeof bill.partnerVat === "string" ? bill.partnerVat.replace(/^BE/i, "").replace(/[\s.\-]/g, "").trim() : "";
+  if (vatEndpoint) {
+    return vatEndpoint;
+  }
+  const partnerName = typeof bill.partnerName === "string" ? bill.partnerName.trim().replace(/\s+/g, " ") : "";
+  if (partnerName) {
+    return partnerName;
+  }
+  const peppolMessageId = typeof bill.peppolMessageId === "string" ? bill.peppolMessageId.trim() : "";
+  if (peppolMessageId) {
+    return peppolMessageId;
+  }
+  return "unknown-sender";
+}
+async function syncIncomingPeppolInvoices(params) {
+  const runtimeConfigError = getPeppolRuntimeConfigurationError();
+  if (runtimeConfigError) {
+    throw new Error(runtimeConfigError);
+  }
+  const { organizationId, odooCompanyId, limit } = params;
+  const bridge = getPeppolBridge();
+  try {
+    await bridge.fetchIncomingDocuments(odooCompanyId);
+  } catch (error) {
+    logger.warn("[PeppolIncomingSync] fetchIncomingDocuments failed, continuing with existing Odoo bills", {
+      organizationId,
+      odooCompanyId,
+      error: error instanceof Error ? error.message : error
+    });
+  }
+  const lastFetch = await db.peppolIncomingInvoice.findFirst({
+    where: { organizationId },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true }
+  });
+  const incomingBills = await bridge.getIncomingInvoices(odooCompanyId, {
+    since: lastFetch?.createdAt.toISOString(),
+    limit
+  });
+  let imported = 0;
+  let skipped = 0;
+  const newlyImported = [];
+  for (const bill of incomingBills) {
+    try {
+      const peppolMessageId = typeof bill.peppolMessageId === "string" ? bill.peppolMessageId.trim() : "";
+      if (!peppolMessageId) {
+        skipped++;
+        continue;
+      }
+      if (peppolMessageId.toLowerCase().includes("demo")) {
+        skipped++;
+        continue;
+      }
+      const exists = await db.peppolIncomingInvoice.findUnique({
+        where: { peppolMessageId }
+      });
+      if (exists) {
+        skipped++;
+        continue;
+      }
+      const senderName = typeof bill.partnerName === "string" && bill.partnerName.trim() ? bill.partnerName.trim() : "Fournisseur Peppol";
+      const totalAmount = toOptionalNumber(bill.amountTotal);
+      const taxAmount = toOptionalNumber(bill.amountTax);
+      const currency = typeof bill.currency === "string" && bill.currency.trim() ? bill.currency.trim() : "EUR";
+      await db.peppolIncomingInvoice.create({
+        data: {
+          organizationId,
+          peppolMessageId,
+          senderEas: bill.partnerVat?.toUpperCase().startsWith("BE") ? "0208" : "0208",
+          senderEndpoint: sanitizeSenderEndpoint({ ...bill, peppolMessageId }),
+          senderName,
+          senderVat: typeof bill.partnerVat === "string" && bill.partnerVat.trim() ? bill.partnerVat.trim() : null,
+          invoiceNumber: typeof bill.name === "string" && bill.name.trim() ? bill.name.trim() : null,
+          invoiceDate: toOptionalDate(bill.invoiceDate),
+          dueDate: toOptionalDate(bill.dueDate),
+          totalAmount,
+          taxAmount,
+          currency,
+          status: "RECEIVED"
+        }
+      });
+      imported++;
+      newlyImported.push({
+        invoiceNumber: typeof bill.name === "string" && bill.name.trim() ? bill.name.trim() : null,
+        senderName,
+        totalAmount,
+        currency
+      });
+    } catch (error) {
+      skipped++;
+      logger.error("[PeppolIncomingSync] failed to import incoming bill", {
+        organizationId,
+        odooCompanyId,
+        peppolMessageId: bill.peppolMessageId,
+        error: error instanceof Error ? error.message : error
+      });
+    }
+  }
+  return {
+    imported,
+    skipped,
+    total: incomingBills.length,
+    newlyImported
+  };
+}
+
+// src/routes/peppol.ts
 var router116 = (0, import_express119.Router)();
 function getOrganizationId2(req2) {
   const fromHeader = req2.headers["x-organization-id"];
@@ -97051,61 +97243,25 @@ router116.post("/fetch-incoming", authenticateToken, isAdmin, async (req2, res) 
     if (!config?.enabled || !config.odooCompanyId) {
       return res.status(400).json({ success: false, message: "Peppol n'est pas configur\xE9" });
     }
-    const bridge = getPeppolBridge();
-    await bridge.fetchIncomingDocuments(config.odooCompanyId);
-    const lastFetch = await db.peppolIncomingInvoice.findFirst({
-      where: { organizationId },
-      orderBy: { createdAt: "desc" },
-      select: { createdAt: true }
-    });
-    const incomingBills = await bridge.getIncomingInvoices(config.odooCompanyId, {
-      since: lastFetch?.createdAt.toISOString()
-    });
-    let imported = 0;
-    const newlyImported = [];
-    for (const bill of incomingBills) {
-      if (!bill.peppolMessageId) continue;
-      if (bill.peppolMessageId.toLowerCase().includes("demo")) continue;
-      const exists = await db.peppolIncomingInvoice.findUnique({
-        where: { peppolMessageId: bill.peppolMessageId }
-      });
-      if (!exists) {
-        await db.peppolIncomingInvoice.create({
-          data: {
-            organizationId,
-            peppolMessageId: bill.peppolMessageId,
-            senderEas: bill.partnerVat?.startsWith("BE") ? "0208" : "0208",
-            senderEndpoint: bill.partnerVat?.replace(/^BE/, "").replace(/[\s.\-]/g, "") || bill.partnerName || "",
-            senderName: bill.partnerName,
-            senderVat: bill.partnerVat || null,
-            invoiceNumber: bill.name,
-            invoiceDate: bill.invoiceDate ? new Date(bill.invoiceDate) : null,
-            dueDate: bill.dueDate ? new Date(bill.dueDate) : null,
-            totalAmount: bill.amountTotal,
-            taxAmount: bill.amountTax,
-            currency: bill.currency,
-            status: "RECEIVED"
-          }
-        });
-        imported++;
-        newlyImported.push({
-          invoiceNumber: bill.name || null,
-          senderName: bill.partnerName || null,
-          totalAmount: bill.amountTotal ?? null,
-          currency: bill.currency || "EUR"
-        });
-      }
+    const runtimeConfigError = getPeppolRuntimeConfigurationError();
+    if (runtimeConfigError) {
+      return res.status(503).json({ success: false, message: runtimeConfigError });
     }
+    const syncResult = await syncIncomingPeppolInvoices({
+      organizationId,
+      odooCompanyId: config.odooCompanyId
+    });
     const userId = getUserId2(req2);
-    await notifyIncomingInvoices(organizationId, newlyImported, userId);
+    await notifyIncomingInvoices(organizationId, syncResult.newlyImported, userId);
     res.json({
       success: true,
-      data: { imported, total: incomingBills.length },
-      message: imported > 0 ? `${imported} nouvelle(s) facture(s) import\xE9e(s)` : incomingBills.length > 0 ? "Aucune nouvelle facture (d\xE9j\xE0 import\xE9es)" : "Aucune facture entrante trouv\xE9e"
+      data: { imported: syncResult.imported, total: syncResult.total, skipped: syncResult.skipped },
+      message: syncResult.imported > 0 ? `${syncResult.imported} nouvelle(s) facture(s) import\xE9e(s)` : syncResult.total > 0 ? "Aucune nouvelle facture (d\xE9j\xE0 import\xE9es)" : "Aucune facture entrante trouv\xE9e"
     });
   } catch (error) {
+    const details = getPeppolFetchErrorDetails(error);
     logger.error("[Peppol] Erreur POST /fetch-incoming:", error);
-    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+    res.status(details.statusCode).json({ success: false, message: details.message });
   }
 });
 router116.get("/incoming", authenticateToken, async (req2, res) => {
@@ -97230,12 +97386,25 @@ router116.post("/verify-endpoint", authenticateToken, async (req2, res) => {
 });
 router116.get("/health", authenticateToken, async (_req, res) => {
   try {
+    const runtimeConfigError = getPeppolRuntimeConfigurationError();
+    if (runtimeConfigError) {
+      return res.status(503).json({
+        success: false,
+        message: runtimeConfigError,
+        data: { ok: false, misconfigured: true }
+      });
+    }
     const bridge = getPeppolBridge();
     const health = await bridge.healthCheck();
     res.json({ success: true, data: health });
   } catch (error) {
+    const details = getPeppolFetchErrorDetails(error);
     logger.error("[Peppol] Erreur GET /health:", error);
-    res.status(500).json({ success: false, message: "Erreur interne du serveur" });
+    res.status(details.statusCode).json({
+      success: false,
+      message: details.message,
+      data: { ok: false }
+    });
   }
 });
 var vatLookupSchema = import_zod20.z.object({
@@ -100463,6 +100632,11 @@ var checkActiveStatuses = import_node_cron.default.schedule("0 */6 * * *", async
 }, { scheduled: false });
 var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", async () => {
   try {
+    const runtimeConfigError = getPeppolRuntimeConfigurationError();
+    if (runtimeConfigError) {
+      logger.error(`${LOG_PREFIX} ${runtimeConfigError}`);
+      return;
+    }
     const configs = await db.peppolConfig.findMany({
       where: {
         registrationStatus: "ACTIVE",
@@ -100479,53 +100653,12 @@ var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", asy
     for (const config of configs) {
       try {
         const orgName = config.Organization?.name || config.organizationId;
-        const bridge = getPeppolBridge();
-        await bridge.fetchIncomingDocuments(config.odooCompanyId);
-        const lastFetch = await db.peppolIncomingInvoice.findFirst({
-          where: { organizationId: config.organizationId },
-          orderBy: { createdAt: "desc" },
-          select: { createdAt: true }
+        const syncResult = await syncIncomingPeppolInvoices({
+          organizationId: config.organizationId,
+          odooCompanyId: config.odooCompanyId
         });
-        const incomingBills = await bridge.getIncomingInvoices(config.odooCompanyId, {
-          since: lastFetch?.createdAt.toISOString()
-        });
-        let imported = 0;
-        const newlyImported = [];
-        for (const bill of incomingBills) {
-          if (!bill.peppolMessageId) continue;
-          if (bill.peppolMessageId.toLowerCase().includes("demo")) continue;
-          const exists = await db.peppolIncomingInvoice.findUnique({
-            where: { peppolMessageId: bill.peppolMessageId }
-          });
-          if (!exists) {
-            await db.peppolIncomingInvoice.create({
-              data: {
-                organizationId: config.organizationId,
-                peppolMessageId: bill.peppolMessageId,
-                senderEas: bill.partnerVat?.startsWith("BE") ? "0208" : "0208",
-                senderEndpoint: bill.partnerVat?.replace(/^BE/, "").replace(/[\s.\-]/g, "") || bill.partnerName || "",
-                senderName: bill.partnerName,
-                senderVat: bill.partnerVat || null,
-                invoiceNumber: bill.name,
-                invoiceDate: bill.invoiceDate ? new Date(bill.invoiceDate) : null,
-                dueDate: bill.dueDate ? new Date(bill.dueDate) : null,
-                totalAmount: bill.amountTotal,
-                taxAmount: bill.amountTax,
-                currency: bill.currency,
-                status: "RECEIVED"
-              }
-            });
-            imported++;
-            newlyImported.push({
-              invoiceNumber: bill.name || null,
-              senderName: bill.partnerName || null,
-              totalAmount: bill.amountTotal ?? null,
-              currency: bill.currency || "EUR"
-            });
-          }
-        }
-        if (imported > 0) {
-          logger.debug(`${LOG_PREFIX} \u{1F4E5} ${orgName}: ${imported} nouvelle(s) facture(s) import\xE9e(s)`);
+        if (syncResult.imported > 0) {
+          logger.debug(`${LOG_PREFIX} \u{1F4E5} ${orgName}: ${syncResult.imported} nouvelle(s) facture(s) import\xE9e(s)`);
           try {
             const org = await db.organization.findUnique({
               where: { id: config.organizationId },
@@ -100537,8 +100670,8 @@ var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", asy
                 User: { select: { id: true, firstName: true, lastName: true, EmailAccount: { select: { emailAddress: true } } } }
               }
             });
-            const title = imported === 1 ? `\u{1F9FE} Nouvelle facture Peppol re\xE7ue` : `\u{1F9FE} ${imported} nouvelles factures Peppol re\xE7ues`;
-            const shortBody = imported === 1 ? `${newlyImported[0].invoiceNumber || "Facture"} de ${newlyImported[0].senderName || "Fournisseur"} (${newlyImported[0].totalAmount?.toFixed(2) || "0.00"}\u20AC)` : `${imported} factures re\xE7ues via Peppol`;
+            const title = syncResult.imported === 1 ? `\u{1F9FE} Nouvelle facture Peppol re\xE7ue` : `\u{1F9FE} ${syncResult.imported} nouvelles factures Peppol re\xE7ues`;
+            const shortBody = syncResult.imported === 1 ? `${syncResult.newlyImported[0].invoiceNumber || "Facture"} de ${syncResult.newlyImported[0].senderName || "Fournisseur"} (${syncResult.newlyImported[0].totalAmount?.toFixed(2) || "0.00"}\u20AC)` : `${syncResult.imported} factures re\xE7ues via Peppol`;
             const notifService = UniversalNotificationService_default.getInstance();
             for (const admin of orgAdmins) {
               notifService.createNotification({
@@ -100550,7 +100683,7 @@ var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", asy
                 priority: "high",
                 actionUrl: "/facture?tab=incoming",
                 tags: ["peppol", "incoming", "cron"],
-                metadata: { count: imported, invoices: newlyImported.map((i) => i.invoiceNumber) }
+                metadata: { count: syncResult.imported, invoices: syncResult.newlyImported.map((i) => i.invoiceNumber) }
               }).catch((err) => logger.error(`${LOG_PREFIX} Erreur notification in-app:`, err.message));
               sendPushToUser(admin.userId, {
                 title,
@@ -100584,10 +100717,14 @@ var fetchIncomingInvoices = import_node_cron.default.schedule("0 */1 * * *", asy
                 isHtml: true
               }).catch((err) => logger.error(`${LOG_PREFIX} Erreur email colony ${org.email}:`, err.message));
             }
-            logger.debug(`${LOG_PREFIX} \u{1F514} Notifications envoy\xE9es: ${imported} facture(s), ${orgAdmins.length} admin(s)`);
+            logger.debug(`${LOG_PREFIX} \u{1F514} Notifications envoy\xE9es: ${syncResult.imported} facture(s), ${orgAdmins.length} admin(s)`);
           } catch (notifyErr) {
             logger.error(`${LOG_PREFIX} \u274C Erreur notifications:`, notifyErr.message);
           }
+        } else if (syncResult.total > 0) {
+          logger.debug(`${LOG_PREFIX} \u{1F4E5} ${orgName}: ${syncResult.total} facture(s) entrante(s), aucune nouvelle importation`);
+        } else {
+          logger.debug(`${LOG_PREFIX} \u{1F4ED} ${orgName}: aucune facture entrante trouv\xE9e`);
         }
       } catch (err) {
         logger.error(`${LOG_PREFIX} \u274C Erreur fetch incoming org ${config.organizationId}:`, err.message);

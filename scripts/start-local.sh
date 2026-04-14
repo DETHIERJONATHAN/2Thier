@@ -71,6 +71,7 @@ kill_port() {
 kill_port 4000
 kill_port 5173
 kill_port 5555
+kill_port 5432  # Cloud SQL Proxy — tuer si déjà actif (évite "port already in use")
 sleep 2
 echo "✅ Processus arrêtés"
 
