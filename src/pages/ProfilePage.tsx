@@ -792,7 +792,14 @@ const ProfilePage = () => {
   return (
     <>
     <PageHelmet title="Profil" noIndex />
-    <div style={{ background: FB.bg, minHeight: '100vh' }}>
+    <div style={{
+      background: FB.bg,
+      height: '100%',
+      minHeight: '100%',
+      overflowY: 'auto',
+      overflowX: 'hidden',
+      WebkitOverflowScrolling: 'touch',
+    }}>
 
       {/* ════════ TOP WHITE SECTION (cover + name + tabs) ════════ */}
       <div style={{ background: FB.white, boxShadow: FB.shadow }}>

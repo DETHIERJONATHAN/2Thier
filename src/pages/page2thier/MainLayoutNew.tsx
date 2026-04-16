@@ -325,8 +325,13 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
     if (!isMobile || !containerRef.current) return;
     const activeTab = orderedTabs[mobilePanel];
     if (!activeTab) return;
+    const container = containerRef.current;
     const el = tabRefs.current.get(activeTab.id);
-    if (el) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    if (!el) return;
+
+    const maxScrollLeft = Math.max(container.scrollWidth - container.clientWidth, 0);
+    const targetLeft = Math.min(Math.max(el.offsetLeft, 0), maxScrollLeft);
+    container.scrollTo({ left: targetLeft, behavior: 'smooth' });
   }, [mobilePanel, isMobile, orderedTabs]);
 
   return (
@@ -340,7 +345,7 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
       margin: '0 4px',
       touchAction: dragId ? 'none' : 'auto',
     }}>
-      {orderedTabs.map((tab, tabVisibleIdx) => {
+        {orderedTabs.map((tab, tabVisibleIdx) => {
         // Desktop: active = Mur if no centerApp and no module, else matches centerApp. Mobile: position.
         const isActive = isDashboard && (
           isMobile
@@ -395,7 +400,7 @@ const MessengerChatGated: React.FC = () => {
   if (!isAppEnabled('messenger')) return null;
   return (
     <Suspense fallback={null}>
-      <div data-tour="messenger">
+      <div>
         <MessengerChat />
       </div>
     </Suspense>

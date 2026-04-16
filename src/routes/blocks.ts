@@ -12,18 +12,6 @@ const router = Router();
 
 router.use(authMiddleware as unknown as (req: Request, res: Response, next: () => void) => void, impersonationMiddleware as unknown as (req: Request, res: Response, next: () => void) => void);
 
-// Petit helper de résilience: ajoute la colonne sectionType si absente
-async function ensureSectionTypeColumnExists() {
-  try {
-    await prisma.$executeRawUnsafe(
-      'ALTER TABLE "Section" ADD COLUMN IF NOT EXISTS "sectionType" TEXT NOT NULL DEFAULT \'normal\''
-    );
-  } catch (e) {
-    // silencieux, on laissera l'erreur initiale si autre problème
-    logger.warn('[API] ensureSectionTypeColumnExists (blocks.ts) - avertissement:', e);
-  }
-}
-
 // GET tous les blocks d'une organisation
 router.get('/', 
   // Middleware anti-cache pour forcer le rechargement
@@ -232,57 +220,15 @@ router.post('/:blockId/sections', requireRole(['admin', 'super_admin']) as unkno
       return;
     }
 
-    // Si un type est fourni, s'assurer que la colonne existe
-    if (typeof type !== 'undefined') {
-      await ensureSectionTypeColumnExists();
-    }
-
-    // Créer la section avec une gestion robuste des écarts de schéma/client Prisma
-    try {
-      await prisma.section.create({
-        data: {
-          id: uuidv4(),
-          name,
-          order: order || 0,
-          blockId,
-          sectionType: type || 'normal',
-        },
-      });
-    } catch (err: unknown) {
-      const msg = String((err as { message?: string })?.message || '');
-      if (
-        msg.includes('sectionType') &&
-        (msg.includes('does not exist') || msg.includes("doesn't exist") || msg.includes('column') || msg.includes('relation'))
-      ) {
-        // Colonne manquante -> on la crée puis on retente
-        await ensureSectionTypeColumnExists();
-        await prisma.section.create({
-          data: {
-            id: uuidv4(),
-            name,
-            order: order || 0,
-            blockId,
-            sectionType: type || 'normal',
-          },
-        });
-      } else if (msg.includes('Unknown arg') && msg.includes('sectionType')) {
-        // Client Prisma pas régénéré: créer sans sectionType puis mettre à jour via SQL brut sécurisé
-        const created = await prisma.section.create({
-          data: {
-            id: uuidv4(),
-            name,
-            order: order || 0,
-            blockId,
-          },
-        });
-        if (typeof type !== 'undefined') {
-          await ensureSectionTypeColumnExists();
-          await prisma.$executeRaw`UPDATE "Section" SET "sectionType" = ${type || 'normal'} WHERE id = ${created.id}`;
-        }
-      } else {
-        throw err;
-      }
-    }
+    await prisma.section.create({
+      data: {
+        id: uuidv4(),
+        name,
+        order: order || 0,
+        blockId,
+        sectionType: type || 'normal',
+      },
+    });
 
     // On récupère le block complet mis à jour avec toutes ses sections et champs
     const updatedBlockWithRelations = await prisma.block.findUnique({

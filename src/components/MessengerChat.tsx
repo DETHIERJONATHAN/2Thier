@@ -1747,6 +1747,7 @@ const MessengerChat: React.FC = () => {
   // ═══════════════════════════════════════════════════════════
   const renderFab = () => (
     <div
+      data-tour="messenger"
       role="button" tabIndex={0} onClick={() => { 
         if (isListOpen) {
           setIsListOpen(false);
