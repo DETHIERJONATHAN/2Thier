@@ -1,5 +1,7 @@
 import { initSentry } from './lib/sentry';
+import { initAnalytics } from './lib/analytics';
 initSentry();
+initAnalytics();
 
 // Auto-reload when a Vite chunk fails to load (stale deployment / hash mismatch)
 window.addEventListener('unhandledrejection', (event) => {
@@ -9,8 +11,9 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 });
 
+import { useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
+import { BrowserRouter, useLocation } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 // Ant Design reset avant nos styles pour harmoniser l'UI
 import 'antd/dist/reset.css'
@@ -20,6 +23,7 @@ import './styles/2thier-colors.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { AuthProvider } from './auth/AuthProvider'
+import { trackPageView } from './lib/analytics'
 import suppressAntdWarnings from './utils/suppressAntdWarnings'
 import initConsoleFilter from './utils/consoleFilter'
 import { ConfigProvider, theme as antdTheme, App as AntdApp } from 'antd'
@@ -39,6 +43,14 @@ initConsoleFilter();
 // Ant Design locale map synced with i18n
 const antdLocales: Record<string, typeof frFR> = { fr: frFR, en: enUS };
 
+function PageViewTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    trackPageView(location.pathname);
+  }, [location.pathname]);
+  return null;
+}
+
 const Root = () => {
   const { i18n: i18nInstance } = useTranslation();
   const antdLocale = antdLocales[i18nInstance.language?.substring(0, 2)] || frFR;
@@ -46,6 +58,7 @@ const Root = () => {
   return (
     <HelmetProvider>
     <BrowserRouter>
+      <PageViewTracker />
       <AuthProvider>
         <ErrorBoundary>
           <ConfigProvider
