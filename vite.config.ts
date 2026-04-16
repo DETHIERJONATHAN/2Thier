@@ -92,8 +92,12 @@ export default defineConfig({
         manualChunks: {
           // React ecosystem
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          // Ant Design (très lourd)
+          // Ant Design (core + icônes ensemble pour tree-shaking optimal)
           'antd-vendor': ['antd', '@ant-design/icons'],
+          // Carte MapLibre (1MB — chargé seulement sur la page carte)
+          'maplibre-vendor': ['maplibre-gl'],
+          // Excel export (413kB — chargé seulement à l'export)
+          'xlsx-vendor': ['xlsx'],
           // Charts et visualisation
           'charts-vendor': ['recharts', '@fullcalendar/core', '@fullcalendar/react', '@fullcalendar/daygrid'],
           // Utilitaires réels
