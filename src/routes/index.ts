@@ -430,7 +430,7 @@ apiRouter.use('/search', globalSearchRoutes);
 
 // Route simple pour vérifier que l'API fonctionne (non authentifiée)
 apiRouter.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), version: process.env.K_REVISION || 'local' });
 });
 
 export default apiRouter;
