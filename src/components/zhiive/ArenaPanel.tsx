@@ -802,7 +802,7 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
   // ═══════════════════════════════════════════════
 
   const renderListView = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <ZhiiveModuleHeader
         icon={<TrophyOutlined style={{ color: SF.primary, fontSize: 16 }} />}
         title={t('arena.title')}
@@ -844,7 +844,7 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
         )}
       />
 
-      <div style={{ padding: '8px 12px 80px', overflowY: 'auto', flex: 1 }}>
+      <div style={{ padding: '8px 12px 80px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
           <Text style={{ fontSize: 11, color: SF.textSecondary }}>{t('arena.subtitle')}</Text>
           <Text style={{ fontSize: 11, color: SF.textSecondary }}>
@@ -991,7 +991,7 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
     const isOrg = isOrganizer(t_);
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
         <ZhiiveModuleHeader
           icon={(
             <Button
@@ -1036,7 +1036,7 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
           )}
         />
 
-        <div style={{ padding: '8px 12px 80px', overflowY: 'auto', flex: 1 }}>
+        <div style={{ padding: '8px 12px 80px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
           <Spin spinning={detailLoading}>
           {/* Info tags */}
           <div style={{ marginBottom: 10, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
