@@ -96,7 +96,14 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({ onImpersona
     clearImpersonation();
   };
 
-  if (!isSuperAdmin) return null;
+  // Zhiive est le réseau de base, pas une colonie — ne jamais l'afficher dans le sélecteur.
+  // Super admin voit tout (y compris Zhiive pour debug).
+  const colonies = isSuperAdmin
+    ? organizations
+    : organizations.filter(o => o.id !== 'zhiive-global-org');
+
+  // Afficher si: Super Admin OU user a multi-colonie
+  if (!isSuperAdmin && colonies.length <= 1) return null;
   
   return (
     <div className="relative mr-4">
@@ -149,18 +156,25 @@ const OrganizationSelector: React.FC<OrganizationSelectorProps> = ({ onImpersona
                       </svg>
                     )}
                   </button>
-                  {organizations.map(org => (
+                  {colonies.map(org => (
                     <div
                       key={org.id}
                       className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-100 border-t"
                     >
                       <button
                         onClick={() => handleOrgChange(org.id)}
-                        className="flex-grow text-left flex items-center"
+                        className="flex-grow text-left flex items-center justify-between"
                       >
-                        <span>{org.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span>{org.name}</span>
+                          {(org as any).role && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              {(org as any).role}
+                            </span>
+                          )}
+                        </div>
                         {currentOrganization?.id === org.id && (
-                          <svg className="h-4 w-4 text-blue-600 ml-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <svg className="h-4 w-4 text-blue-600 ml-2 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
                         )}

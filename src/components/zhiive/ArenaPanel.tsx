@@ -18,16 +18,17 @@ import {
   ThunderboltOutlined, EnvironmentOutlined, CalendarOutlined,
   EditOutlined, UserAddOutlined, ClockCircleOutlined, DeleteOutlined,
   ReloadOutlined, ArrowLeftOutlined, CheckCircleOutlined,
-  CrownOutlined, InfoCircleOutlined,
+  CrownOutlined, InfoCircleOutlined, SearchOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuthenticatedApi } from '../../hooks/useAuthenticatedApi';
 import { useAuth } from '../../auth/useAuth';
 import { SF } from './ZhiiveTheme';
+import ZhiiveModuleHeader from './ZhiiveModuleHeader';
 import { TEAM_TYPE_SIZES } from '../../services/arena/sportConfigs';
 import dayjs from 'dayjs';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 // ── Types ──
@@ -55,6 +56,7 @@ interface Tournament {
   status: string;
   creatorId: string;
   organizationId: string;
+  settings: Record<string, unknown> | null;
   Creator: { id: string; firstName: string; lastName: string; avatarUrl: string | null };
   Organization: { id: string; name: string; logoUrl: string | null };
   _count: { TeamEntries: number; PlayerEntries: number; Matches: number };
@@ -69,6 +71,7 @@ interface Round {
   id: string;
   roundNumber: number;
   name: string | null;
+  startsAt: string | null;
   Matches: Match[];
 }
 
@@ -154,8 +157,27 @@ interface ArenaPanelProps {
 // ── Constants ──
 
 const SPORTS = ['petanque', 'football', 'basketball', 'volleyball', 'tennis', 'badminton', 'other'];
-const FORMATS = ['RANDOM_DRAW', 'ROUND_ROBIN', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'CHAMPIONSHIP'];
-const TEAM_TYPES = ['SOLO', 'DOUBLETTE', 'TRIPLETTE', 'QUADRETTE', 'CUSTOM'];
+const FORMATS = ['ROUND_ROBIN', 'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION', 'SWISS', 'CHAMPIONSHIP'];
+// Defaults et config par sport
+const SPORT_CONFIG: Record<string, {
+  isMeleeAvailable: boolean;
+  pointsToWinDefault: number;
+  showPointsToWin: boolean;
+  teamTypes: string[];
+  playersPerTeam: number;
+  teamType: string;
+  format: string;
+  nbRounds: number;
+  isMelee: boolean;
+}> = {
+  petanque:   { isMeleeAvailable: true,  showPointsToWin: true,  pointsToWinDefault: 13, teamTypes: ['SOLO','DOUBLETTE','TRIPLETTE','CUSTOM'], playersPerTeam: 2,  teamType: 'DOUBLETTE', format: 'CHAMPIONSHIP', nbRounds: 5,  isMelee: true  },
+  football:   { isMeleeAvailable: false, showPointsToWin: false, pointsToWinDefault: 0,  teamTypes: ['CUSTOM'],                                playersPerTeam: 11, teamType: 'CUSTOM',    format: 'CHAMPIONSHIP', nbRounds: 30, isMelee: false },
+  basketball: { isMeleeAvailable: false, showPointsToWin: false, pointsToWinDefault: 0,  teamTypes: ['CUSTOM'],                                playersPerTeam: 5,  teamType: 'CUSTOM',    format: 'ROUND_ROBIN',  nbRounds: 10, isMelee: false },
+  volleyball: { isMeleeAvailable: false, showPointsToWin: true,  pointsToWinDefault: 25, teamTypes: ['CUSTOM'],                                playersPerTeam: 6,  teamType: 'CUSTOM',    format: 'ROUND_ROBIN',  nbRounds: 5,  isMelee: false },
+  tennis:     { isMeleeAvailable: false, showPointsToWin: true,  pointsToWinDefault: 6,  teamTypes: ['SOLO','DOUBLETTE'],                      playersPerTeam: 1,  teamType: 'SOLO',      format: 'SINGLE_ELIMINATION', nbRounds: 5, isMelee: false },
+  badminton:  { isMeleeAvailable: false, showPointsToWin: true,  pointsToWinDefault: 21, teamTypes: ['SOLO','DOUBLETTE'],                      playersPerTeam: 1,  teamType: 'SOLO',      format: 'SINGLE_ELIMINATION', nbRounds: 5, isMelee: false },
+  other:      { isMeleeAvailable: false, showPointsToWin: true,  pointsToWinDefault: 0,  teamTypes: ['SOLO','DOUBLETTE','TRIPLETTE','CUSTOM'], playersPerTeam: 2,  teamType: 'DOUBLETTE', format: 'ROUND_ROBIN',  nbRounds: 5,  isMelee: false },
+};
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: SF.textSecondary,
@@ -174,6 +196,22 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   COMPLETED: <TrophyOutlined />,
   CANCELLED: <DeleteOutlined />,
 };
+
+const TOURNAMENT_STATUS_FILTERS = [
+  'DRAFT',
+  'REGISTRATION_OPEN',
+  'REGISTRATION_CLOSED',
+  'IN_PROGRESS',
+  'COMPLETED',
+  'CANCELLED',
+];
+
+const normalizeArenaText = (value: unknown): string =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 
 // ── Panel Component ──
 
@@ -196,6 +234,12 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('matches');
+  const [detailSearchQuery, setDetailSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterSport, setFilterSport] = useState<string | undefined>(undefined);
+  const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
+  const [filterLocation, setFilterLocation] = useState<string | undefined>(undefined);
+  const [filterFormat, setFilterFormat] = useState<string | undefined>(undefined);
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showCourtsModal, setShowCourtsModal] = useState(false);
@@ -204,9 +248,12 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [availablePlayers, setAvailablePlayers] = useState<{ id: string; firstName: string; lastName: string; avatarUrl: string | null }[]>([]);
   const [myRegistration, setMyRegistration] = useState<{ isRegistered: boolean; asPlayer: any; asTeamMember: any; isCaptain: boolean; team: any } | null>(null);
+  const [roundDates, setRoundDates] = useState<Record<number, string>>({});
+  const [savingDates, setSavingDates] = useState(false);
   const [scoreForm] = Form.useForm();
   const [registerForm] = Form.useForm();
   const [courtsForm] = Form.useForm();
+  const selectedTournamentId = selectedTournament?.id;
 
   // ── Data fetching: Liste ──
 
@@ -234,7 +281,18 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
       const res = await stableApi.get<{ success: boolean; data: Tournament }>(
         `/api/arena/tournaments/${id}`
       );
-      if (res.success) setSelectedTournament(res.data);
+      if (res.success) {
+        setSelectedTournament(res.data);
+        // Initialiser les roundDates depuis les rounds existants ou les settings
+        const existingDates: Record<number, string> = {};
+        if (res.data.Rounds?.length) {
+          res.data.Rounds.forEach(r => { if (r.startsAt) existingDates[r.roundNumber] = r.startsAt; });
+        } else {
+          const stored = (res.data.settings?.roundDates as Record<string, string>) ?? {};
+          Object.entries(stored).forEach(([k, v]) => { if (v) existingDates[Number(k)] = v; });
+        }
+        setRoundDates(existingDates);
+      }
     } catch {
       antMessage.error(t('messages.loadingError'));
     } finally {
@@ -262,23 +320,29 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
 
   // Quand on sélectionne un tournoi, charger l'inscription
   useEffect(() => {
-    if (selectedTournament) {
-      fetchMyRegistration(selectedTournament.id);
+    if (selectedTournamentId) {
+      fetchMyRegistration(selectedTournamentId);
     } else {
       setMyRegistration(null);
     }
-  }, [selectedTournament?.id, fetchMyRegistration]);
+  }, [selectedTournamentId, fetchMyRegistration]);
+
+  useEffect(() => {
+    if (!selectedTournamentId) return;
+    setActiveTab('matches');
+    setDetailSearchQuery('');
+  }, [selectedTournamentId]);
 
   // ── Socket.IO realtime ──
   useEffect(() => {
-    if (!selectedTournament) return;
+    if (!selectedTournamentId) return;
     let socket: any;
     try {
       const io = (window as any).__ZHIIVE_SOCKET_IO__;
       if (io) {
         socket = io;
-        socket.emit('arena:join', { tournamentId: selectedTournament.id });
-        const refresh = () => fetchTournamentDetail(selectedTournament.id);
+        socket.emit('arena:join', { tournamentId: selectedTournamentId });
+        const refresh = () => fetchTournamentDetail(selectedTournamentId);
         socket.on('arena:score-updated', refresh);
         socket.on('arena:tournament-updated', refresh);
         socket.on('arena:standings-updated', refresh);
@@ -288,8 +352,8 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
       }
     } catch { /* socket optional */ }
     return () => {
-      if (socket && selectedTournament) {
-        socket.emit('arena:leave', { tournamentId: selectedTournament.id });
+      if (socket) {
+        socket.emit('arena:leave', { tournamentId: selectedTournamentId });
         socket.off('arena:score-updated');
         socket.off('arena:tournament-updated');
         socket.off('arena:standings-updated');
@@ -298,7 +362,7 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
         socket.off('arena:tournament-status');
       }
     };
-  }, [selectedTournament?.id, fetchTournamentDetail]);
+  }, [selectedTournamentId, fetchTournamentDetail]);
 
   // ── Actions ──
 
@@ -308,10 +372,12 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
 
   const handleCreate = useCallback(async (values: Record<string, unknown>) => {
     try {
+      const { isMelee, ...rest } = values as Record<string, unknown> & { isMelee?: boolean };
       const res = await stableApi.post<{ success: boolean }>('/api/arena/tournaments', {
-        ...values,
-        startsAt: values.startsAt ? (values.startsAt as any).toISOString() : null,
-        endsAt: values.endsAt ? (values.endsAt as any).toISOString() : null,
+        ...rest,
+        format: isMelee ? 'RANDOM_DRAW' : rest.format,
+        startsAt: rest.startsAt ? (rest.startsAt as any).toISOString() : null,
+        endsAt: rest.endsAt ? (rest.endsAt as any).toISOString() : null,
       });
       if (res.success) {
         antMessage.success(t('arena.tournament') + ' ' + t('common.created'));
@@ -476,6 +542,23 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
     }
   }, [stableApi, fetchTournaments, t, antMessage]);
 
+  // ── Round dates ──
+  const handleSaveRoundDates = useCallback(async () => {
+    if (!selectedTournament) return;
+    setSavingDates(true);
+    try {
+      const payload: Record<string, string | null> = {};
+      Object.entries(roundDates).forEach(([k, v]) => { payload[k] = v || null; });
+      await stableApi.patch(`/api/arena/tournaments/${selectedTournament.id}/round-dates`, { roundDates: payload });
+      antMessage.success(t('common.success'));
+      fetchTournamentDetail(selectedTournament.id);
+    } catch (err: any) {
+      antMessage.error(err.message || t('messages.loadingError'));
+    } finally {
+      setSavingDates(false);
+    }
+  }, [selectedTournament, roundDates, stableApi, t, antMessage, fetchTournamentDetail]);
+
   // ── Super Admin: Seed fake players/teams ──
   const [seeding, setSeeding] = useState(false);
   const [fakeCount, setFakeCount] = useState<number>(16);
@@ -518,15 +601,102 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
     }
   }, [stableApi, selectedTournament, fetchTournamentDetail, t, antMessage]);
 
+  const locationOptions = useMemo(() => {
+    const uniqueLocations = new Map<string, string>();
+
+    tournaments.forEach((tournament) => {
+      const location = tournament.location?.trim();
+      if (!location) return;
+
+      const key = normalizeArenaText(location);
+      if (!uniqueLocations.has(key)) uniqueLocations.set(key, location);
+    });
+
+    return Array.from(uniqueLocations.values()).sort((a, b) =>
+      a.localeCompare(b, 'fr', { sensitivity: 'base' })
+    );
+  }, [tournaments]);
+
+  const filteredTournaments = useMemo(() => {
+    const queryTokens = normalizeArenaText(searchQuery).split(/\s+/).filter(Boolean);
+
+    return tournaments.filter((tournament) => {
+      if (filterSport && tournament.sport !== filterSport) return false;
+      if (filterStatus && tournament.status !== filterStatus) return false;
+      if (filterFormat && tournament.format !== filterFormat) return false;
+      if (
+        filterLocation &&
+        normalizeArenaText(tournament.location) !== normalizeArenaText(filterLocation)
+      ) {
+        return false;
+      }
+      if (queryTokens.length === 0) return true;
+
+      const searchIndex = normalizeArenaText([
+        tournament.name,
+        tournament.description,
+        tournament.location,
+        tournament.rules,
+        tournament.Organization?.name,
+        tournament.Creator ? `${tournament.Creator.firstName} ${tournament.Creator.lastName}` : '',
+        t(`arena.sports.${tournament.sport}`),
+        t(`arena.formats.${tournament.format}`),
+        t(`arena.teamTypes.${tournament.teamType}`),
+        t(`arena.status.${tournament.status}`),
+        tournament.startsAt ? dayjs(tournament.startsAt).format('DD/MM/YYYY HH:mm') : '',
+      ].join(' '));
+
+      return queryTokens.every((token) => searchIndex.includes(token));
+    });
+  }, [tournaments, searchQuery, filterSport, filterStatus, filterLocation, filterFormat, t]);
+
+  const hasActiveFilters = Boolean(
+    searchQuery || filterSport || filterStatus || filterLocation || filterFormat
+  );
+
+  const resetFilters = useCallback(() => {
+    setSearchQuery('');
+    setFilterSport(undefined);
+    setFilterStatus(undefined);
+    setFilterLocation(undefined);
+    setFilterFormat(undefined);
+  }, []);
+
+  const detailSearchTokens = useMemo(() =>
+    normalizeArenaText(detailSearchQuery).split(/\s+/).filter(Boolean), [detailSearchQuery]);
+
+  const hasDetailSearch = detailSearchTokens.length > 0;
+
+  const matchesDetailSearch = useCallback((values: unknown[]) => {
+    if (detailSearchTokens.length === 0) return true;
+    const haystack = normalizeArenaText(values.join(' '));
+    return detailSearchTokens.every((token) => haystack.includes(token));
+  }, [detailSearchTokens]);
+
+  const renderDetailSearchEmpty = () => (
+    <Empty
+      image={<SearchOutlined style={{ fontSize: 40, color: SF.textMuted }} />}
+      description={t('arena.noDetailResults')}
+      style={{ padding: 16 }}
+    >
+      <Text style={{ display: 'block', color: SF.textSecondary, marginBottom: 12, fontSize: 12 }}>
+        {t('arena.noDetailResultsHint')}
+      </Text>
+      <Button size="small" onClick={() => setDetailSearchQuery('')}>
+        {t('arena.clearFilters')}
+      </Button>
+    </Empty>
+  );
+
   // ── Active tournaments (in progress) ──
   const activeTournaments = useMemo(() =>
-    tournaments.filter(t => t.status === 'IN_PROGRESS'), [tournaments]);
+    filteredTournaments.filter(t => t.status === 'IN_PROGRESS'), [filteredTournaments]);
   
   const openTournaments = useMemo(() =>
-    tournaments.filter(t => t.status === 'REGISTRATION_OPEN'), [tournaments]);
+    filteredTournaments.filter(t => t.status === 'REGISTRATION_OPEN'), [filteredTournaments]);
 
   const otherTournaments = useMemo(() =>
-    tournaments.filter(t => !['IN_PROGRESS', 'REGISTRATION_OPEN'].includes(t.status)), [tournaments]);
+    filteredTournaments.filter(t => !['IN_PROGRESS', 'REGISTRATION_OPEN'].includes(t.status)), [filteredTournaments]);
 
   // ═══════════════════════════════════════════════
   // RENDER — Carte tournoi (liste)
@@ -577,8 +747,13 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
               {tournament.nbRounds > 0 && (
                 <Tag color="cyan" style={{ fontSize: 10 }}>{tournament.nbRounds} {t('arena.rounds')}</Tag>
               )}
+              {(tournament.maxTeams ?? tournament.maxPlayers) && (
+                <Tag color="orange" style={{ fontSize: 10 }}>
+                  max {tournament.maxTeams ?? tournament.maxPlayers} {tournament.format === 'RANDOM_DRAW' ? t('arena.players') : t('arena.teams')}
+                </Tag>
+              )}
               {tournament.courtsCount && tournament.courtsCount > 0 && (
-                <Tag color="green" style={{ fontSize: 10 }}><EnvironmentOutlined /> {tournament.courtsCount}</Tag>
+                <Tag color="green" style={{ fontSize: 10 }}>⛳ {tournament.courtsCount} {t('arena.courts')}</Tag>
               )}
             </div>
 
@@ -627,89 +802,183 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
   // ═══════════════════════════════════════════════
 
   const renderListView = () => (
-    <>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{
-            width: 32,
-            height: 32,
-            borderRadius: 10,
-            background: SF.gradientPrimary,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            <TrophyOutlined style={{ fontSize: 16, color: '#fff' }} />
-          </div>
-          <div>
-            <Title level={5} style={{ margin: 0, fontSize: 15, color: SF.text }}>{t('arena.title')}</Title>
-            <Text style={{ fontSize: 11, color: SF.textSecondary }}>{t('arena.subtitle')}</Text>
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+      <ZhiiveModuleHeader
+        icon={<TrophyOutlined style={{ color: SF.primary, fontSize: 16 }} />}
+        title={t('arena.title')}
+        center={(
+          <Input
+            allowClear
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            prefix={<SearchOutlined style={{ color: SF.textMuted }} />}
+            placeholder={t('arena.searchPlaceholder')}
+            style={{ height: 28, borderRadius: SF.radiusSm, fontSize: 12, width: '100%', minWidth: 0 }}
+          />
+        )}
+        actions={(
+          <>
+            <Tooltip title={t('common.refresh')}>
+              <Button type="text" size="small" icon={<ReloadOutlined />} onClick={fetchTournaments} />
+            </Tooltip>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setShowCreateModal(true)}
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                background: SF.primary,
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: 12,
+              }}
+            >
+              <PlusOutlined />
+            </div>
+          </>
+        )}
+      />
+
+      <div style={{ padding: '8px 12px 80px', overflowY: 'auto', flex: 1 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+          <Text style={{ fontSize: 11, color: SF.textSecondary }}>{t('arena.subtitle')}</Text>
+          <Text style={{ fontSize: 11, color: SF.textSecondary }}>
+            {hasActiveFilters
+              ? t('arena.resultsCountFiltered', { count: filteredTournaments.length, total: tournaments.length })
+              : t('arena.resultsCount', { count: tournaments.length })}
+          </Text>
         </div>
-        <Space>
-          <Button size="small" icon={<ReloadOutlined />} onClick={fetchTournaments} />
-          <Button
+
+        <div style={{ display: 'flex', gap: 6, marginBottom: 12, alignItems: 'center', overflowX: 'auto', flexWrap: 'nowrap', scrollbarWidth: 'none' }}>
+          <Select
+            allowClear
+            showSearch
             size="small"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setShowCreateModal(true)}
-            style={{ background: SF.gradientPrimary, border: 'none' }}
+            placeholder={t('arena.allSports')}
+            value={filterSport}
+            onChange={(value) => setFilterSport(value || undefined)}
+            style={{ minWidth: 122, flexShrink: 0 }}
+            optionFilterProp="children"
           >
-            {t('arena.createTournament')}
+            {SPORTS.map((sport) => (
+              <Select.Option key={sport} value={sport}>{t(`arena.sports.${sport}`)}</Select.Option>
+            ))}
+          </Select>
+
+          <Select
+            allowClear
+            showSearch
+            size="small"
+            placeholder={t('arena.allLocations')}
+            value={filterLocation}
+            onChange={(value) => setFilterLocation(value || undefined)}
+            style={{ minWidth: 138, flexShrink: 0 }}
+            optionFilterProp="children"
+          >
+            {locationOptions.map((location) => (
+              <Select.Option key={location} value={location}>{location}</Select.Option>
+            ))}
+          </Select>
+
+          <Select
+            allowClear
+            size="small"
+            placeholder={t('arena.allFormats')}
+            value={filterFormat}
+            onChange={(value) => setFilterFormat(value || undefined)}
+            style={{ minWidth: 138, flexShrink: 0 }}
+          >
+            {FORMATS.map((format) => (
+              <Select.Option key={format} value={format}>{t(`arena.formats.${format}`)}</Select.Option>
+            ))}
+          </Select>
+
+          <Select
+            allowClear
+            size="small"
+            placeholder={t('arena.allStatuses')}
+            value={filterStatus}
+            onChange={(value) => setFilterStatus(value || undefined)}
+            style={{ minWidth: 142, flexShrink: 0 }}
+          >
+            {TOURNAMENT_STATUS_FILTERS.map((status) => (
+              <Select.Option key={status} value={status}>
+                <Space size={4}>{STATUS_ICONS[status]}{t(`arena.status.${status}`)}</Space>
+              </Select.Option>
+            ))}
+          </Select>
+
+          <Button size="small" onClick={resetFilters} disabled={!hasActiveFilters} style={{ flexShrink: 0 }}>
+            {t('arena.clearFilters')}
           </Button>
-        </Space>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
+        ) : tournaments.length === 0 ? (
+          <Empty
+            image={<TrophyOutlined style={{ fontSize: 48, color: SF.textSecondary }} />}
+            description={t('arena.noTournaments')}
+            style={{ marginTop: 40 }}
+          >
+            <Button
+              icon={<PlusOutlined />}
+              type="primary"
+              onClick={() => setShowCreateModal(true)}
+            >
+              {t('arena.createTournament')}
+            </Button>
+          </Empty>
+        ) : filteredTournaments.length === 0 ? (
+          <Empty
+            image={<SearchOutlined style={{ fontSize: 44, color: SF.textMuted }} />}
+            description={t('arena.noResults')}
+            style={{ marginTop: 28 }}
+          >
+            <Text style={{ display: 'block', color: SF.textSecondary, marginBottom: 12, fontSize: 12 }}>
+              {t('arena.noResultsHint')}
+            </Text>
+            <Button size="small" onClick={resetFilters}>{t('arena.clearFilters')}</Button>
+          </Empty>
+        ) : (
+          <>
+            {activeTournaments.length > 0 && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <ThunderboltOutlined style={{ color: SF.primary }} />
+                  <Text strong style={{ color: SF.primary, fontSize: 13 }}>{t('arena.status.IN_PROGRESS')}</Text>
+                  <Badge count={activeTournaments.length} style={{ background: SF.primary }} />
+                </div>
+                {activeTournaments.map(t => renderTournamentCard(t))}
+              </>
+            )}
+
+            {openTournaments.length > 0 && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, marginTop: 12 }}>
+                  <UserAddOutlined style={{ color: SF.success }} />
+                  <Text strong style={{ color: SF.success, fontSize: 13 }}>{t('arena.status.REGISTRATION_OPEN')}</Text>
+                  <Badge count={openTournaments.length} style={{ background: SF.success }} />
+                </div>
+                {openTournaments.map(t => renderTournamentCard(t))}
+              </>
+            )}
+
+            {otherTournaments.length > 0 && (
+              <>
+                <Divider style={{ margin: '12px 0 8px', fontSize: 12 }}>{t('arena.tournaments')}</Divider>
+                {otherTournaments.map(t => renderTournamentCard(t, true))}
+              </>
+            )}
+          </>
+        )}
       </div>
-
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
-      ) : tournaments.length === 0 ? (
-        <Empty
-          image={<TrophyOutlined style={{ fontSize: 48, color: SF.textSecondary }} />}
-          description={t('arena.noTournaments')}
-          style={{ marginTop: 40 }}
-        >
-          <Button
-            icon={<PlusOutlined />}
-            type="primary"
-            onClick={() => setShowCreateModal(true)}
-          >
-            {t('arena.createTournament')}
-          </Button>
-        </Empty>
-      ) : (
-        <>
-          {activeTournaments.length > 0 && (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                <ThunderboltOutlined style={{ color: SF.primary }} />
-                <Text strong style={{ color: SF.primary, fontSize: 13 }}>{t('arena.status.IN_PROGRESS')}</Text>
-                <Badge count={activeTournaments.length} style={{ background: SF.primary }} />
-              </div>
-              {activeTournaments.map(t => renderTournamentCard(t))}
-            </>
-          )}
-
-          {openTournaments.length > 0 && (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, marginTop: 12 }}>
-                <UserAddOutlined style={{ color: SF.success }} />
-                <Text strong style={{ color: SF.success, fontSize: 13 }}>{t('arena.status.REGISTRATION_OPEN')}</Text>
-                <Badge count={openTournaments.length} style={{ background: SF.success }} />
-              </div>
-              {openTournaments.map(t => renderTournamentCard(t))}
-            </>
-          )}
-
-          {otherTournaments.length > 0 && (
-            <>
-              <Divider style={{ margin: '12px 0 8px', fontSize: 12 }}>{t('arena.tournaments')}</Divider>
-              {otherTournaments.map(t => renderTournamentCard(t, true))}
-            </>
-          )}
-        </>
-      )}
-    </>
+    </div>
   );
 
   // ═══════════════════════════════════════════════
@@ -722,40 +991,72 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
     const isOrg = isOrganizer(t_);
 
     return (
-      <>
-        {/* Header détail avec bouton retour */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <Button
-            type="text"
-            icon={<ArrowLeftOutlined />}
-            onClick={() => setSelectedTournament(null)}
-            style={{ padding: '4px 8px' }}
-          />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <Text strong style={{ fontSize: 15, color: SF.text, display: 'block' }} ellipsis>
-              {t_.name}
-            </Text>
-            <Space size={4} wrap>
-              <Tag color={STATUS_COLORS[t_.status]} icon={STATUS_ICONS[t_.status]} style={{ borderRadius: 12, fontSize: 10 }}>
-                {t(`arena.status.${t_.status}`)}
-              </Tag>
-              <Tag style={{ fontSize: 10 }}>{t(`arena.sports.${t_.sport}`)}</Tag>
-            </Space>
-          </div>
-          {isOrg && t_.status === 'DRAFT' && (
-            <Popconfirm title={t('actions.confirmDelete')} onConfirm={() => handleDeleteTournament(t_.id)}>
-              <Button danger size="small" icon={<DeleteOutlined />} />
-            </Popconfirm>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+        <ZhiiveModuleHeader
+          icon={(
+            <Button
+              type="text"
+              size="small"
+              icon={<ArrowLeftOutlined />}
+              onClick={() => setSelectedTournament(null)}
+              style={{ paddingInline: 4 }}
+            />
           )}
-        </div>
+          title={
+            <span style={{ display: 'block', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {t_.name}
+            </span>
+          }
+          center={(
+            <Input
+              allowClear
+              value={detailSearchQuery}
+              onChange={(event) => setDetailSearchQuery(event.target.value)}
+              prefix={<SearchOutlined style={{ color: SF.textMuted }} />}
+              placeholder={t('arena.searchInTournamentPlaceholder')}
+              style={{ height: 28, borderRadius: SF.radiusSm, fontSize: 12, width: '100%', minWidth: 0 }}
+            />
+          )}
+          actions={(
+            <>
+              <Tooltip title={t('common.refresh')}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  onClick={() => fetchTournamentDetail(t_.id)}
+                />
+              </Tooltip>
+              {isOrg && t_.status === 'DRAFT' && (
+                <Popconfirm title={t('actions.confirmDelete')} onConfirm={() => handleDeleteTournament(t_.id)}>
+                  <Button danger size="small" icon={<DeleteOutlined />} />
+                </Popconfirm>
+              )}
+            </>
+          )}
+        />
 
-        <Spin spinning={detailLoading}>
+        <div style={{ padding: '8px 12px 80px', overflowY: 'auto', flex: 1 }}>
+          <Spin spinning={detailLoading}>
           {/* Info tags */}
           <div style={{ marginBottom: 10, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            <Tag color={STATUS_COLORS[t_.status]} icon={STATUS_ICONS[t_.status]} style={{ borderRadius: 12, fontSize: 10 }}>
+              {t(`arena.status.${t_.status}`)}
+            </Tag>
+            <Tag style={{ fontSize: 10 }}>{t(`arena.sports.${t_.sport}`)}</Tag>
             <Tag color="purple" style={{ fontSize: 10 }}>{t(`arena.formats.${t_.format}`)}</Tag>
             <Tag color="blue" style={{ fontSize: 10 }}>{t(`arena.teamTypes.${t_.teamType}`)}</Tag>
             {t_.allowMixedTeams && <Tag color="green" style={{ fontSize: 10 }}>{t('arena.mixedTeams')}</Tag>}
-            <Tag style={{ fontSize: 10 }}>{t('arena.pointsToWin')}: {t_.pointsToWin}</Tag>
+            {t_.pointsToWin > 0 && <Tag style={{ fontSize: 10 }}>{t_.pointsToWin} pts</Tag>}
+            {t_.nbRounds > 0 && <Tag color="cyan" style={{ fontSize: 10 }}>{t_.nbRounds} {t('arena.rounds')}</Tag>}
+            {(t_.maxTeams ?? t_.maxPlayers) && (
+              <Tag color="orange" style={{ fontSize: 10 }}>
+                max {t_.maxTeams ?? t_.maxPlayers} {t_.format === 'RANDOM_DRAW' ? t('arena.players') : t('arena.teams')}
+              </Tag>
+            )}
+            {t_.courtsCount && t_.courtsCount > 0 && (
+              <Tag color="green" style={{ fontSize: 10 }}>⛳ {t_.courtsCount} {t('arena.courts')}</Tag>
+            )}
           </div>
 
           {t_.description && (
@@ -904,21 +1205,113 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
             ]}
           />
         </Spin>
-      </>
+        </div>
+      </div>
     );
   };
 
   // ═══════════════════════════════ Onglet Matchs ══
   const renderMatchesTab = () => {
     const rounds = selectedTournament?.Rounds || [];
-    if (rounds.length === 0) return <Empty description={t('arena.noMatches')} style={{ padding: 16 }} />;
+    const isOrg = selectedTournament ? isOrganizer(selectedTournament) : false;
+    const isChampionship = selectedTournament?.format === 'CHAMPIONSHIP' || selectedTournament?.format === 'ROUND_ROBIN';
+    const nbRounds = selectedTournament?.nbRounds || 0;
+
+    // Pour un championnat, afficher le planificateur de journées même avant génération
+    const roundCount = rounds.length > 0 ? rounds.length : nbRounds;
+    const filteredRounds = hasDetailSearch
+      ? rounds.reduce<Round[]>((acc, round) => {
+          const roundMatches = round.Matches.filter((match) =>
+            matchesDetailSearch([
+              round.roundNumber,
+              round.name,
+              round.startsAt ? dayjs(round.startsAt).format('DD/MM/YYYY HH:mm') : '',
+              match.matchNumber,
+              selectedTournament?.format === 'RANDOM_DRAW' ? getTeamPlayerNames(match.Team1) : (match.Team1?.name || t('arena.bye')),
+              selectedTournament?.format === 'RANDOM_DRAW' ? getTeamPlayerNames(match.Team2) : (match.Team2?.name || t('arena.bye')),
+              match.Court?.name,
+              match.status,
+              match.score1,
+              match.score2,
+            ])
+          );
+
+          if (matchesDetailSearch([
+            t('arena.round'),
+            round.roundNumber,
+            round.name,
+            round.startsAt ? dayjs(round.startsAt).format('DD/MM/YYYY HH:mm') : '',
+          ])) {
+            acc.push(round);
+            return acc;
+          }
+
+          if (roundMatches.length > 0) {
+            acc.push({ ...round, Matches: roundMatches });
+          }
+
+          return acc;
+        }, [])
+      : rounds;
 
     return (
       <div>
-        {rounds.map(round => (
+        {/* Planificateur de dates — CHAMPIONSHIP/ROUND_ROBIN organisateur */}
+        {isOrg && isChampionship && roundCount > 0 && (
+          <Card
+            size="small"
+            style={{ marginBottom: 10, borderRadius: SF.radius, border: `1px solid ${SF.primary}30` }}
+            title={<span style={{ fontSize: 12, color: SF.primary }}><CalendarOutlined /> {t('arena.scheduleRounds')}</span>}
+            bodyStyle={{ padding: '8px 12px' }}
+          >
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {Array.from({ length: roundCount }, (_, i) => i + 1).map(rn => {
+                const round = rounds.find(r => r.roundNumber === rn);
+                const label = round?.name || `J${rn}`;
+                return (
+                  <div key={rn} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Text style={{ fontSize: 11, minWidth: 28 }}>{label}</Text>
+                    <DatePicker
+                      size="small"
+                      showTime={{ format: 'HH:mm' }}
+                      format="DD/MM HH:mm"
+                      style={{ width: 130 }}
+                      value={roundDates[rn] ? dayjs(roundDates[rn]) : null}
+                      onChange={(d) => setRoundDates(prev => ({ ...prev, [rn]: d ? d.toISOString() : '' }))}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <Button
+              size="small"
+              type="primary"
+              style={{ marginTop: 8, background: SF.gradientPrimary, border: 'none' }}
+              loading={savingDates}
+              onClick={handleSaveRoundDates}
+            >
+              {t('common.save')}
+            </Button>
+          </Card>
+        )}
+
+        {rounds.length === 0
+          ? <Empty description={t('arena.noMatches')} style={{ padding: 16 }} />
+          : filteredRounds.length === 0
+            ? renderDetailSearchEmpty()
+            : filteredRounds.map(round => (
           <Card
             key={round.id}
-            title={<span style={{ fontSize: 12 }}>{t('arena.round')} {round.roundNumber}{round.name ? ` — ${round.name}` : ''}</span>}
+            title={
+              <span style={{ fontSize: 12 }}>
+                {t('arena.round')} {round.roundNumber}{round.name ? ` — ${round.name}` : ''}
+                {round.startsAt && (
+                  <span style={{ marginLeft: 8, color: SF.textSecondary, fontWeight: 400 }}>
+                    <CalendarOutlined /> {dayjs(round.startsAt).format('DD/MM/YYYY HH:mm')}
+                  </span>
+                )}
+              </span>
+            }
             size="small"
             style={{ marginBottom: 8, borderRadius: SF.radius }}
             bodyStyle={{ padding: 0 }}
@@ -971,11 +1364,26 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
   // ═══════════════════════════════ Onglet Classement ══
   const renderStandingsTab = () => {
     const standings = selectedTournament?.Standings || [];
+    const filteredStandings = standings.filter((standing) =>
+      matchesDetailSearch([
+        standing.rank,
+        standing.TeamEntry?.name,
+        standing.played,
+        standing.wins,
+        standing.draws,
+        standing.losses,
+        standing.points,
+        standing.pointsFor,
+        standing.pointsAgainst,
+      ])
+    );
+
     if (standings.length === 0) return <Empty description={t('arena.noMatches')} style={{ padding: 16 }} />;
+    if (filteredStandings.length === 0) return renderDetailSearchEmpty();
 
     return (
       <Table
-        dataSource={standings}
+        dataSource={filteredStandings}
         rowKey="id"
         pagination={false}
         size="small"
@@ -1012,17 +1420,32 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
     const teams = selectedTournament?.TeamEntries || [];
     const players = selectedTournament?.PlayerEntries || [];
     const isMelee = selectedTournament?.format === 'RANDOM_DRAW';
+    const filteredTeams = teams.filter((team) =>
+      matchesDetailSearch([
+        team.name,
+        team.status,
+        team.Members?.map((member) => `${member.User.firstName} ${member.User.lastName}`).join(' '),
+      ])
+    );
+    const filteredPlayers = players.filter((player) =>
+      matchesDetailSearch([
+        player.User.firstName,
+        player.User.lastName,
+        player.status,
+      ])
+    );
 
     if (teams.length === 0 && players.length === 0) return <Empty description={t('arena.noTeams')} style={{ padding: 16 }} />;
+    if (filteredTeams.length === 0 && filteredPlayers.length === 0) return renderDetailSearchEmpty();
 
     // ── Mode mêlée : liste numérotée de joueurs individuels ──
     if (isMelee && players.length > 0) {
       return (
         <div>
           <div style={{ marginBottom: 8, padding: '6px 10px', borderRadius: SF.radius, background: `${SF.primary}08`, border: `1px solid ${SF.primary}20`, fontSize: 11 }}>
-            <TeamOutlined /> {players.filter(p => p.status === 'CONFIRMED').length} {t('arena.players')} {t('arena.confirmed').toLowerCase()}
+            <TeamOutlined /> {filteredPlayers.filter(p => p.status === 'CONFIRMED').length} {t('arena.players')} {t('arena.confirmed').toLowerCase()}
           </div>
-          {players.map((p, idx) => (
+          {filteredPlayers.map((p, idx) => (
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px', borderBottom: `1px solid ${SF.border}` }}>
               <span style={{ fontSize: 11, color: SF.textSecondary, minWidth: 20, textAlign: 'right' }}>{idx + 1}.</span>
               <Avatar size={22} src={p.User.avatarUrl}>{p.User.firstName?.[0]}</Avatar>
@@ -1039,7 +1462,7 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
     // ── Mode équipe formée : liste des équipes avec membres ──
     return (
       <div>
-        {teams.map(team => (
+        {filteredTeams.map(team => (
           <div key={team.id} style={{ padding: '8px 0', borderBottom: `1px solid ${SF.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
               <Avatar size={20} style={{ background: team.status === 'CONFIRMED' ? SF.success : SF.textSecondary }}>
@@ -1072,10 +1495,10 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
             )}
           </div>
         ))}
-        {players.length > 0 && (
+        {filteredPlayers.length > 0 && (
           <>
             <Divider style={{ margin: '8px 0', fontSize: 11 }}>{t('arena.players')}</Divider>
-            {players.map((p, idx) => (
+            {filteredPlayers.map((p, idx) => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px', borderBottom: `1px solid ${SF.border}` }}>
                 <span style={{ fontSize: 11, color: SF.textSecondary, minWidth: 20, textAlign: 'right' }}>{idx + 1}.</span>
                 <Avatar size={22} src={p.User.avatarUrl}>{p.User.firstName?.[0]}</Avatar>
@@ -1095,16 +1518,25 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
   const renderCourtsTab = () => {
     const courts = selectedTournament?.Courts || [];
     const isOrg = isOrganizer(selectedTournament!);
-    const activeCount = courts.filter(c => c.teamType !== 'IDLE').length;
-    const doublCount = courts.filter(c => c.teamType === 'DOUBLETTE').length;
-    const triplCount = courts.filter(c => c.teamType === 'TRIPLETTE').length;
+    const filteredCourts = courts.filter((court) =>
+      matchesDetailSearch([
+        court.name,
+        court.location,
+        court.teamType,
+        court.isAvailable ? t('common.available') : t('common.inUse'),
+        court.teamType === 'IDLE' ? t('common.inactive') : t(`arena.teamTypes.${court.teamType}`),
+      ])
+    );
+    const activeCount = filteredCourts.filter(c => c.teamType !== 'IDLE').length;
+    const doublCount = filteredCourts.filter(c => c.teamType === 'DOUBLETTE').length;
+    const triplCount = filteredCourts.filter(c => c.teamType === 'TRIPLETTE').length;
 
     return (
       <div>
         {/* Résumé */}
-        {courts.length > 0 && (
+        {filteredCourts.length > 0 && (
           <div style={{ marginBottom: 10, padding: '6px 10px', borderRadius: SF.radius, background: `${SF.primary}08`, border: `1px solid ${SF.primary}20`, fontSize: 11 }}>
-            <TeamOutlined /> {courts.length} terrains · {activeCount} actifs
+            <TeamOutlined /> {filteredCourts.length} terrains · {activeCount} actifs
             {doublCount > 0 && ` · ${doublCount} doublette(s)`}
             {triplCount > 0 && ` · ${triplCount} triplette(s)`}
           </div>
@@ -1114,8 +1546,10 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
           <Empty description={t('arena.noCourts')} style={{ padding: 16 }} />
         )}
 
+        {courts.length > 0 && filteredCourts.length === 0 && renderDetailSearchEmpty()}
+
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-          {courts.map(court => {
+          {filteredCourts.map(court => {
             const isIdle = court.teamType === 'IDLE';
             return (
               <Card key={court.id} size="small" style={{
@@ -1211,8 +1645,12 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
   // ═══════════════════════════════════════════════
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: '8px 12px 80px' }}>
-      {selectedTournament ? renderDetailView() : renderListView()}
+    <div style={{ height: '100%', overflow: 'hidden', background: SF.bg }}>
+      {selectedTournament ? (
+        <div style={{ height: '100%', overflow: 'hidden' }}>
+          {renderDetailView()}
+        </div>
+      ) : renderListView()}
 
       {/* Create Modal */}
       <Modal
@@ -1228,7 +1666,8 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
           onFinish={handleCreate}
           initialValues={{
             sport: 'petanque',
-            format: 'RANDOM_DRAW',
+            format: 'CHAMPIONSHIP',
+            isMelee: true,
             teamType: 'DOUBLETTE',
             playersPerTeam: 2,
             pointsToWin: 13,
@@ -1247,7 +1686,17 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
 
           {/* Sport */}
           <Form.Item name="sport" label={<>{t('arena.sport')} <Tooltip title={t('arena.tooltips.sport')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 11 }} /></Tooltip></>}>
-            <Select>
+            <Select onChange={(val) => {
+              const cfg = SPORT_CONFIG[val] ?? SPORT_CONFIG.other;
+              createForm.setFieldsValue({
+                format: cfg.format,
+                teamType: cfg.teamType,
+                playersPerTeam: cfg.playersPerTeam,
+                pointsToWin: cfg.pointsToWinDefault,
+                nbRounds: cfg.nbRounds,
+                isMelee: cfg.isMelee,
+              });
+            }}>
               {SPORTS.map(s => <Select.Option key={s} value={s}>{t(`arena.sports.${s}`)}</Select.Option>)}
             </Select>
           </Form.Item>
@@ -1255,13 +1704,12 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
           {/* Format — avec description claire */}
           <Form.Item
             name="format"
-            label={<>{t('arena.format')} <Tooltip title={t('arena.tooltips.format')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 11 }} /></Tooltip></>}
+            label={<>{t('arena.format')} <Tooltip title={t('arena.tooltips.format')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>}
             extra={
               <Form.Item noStyle shouldUpdate={(prev, next) => prev.format !== next.format}>
                 {({ getFieldValue }) => {
                   const fmt = getFieldValue('format');
                   const hints: Record<string, string> = {
-                    RANDOM_DRAW: t('arena.formatHints.RANDOM_DRAW'),
                     SINGLE_ELIMINATION: t('arena.formatHints.SINGLE_ELIMINATION'),
                     ROUND_ROBIN: t('arena.formatHints.ROUND_ROBIN'),
                     SWISS: t('arena.formatHints.SWISS'),
@@ -1273,58 +1721,67 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
               </Form.Item>
             }
           >
-            <Select onChange={(val) => {
-              // Mêlée → teamType n'a pas de sens fixe (équipes tirées par manche)
-              if (val === 'RANDOM_DRAW') createForm.setFieldsValue({ allowMixedTeams: true });
-            }}>
+            <Select>
               {FORMATS.map(f => <Select.Option key={f} value={f}>{t(`arena.formats.${f}`)}</Select.Option>)}
             </Select>
           </Form.Item>
 
-          {/* Type d'équipe — toujours visible */}
-          <Form.Item
-            name="teamType"
-            label={<>{t('arena.teamType')} <Tooltip title={t('arena.tooltips.teamType')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 11 }} /></Tooltip></>}
-            extra={
-              <Form.Item noStyle shouldUpdate={(prev, next) => prev.format !== next.format}>
-                {({ getFieldValue }) => getFieldValue('format') === 'RANDOM_DRAW' ? (
-                  <Text style={{ fontSize: 11, color: SF.primary }}><ThunderboltOutlined /> {t('arena.meleeHint')}</Text>
-                ) : null}
-              </Form.Item>
-            }
-          >
-            <Select onChange={(val) => {
-              const sizes: Record<string, number> = { SOLO: 1, DOUBLETTE: 2, TRIPLETTE: 3, QUADRETTE: 4 };
-              if (sizes[val]) createForm.setFieldsValue({ playersPerTeam: sizes[val] });
-            }}>
-              {TEAM_TYPES.map(tt => <Select.Option key={tt} value={tt}>{t(`arena.teamTypes.${tt}`)}</Select.Option>)}
-            </Select>
+          {/* Type d'équipe — options filtrées par sport */}
+          <Form.Item noStyle shouldUpdate={(prev, next) => prev.sport !== next.sport || prev.isMelee !== next.isMelee}>
+            {({ getFieldValue }) => {
+              const sport = getFieldValue('sport') || 'petanque';
+              const cfg = SPORT_CONFIG[sport] ?? SPORT_CONFIG.other;
+              const isMelee = getFieldValue('isMelee');
+              return (
+                <Form.Item
+                  name="teamType"
+                  label={<>{t('arena.teamType')} <Tooltip title={t('arena.tooltips.teamType')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 11 }} /></Tooltip></>}
+                  extra={isMelee ? <Text style={{ fontSize: 11, color: SF.primary }}><ThunderboltOutlined /> {t('arena.meleeHint')}</Text> : null}
+                >
+                  <Select onChange={(val) => {
+                    const sizes: Record<string, number> = { SOLO: 1, DOUBLETTE: 2, TRIPLETTE: 3 };
+                    if (sizes[val]) createForm.setFieldsValue({ playersPerTeam: sizes[val] });
+                  }}>
+                    {cfg.teamTypes.map(tt => <Select.Option key={tt} value={tt}>{t(`arena.teamTypes.${tt}`)}</Select.Option>)}
+                  </Select>
+                </Form.Item>
+              );
+            }}
           </Form.Item>
 
-          <Row gutter={12}>
-            <Col span={8}>
-              <Form.Item name="pointsToWin" label={<>{t('arena.pointsToWin')} <Tooltip title={t('arena.tooltips.pointsToWin')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 11 }} /></Tooltip></>}>
-                <InputNumber min={1} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item noStyle shouldUpdate={(prev, next) => prev.format !== next.format}>
-                {({ getFieldValue }) => {
-                  const isMelee = getFieldValue('format') === 'RANDOM_DRAW';
-                  return (
+          <Form.Item noStyle shouldUpdate={(prev, next) => prev.sport !== next.sport || prev.isMelee !== next.isMelee}>
+            {({ getFieldValue }) => {
+              const sport = getFieldValue('sport') || 'petanque';
+              const cfg = SPORT_CONFIG[sport] ?? SPORT_CONFIG.other;
+              const isMelee = getFieldValue('isMelee');
+              return (
+                <Row gutter={12}>
+                  {cfg.showPointsToWin && (
+                    <Col span={6}>
+                      <Form.Item name="pointsToWin" label={<>{t('arena.pointsToWin')} <Tooltip title={t('arena.tooltips.pointsToWin')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 11 }} /></Tooltip></>}>
+                        <InputNumber min={0} style={{ width: '100%' }} />
+                      </Form.Item>
+                    </Col>
+                  )}
+                  <Col span={cfg.showPointsToWin ? 6 : 8}>
                     <Form.Item name="maxTeams" label={<>{isMelee ? t('arena.maxPlayers') : t('arena.maxTeams')} <Tooltip title={isMelee ? t('arena.tooltips.maxPlayers') : t('arena.tooltips.maxTeams')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 11 }} /></Tooltip></>}>
                       <InputNumber min={2} style={{ width: '100%' }} />
                     </Form.Item>
-                  );
-                }}
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="nbRounds" label={<>{t('arena.rounds')} <Tooltip title={t('arena.tooltips.nbRounds')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 11 }} /></Tooltip></>}>
-                <InputNumber min={1} max={50} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-          </Row>
+                  </Col>
+                  <Col span={cfg.showPointsToWin ? 6 : 8}>
+                    <Form.Item name="nbRounds" label={<>{t('arena.rounds')} <Tooltip title={t('arena.tooltips.nbRounds')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 11 }} /></Tooltip></>}>
+                      <InputNumber min={1} max={99} style={{ width: '100%' }} />
+                    </Form.Item>
+                  </Col>
+                  <Col span={cfg.showPointsToWin ? 6 : 8}>
+                    <Form.Item name="courtsCount" label={t('arena.courtsCount')}>
+                      <InputNumber min={1} max={50} style={{ width: '100%' }} />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              );
+            }}
+          </Form.Item>
           <Form.Item name="location" label={<>{t('arena.location')} <Tooltip title={t('arena.tooltips.location')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 11 }} /></Tooltip></>}>
             <Input prefix={<EnvironmentOutlined />} />
           </Form.Item>
@@ -1340,22 +1797,37 @@ const ArenaPanel: React.FC<ArenaPanelProps> = () => {
               </Form.Item>
             </Col>
           </Row>
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item name="allowMixedTeams" valuePropName="checked">
-                <Tooltip title={t('arena.tooltips.mixedTeams')}>
-                  <Switch checkedChildren={t('arena.mixedTeams')} unCheckedChildren={t('arena.mixedTeams')} />
-                </Tooltip>
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="isPublic" valuePropName="checked">
-                <Tooltip title={t('arena.tooltips.isPublic')}>
-                  <Switch checkedChildren={t('arena.public')} unCheckedChildren={t('arena.private')} />
-                </Tooltip>
-              </Form.Item>
-            </Col>
-          </Row>
+          <Form.Item noStyle shouldUpdate={(prev, next) => prev.sport !== next.sport}>
+            {({ getFieldValue }) => {
+              const sport = getFieldValue('sport') || 'petanque';
+              const cfg = SPORT_CONFIG[sport] ?? SPORT_CONFIG.other;
+              return (
+                <Row gutter={12}>
+                  {cfg.isMeleeAvailable && (
+                    <Col span={8}>
+                      <Form.Item name="isMelee" valuePropName="checked" label={<>{t('arena.melee')} <Tooltip title={t('arena.tooltips.isMelee')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 11 }} /></Tooltip></>}>
+                        <Switch checkedChildren={t('arena.melee')} unCheckedChildren={t('arena.byTeam')} />
+                      </Form.Item>
+                    </Col>
+                  )}
+                  <Col span={cfg.isMeleeAvailable ? 8 : 12}>
+                    <Form.Item name="allowMixedTeams" valuePropName="checked" label=" ">
+                      <Tooltip title={t('arena.tooltips.mixedTeams')}>
+                        <Switch checkedChildren={t('arena.mixedTeams')} unCheckedChildren={t('arena.mixedTeams')} />
+                      </Tooltip>
+                    </Form.Item>
+                  </Col>
+                  <Col span={cfg.isMeleeAvailable ? 8 : 12}>
+                    <Form.Item name="isPublic" valuePropName="checked" label=" ">
+                      <Tooltip title={t('arena.tooltips.isPublic')}>
+                        <Switch checkedChildren={t('arena.public')} unCheckedChildren={t('arena.private')} />
+                      </Tooltip>
+                    </Form.Item>
+                  </Col>
+                </Row>
+              );
+            }}
+          </Form.Item>
           <Form.Item>
             <Button type="primary" htmlType="submit" block style={{ background: SF.gradientPrimary, border: 'none' }}>
               {t('arena.createTournament')}

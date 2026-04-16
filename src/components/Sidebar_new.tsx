@@ -625,8 +625,8 @@ const Sidebar = ({ modules, hasFeature }: { modules: Array<{ key?: string; id?: 
             <p className="font-semibold">{user.firstName} {user.lastName}</p>
             <p className="text-xs">{user.email}</p>
             
-            {/* Affichage de l'organisation et du rôle, en utilisant les données de useAuth */}
-            {currentOrganization && currentOrganization.id !== 'all' ? (
+            {/* Affichage de la colonie — Zhiive est le réseau social de base, pas une colonie */}
+            {currentOrganization && currentOrganization.id !== 'all' && currentOrganization.id !== 'zhiive-global-org' ? (
               <p className="text-xs mt-1">
                 <span className="font-semibold">Colony :</span> {currentOrganization.name}
               </p>

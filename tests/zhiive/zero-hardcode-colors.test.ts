@@ -48,7 +48,9 @@ const ALLOWED_PATHS = [
 ];
 
 function isAllowed(relPath: string): boolean {
-  return ALLOWED_PATHS.some((a) => relPath.includes(a));
+  // Normalize Windows backslashes so the allow-list (written with `/`) matches on any OS.
+  const normalized = relPath.replace(/\\/g, '/');
+  return ALLOWED_PATHS.some((a) => normalized.includes(a));
 }
 
 describe('Zero-Hardcode Colors Enforcement', () => {

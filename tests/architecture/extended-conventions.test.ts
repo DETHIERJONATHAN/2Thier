@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { grepSrc } from '../helpers/grepSrc';
 
 const ROOT = path.resolve(__dirname, '../..');
 const SRC = path.join(ROOT, 'src');
@@ -49,13 +49,9 @@ describe('Architecture — Logger Usage', () => {
   });
 
   it('routes should not use bare console.log', () => {
-    const result = execSync(
-      `grep -rl "console\\.log" src/routes/ 2>/dev/null | head -5 || true`,
-      { cwd: ROOT, encoding: 'utf-8' }
-    ).trim();
-    // Some files may still have console.log but they should be migrated to logger
-    // This is a soft check — we count them
-    const fileCount = result ? result.split('\n').length : 0;
+    const hits = grepSrc(/console\.log/, { dir: path.join(SRC, 'routes') });
+    // Soft check — route files should be migrated to the shared logger.
+    const fileCount = new Set(hits.map(h => h.file)).size;
     expect(fileCount).toBeLessThanOrEqual(10);
   });
 });

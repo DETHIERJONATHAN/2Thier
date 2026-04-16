@@ -13,21 +13,21 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card, Button, Tag, Modal, Form, Input, Select, InputNumber,
   Switch, DatePicker, Tabs, Table, Space, Avatar, Badge, Empty,
-  Tooltip, Typography, Row, Col, Divider, App, Spin, Progress,
-  Drawer, List, Popconfirm,
+  Tooltip, Typography, Row, Col, Divider, App, Spin,
+  Drawer, List, Popconfirm, Grid,
 } from 'antd';
 import {
   TrophyOutlined, TeamOutlined, PlusOutlined, PlayCircleOutlined,
   ReloadOutlined, EnvironmentOutlined, CalendarOutlined,
   ThunderboltOutlined, CheckCircleOutlined, ClockCircleOutlined,
-  DeleteOutlined, EditOutlined, EyeOutlined, UserAddOutlined,
-  CrownOutlined, ArrowUpOutlined, InfoCircleOutlined,
+  DeleteOutlined, EditOutlined, UserAddOutlined,
+  CrownOutlined, InfoCircleOutlined, SearchOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuthenticatedApi } from '../hooks/useAuthenticatedApi';
 import { useAuth } from '../auth/useAuth';
 import { SF } from '../components/zhiive/ZhiiveTheme';
-import { getSportConfig, TEAM_TYPE_SIZES } from '../services/arena/sportConfigs';
+import { TEAM_TYPE_SIZES } from '../services/arena/sportConfigs';
 import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
@@ -155,6 +155,22 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   CANCELLED: <DeleteOutlined />,
 };
 
+const TOURNAMENT_STATUS_FILTERS = [
+  'DRAFT',
+  'REGISTRATION_OPEN',
+  'REGISTRATION_CLOSED',
+  'IN_PROGRESS',
+  'COMPLETED',
+  'CANCELLED',
+];
+
+const normalizeArenaText = (value: unknown): string =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
 // ── Composant Principal ──
 
 const ArenaPage: React.FC = () => {
@@ -162,6 +178,8 @@ const ArenaPage: React.FC = () => {
   const { api } = useAuthenticatedApi();
   const { user, isSuperAdmin } = useAuth();
   const { message: antMessage } = App.useApp();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
 
   // Stabiliser l'instance API
   const stableApi = useMemo(() => api, []);
@@ -176,8 +194,12 @@ const ArenaPage: React.FC = () => {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showCourtsModal, setShowCourtsModal] = useState(false);
   const [activeTab, setActiveTab] = useState('matches');
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterSport, setFilterSport] = useState<string | undefined>(undefined);
   const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
+  const [filterLocation, setFilterLocation] = useState<string | undefined>(undefined);
+  const [filterFormat, setFilterFormat] = useState<string | undefined>(undefined);
+  const [filterVisibility, setFilterVisibility] = useState<'public' | 'private' | undefined>(undefined);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [availablePlayers, setAvailablePlayers] = useState<{ id: string; firstName: string; lastName: string; avatarUrl: string | null }[]>([]);
   const [myRegistration, setMyRegistration] = useState<{ isRegistered: boolean; asPlayer: any; asTeamMember: any; isCaptain: boolean; team: any } | null>(null);
@@ -223,11 +245,8 @@ const ArenaPage: React.FC = () => {
   const fetchTournaments = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (filterSport) params.set('sport', filterSport);
-      if (filterStatus) params.set('status', filterStatus);
       const res = await stableApi.get<{ success: boolean; data: Tournament[] }>(
-        `/api/arena/tournaments?${params.toString()}`
+        '/api/arena/tournaments'
       );
       if (res.success) setTournaments(res.data);
     } catch (err: any) {
@@ -235,7 +254,7 @@ const ArenaPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [stableApi, filterSport, filterStatus, t, antMessage]);
+  }, [stableApi, t, antMessage]);
 
   const fetchTournamentDetail = useCallback(async (id: string) => {
     setDetailLoading(true);
@@ -256,6 +275,82 @@ const ArenaPage: React.FC = () => {
   }, [fetchTournaments]);
 
   // ── Helpers ──
+
+  const locationOptions = useMemo(() => {
+    const uniqueLocations = new Map<string, string>();
+
+    tournaments.forEach((tournament) => {
+      const location = tournament.location?.trim();
+      if (!location) return;
+
+      const key = normalizeArenaText(location);
+      if (!uniqueLocations.has(key)) uniqueLocations.set(key, location);
+    });
+
+    return Array.from(uniqueLocations.values()).sort((a, b) =>
+      a.localeCompare(b, 'fr', { sensitivity: 'base' })
+    );
+  }, [tournaments]);
+
+  const filteredTournaments = useMemo(() => {
+    const queryTokens = normalizeArenaText(searchQuery).split(/\s+/).filter(Boolean);
+
+    return tournaments.filter((tournament) => {
+      if (filterSport && tournament.sport !== filterSport) return false;
+      if (filterStatus && tournament.status !== filterStatus) return false;
+      if (filterFormat && tournament.format !== filterFormat) return false;
+      if (
+        filterLocation &&
+        normalizeArenaText(tournament.location) !== normalizeArenaText(filterLocation)
+      ) {
+        return false;
+      }
+      if (filterVisibility === 'public' && !tournament.isPublic) return false;
+      if (filterVisibility === 'private' && tournament.isPublic) return false;
+      if (queryTokens.length === 0) return true;
+
+      const searchIndex = normalizeArenaText([
+        tournament.name,
+        tournament.description,
+        tournament.location,
+        tournament.rules,
+        tournament.Organization?.name,
+        tournament.Creator ? `${tournament.Creator.firstName} ${tournament.Creator.lastName}` : '',
+        t(`arena.sports.${tournament.sport}`),
+        t(`arena.formats.${tournament.format}`),
+        t(`arena.teamTypes.${tournament.teamType}`),
+        t(`arena.status.${tournament.status}`),
+        tournament.isPublic ? t('arena.public') : t('arena.private'),
+        tournament.pointsToWin,
+        tournament.nbRounds,
+        tournament.startsAt ? dayjs(tournament.startsAt).format('DD/MM/YYYY HH:mm') : '',
+      ].join(' '));
+
+      return queryTokens.every((token) => searchIndex.includes(token));
+    });
+  }, [
+    tournaments,
+    searchQuery,
+    filterSport,
+    filterStatus,
+    filterLocation,
+    filterFormat,
+    filterVisibility,
+    t,
+  ]);
+
+  const hasActiveFilters = Boolean(
+    searchQuery || filterSport || filterStatus || filterLocation || filterFormat || filterVisibility
+  );
+
+  const resetFilters = useCallback(() => {
+    setSearchQuery('');
+    setFilterSport(undefined);
+    setFilterStatus(undefined);
+    setFilterLocation(undefined);
+    setFilterFormat(undefined);
+    setFilterVisibility(undefined);
+  }, []);
 
   const isOrganizer = useCallback((tournament: Tournament) => {
     return tournament.creatorId === user?.id || isSuperAdmin;
@@ -451,45 +546,6 @@ const ArenaPage: React.FC = () => {
 
   const renderTournamentsList = () => (
     <div>
-      {/* Filtres */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        <Select
-          allowClear
-          placeholder={t('arena.allSports')}
-          value={filterSport}
-          onChange={setFilterSport}
-          style={{ minWidth: 160 }}
-        >
-          {SPORTS.map(s => (
-            <Select.Option key={s} value={s}>{t(`arena.sports.${s}`)}</Select.Option>
-          ))}
-        </Select>
-        <Select
-          allowClear
-          placeholder={t('arena.allStatuses')}
-          value={filterStatus}
-          onChange={setFilterStatus}
-          style={{ minWidth: 180 }}
-        >
-          {['DRAFT', 'REGISTRATION_OPEN', 'IN_PROGRESS', 'COMPLETED'].map(s => (
-            <Select.Option key={s} value={s}>
-              <Space>{STATUS_ICONS[s]}{t(`arena.status.${s}`)}</Space>
-            </Select.Option>
-          ))}
-        </Select>
-        <Button icon={<ReloadOutlined />} onClick={fetchTournaments}>{t('common.refresh')}</Button>
-        <div style={{ flex: 1 }} />
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setShowCreateModal(true)}
-          style={{ background: SF.gradientPrimary, border: 'none' }}
-        >
-          {t('arena.createTournament')}
-        </Button>
-      </div>
-
-      {/* Grille de tournois */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
       ) : tournaments.length === 0 ? (
@@ -501,9 +557,19 @@ const ArenaPage: React.FC = () => {
             {t('arena.createTournament')}
           </Button>
         </Empty>
+      ) : filteredTournaments.length === 0 ? (
+        <Empty
+          image={<SearchOutlined style={{ fontSize: 56, color: SF.textMuted }} />}
+          description={t('arena.noResults')}
+        >
+          <Text style={{ display: 'block', color: SF.textSecondary, marginBottom: 12 }}>
+            {t('arena.noResultsHint')}
+          </Text>
+          <Button onClick={resetFilters}>{t('arena.clearFilters')}</Button>
+        </Empty>
       ) : (
         <Row gutter={[16, 16]}>
-          {tournaments.map(tournament => (
+          {filteredTournaments.map(tournament => (
             <Col key={tournament.id} xs={24} sm={12} lg={8} xl={6}>
               <Card
                 hoverable
@@ -515,24 +581,25 @@ const ArenaPage: React.FC = () => {
                 }}
                 bodyStyle={{ padding: 16 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 8 }}>
                   <Tag
                     color={STATUS_COLORS[tournament.status]}
                     icon={STATUS_ICONS[tournament.status]}
-                    style={{ borderRadius: 12 }}
+                    style={{ borderRadius: 12, marginInlineEnd: 0 }}
                   >
                     {t(`arena.status.${tournament.status}`)}
                   </Tag>
-                  <Tag style={{ borderRadius: 12 }}>{t(`arena.sports.${tournament.sport}`)}</Tag>
+                  <Tag style={{ borderRadius: 12, marginInlineEnd: 0 }}>{t(`arena.sports.${tournament.sport}`)}</Tag>
                 </div>
 
                 <Title level={5} style={{ margin: '8px 0 4px', color: SF.text }} ellipsis>
                   {tournament.name}
                 </Title>
 
-                <Space size={4} style={{ marginBottom: 8 }}>
+                <Space size={[4, 4]} wrap style={{ marginBottom: 8 }}>
                   <Tag color="purple">{t(`arena.formats.${tournament.format}`)}</Tag>
                   <Tag color="blue">{t(`arena.teamTypes.${tournament.teamType}`)}</Tag>
+                  {tournament.isPublic ? <Tag color="cyan">{t('arena.public')}</Tag> : <Tag>{t('arena.private')}</Tag>}
                 </Space>
 
                 {tournament.location && (
@@ -548,7 +615,7 @@ const ArenaPage: React.FC = () => {
 
                 <Divider style={{ margin: '8px 0' }} />
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: SF.textSecondary }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, color: SF.textSecondary }}>
                   <span><TeamOutlined /> {tournament._count.TeamEntries} {t('arena.teams').toLowerCase()}</span>
                   <span><ThunderboltOutlined /> {tournament._count.Matches} {t('arena.matches').toLowerCase()}</span>
                 </div>
@@ -1178,17 +1245,17 @@ const ArenaPage: React.FC = () => {
         </Row>
 
         <Row gutter={16}>
-          <Col span={6}>
+          <Col span={5}>
             <Form.Item name="playersPerTeam" label={t('arena.players')}>
               <InputNumber min={1} max={11} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
-          <Col span={6}>
+          <Col span={5}>
             <Form.Item name="pointsToWin" label={<>{t('arena.pointsToWin')} <Tooltip title={t('arena.tooltips.pointsToWin')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>}>
               <InputNumber min={1} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
-          <Col span={6}>
+          <Col span={5}>
             <Form.Item noStyle shouldUpdate={(prev, next) => prev.format !== next.format}>
               {({ getFieldValue }) => {
                 const isMelee = getFieldValue('format') === 'RANDOM_DRAW';
@@ -1200,8 +1267,13 @@ const ArenaPage: React.FC = () => {
               }}
             </Form.Item>
           </Col>
-          <Col span={6}>
+          <Col span={5}>
             <Form.Item name="nbRounds" label={<>{t('arena.rounds')} <Tooltip title={t('arena.tooltips.nbRounds')}><InfoCircleOutlined style={{ color: SF.textSecondary, fontSize: 12 }} /></Tooltip></>}>
+              <InputNumber min={1} max={50} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col span={4}>
+            <Form.Item name="courtsCount" label={t('arena.courtsCount')}>
               <InputNumber min={1} max={50} style={{ width: '100%' }} />
             </Form.Item>
           </Col>
@@ -1428,36 +1500,158 @@ const ArenaPage: React.FC = () => {
   // ═══════════════════════════════════════════════
 
   return (
-    <div style={{ padding: '0 16px 24px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: SF.bg }}>
       <PageHelmet title="Arena" description="Tournois et compétitions Zhiive" />
-      {/* Header */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 20,
-        paddingTop: 8,
+        gap: isMobile ? 8 : 12,
+        minHeight: 48,
+        padding: isMobile ? '0 12px' : '0 16px',
+        borderBottom: `1px solid ${SF.border}`,
+        background: SF.cardBg,
+        flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 42,
-            height: 42,
-            borderRadius: 12,
-            background: SF.gradientPrimary,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            <TrophyOutlined style={{ fontSize: 22, color: '#fff' }} />
-          </div>
-          <div>
-            <Title level={4} style={{ margin: 0, color: SF.text }}>{t('arena.title')}</Title>
-            <Text style={{ color: SF.textSecondary, fontSize: 13 }}>{t('arena.subtitle')}</Text>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <TrophyOutlined style={{ fontSize: 16, color: SF.primary }} />
+          <span style={{ fontSize: isMobile ? 15 : 16, fontWeight: 600, color: SF.text, whiteSpace: 'nowrap' }}>
+            {t('arena.title')}
+          </span>
+        </div>
+
+        <Input
+          allowClear
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          prefix={<SearchOutlined style={{ color: SF.textMuted }} />}
+          placeholder={t('arena.searchPlaceholder')}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            height: 32,
+            borderRadius: 16,
+            maxWidth: isMobile ? 'none' : 560,
+          }}
+        />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <Tooltip title={t('common.refresh')}>
+            <Button type="text" size="small" icon={<ReloadOutlined />} onClick={fetchTournaments} />
+          </Tooltip>
+          <Button
+            type="primary"
+            size="small"
+            icon={<PlusOutlined />}
+            onClick={() => setShowCreateModal(true)}
+            style={{ background: SF.gradientPrimary, border: 'none' }}
+          >
+            {!isMobile && t('arena.createTournament')}
+          </Button>
         </div>
       </div>
 
-      {renderTournamentsList()}
+      <div style={{
+        padding: isMobile ? '10px 12px 12px' : '12px 16px',
+        borderBottom: `1px solid ${SF.border}`,
+        background: SF.cardBg,
+        flexShrink: 0,
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 8,
+          flexWrap: 'wrap',
+          marginBottom: 10,
+        }}>
+          <Text style={{ color: SF.textSecondary, fontSize: 12 }}>{t('arena.subtitle')}</Text>
+          <Text style={{ color: SF.textSecondary, fontSize: 12 }}>
+            {hasActiveFilters
+              ? t('arena.resultsCountFiltered', { count: filteredTournaments.length, total: tournaments.length })
+              : t('arena.resultsCount', { count: tournaments.length })}
+          </Text>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Select
+            allowClear
+            showSearch
+            size={isMobile ? 'small' : 'middle'}
+            placeholder={t('arena.allSports')}
+            value={filterSport}
+            onChange={(value) => setFilterSport(value || undefined)}
+            style={{ minWidth: isMobile ? 130 : 150 }}
+            optionFilterProp="children"
+          >
+            {SPORTS.map((sport) => (
+              <Select.Option key={sport} value={sport}>{t(`arena.sports.${sport}`)}</Select.Option>
+            ))}
+          </Select>
+
+          <Select
+            allowClear
+            showSearch
+            size={isMobile ? 'small' : 'middle'}
+            placeholder={t('arena.allLocations')}
+            value={filterLocation}
+            onChange={(value) => setFilterLocation(value || undefined)}
+            style={{ minWidth: isMobile ? 140 : 180 }}
+            optionFilterProp="children"
+          >
+            {locationOptions.map((location) => (
+              <Select.Option key={location} value={location}>{location}</Select.Option>
+            ))}
+          </Select>
+
+          <Select
+            allowClear
+            size={isMobile ? 'small' : 'middle'}
+            placeholder={t('arena.allFormats')}
+            value={filterFormat}
+            onChange={(value) => setFilterFormat(value || undefined)}
+            style={{ minWidth: isMobile ? 145 : 170 }}
+          >
+            {FORMATS.map((format) => (
+              <Select.Option key={format} value={format}>{t(`arena.formats.${format}`)}</Select.Option>
+            ))}
+          </Select>
+
+          <Select
+            allowClear
+            size={isMobile ? 'small' : 'middle'}
+            placeholder={t('arena.allStatuses')}
+            value={filterStatus}
+            onChange={(value) => setFilterStatus(value || undefined)}
+            style={{ minWidth: isMobile ? 145 : 180 }}
+          >
+            {TOURNAMENT_STATUS_FILTERS.map((status) => (
+              <Select.Option key={status} value={status}>
+                <Space>{STATUS_ICONS[status]}{t(`arena.status.${status}`)}</Space>
+              </Select.Option>
+            ))}
+          </Select>
+
+          <Select
+            allowClear
+            size={isMobile ? 'small' : 'middle'}
+            placeholder={t('arena.allVisibility')}
+            value={filterVisibility}
+            onChange={(value) => setFilterVisibility((value as 'public' | 'private' | undefined) || undefined)}
+            style={{ minWidth: isMobile ? 130 : 150 }}
+          >
+            <Select.Option value="public">{t('arena.visibilityPublic')}</Select.Option>
+            <Select.Option value="private">{t('arena.visibilityPrivate')}</Select.Option>
+          </Select>
+
+          <Button size={isMobile ? 'small' : 'middle'} onClick={resetFilters} disabled={!hasActiveFilters}>
+            {t('arena.clearFilters')}
+          </Button>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: isMobile ? 12 : 16 }}>
+        {renderTournamentsList()}
+      </div>
       {renderTournamentDetail()}
       {renderCreateModal()}
       {renderScoreModal()}

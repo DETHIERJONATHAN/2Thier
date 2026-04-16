@@ -43,9 +43,11 @@ import {
   Tag,
   Switch,
   Result,
-  Checkbox
+  Checkbox,
+  Dropdown,
+  type MenuProps,
 } from 'antd';
-import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined, SendOutlined, PaperClipOutlined, ToolOutlined, CheckCircleOutlined, ExclamationCircleOutlined, EditOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { FileTextOutlined, DownloadOutlined, ClockCircleOutlined, FolderOpenOutlined, PlusOutlined, UserOutlined, FileAddOutlined, SearchOutlined, MailOutlined, PhoneOutlined, HomeOutlined, SwapOutlined, LeftOutlined, RightOutlined, SaveOutlined, SendOutlined, PaperClipOutlined, ToolOutlined, CheckCircleOutlined, ExclamationCircleOutlined, EditOutlined, ShoppingOutlined, MoreOutlined, LineChartOutlined, FileProtectOutlined, DollarOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../../auth/useAuth';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTreeBranchLeafConfig } from '../../hooks/useTreeBranchLeafConfig';
@@ -65,6 +67,7 @@ import type { TBLLead } from '../../lead-integration/types/lead-types';
 import { useTBLSwipeNavigation } from './hooks/useTBLSwipeNavigation';
 import { useTranslation } from 'react-i18next';
 import { logger } from '../../../../lib/logger';
+import ZhiiveModuleHeader from '../../../zhiive/ZhiiveModuleHeader';
 
 // 🚀 LAZY IMPORTS - Composants chargés uniquement quand nécessaires (modals, panels dev)
 const DocumentsSection = lazy(() => import('../../../Documents/DocumentsSection'));
@@ -176,14 +179,19 @@ const TBL: React.FC<TBLProps> = ({
     if (isTablet) return 'p-4';
     return 'p-6';
   }, [isMobile, isTablet]);
+  const tblCardBodyPadding = isMobile ? 16 : isTablet ? 20 : 24;
+  const tblHeaderBottomSpacing = isMobile ? 10 : 12;
+  const tblProgressBottomSpacing = isMobile ? 8 : 10;
+  const tblProgressStrokeWidth = isMobile ? 5 : 6;
+  const tblProgressValueFontSize = isMobile ? 12 : 13;
+  const tblTopTabsGutter = isMobile ? 6 : 10;
+  const tblTopTabsSize = isMobile ? 'small' as const : 'middle' as const;
+  const tblTopTabPadding = isMobile ? '4px 8px' : '5px 10px';
+  const tblTopTabFontSize = isMobile ? 12 : 12;
   const mainRowGutter = useMemo<[number, number]>(() => [
     isMobile ? 16 : isTablet ? 20 : 24,
     isMobile ? 16 : 32
   ], [isMobile, isTablet]);
-  const headerContainerClass = useMemo(
-    () => `mb-6 pb-4 border-b border-gray-200 flex ${isMobile ? 'flex-col gap-4 items-start' : 'items-center justify-between'}`,
-    [isMobile]
-  );
   const headerActionsDirection = 'horizontal';
   const headerActionsAlign = isMobile ? 'start' : 'center';
   const headerActionsClassName = isMobile ? 'w-full' : undefined;
@@ -3300,6 +3308,24 @@ const TBL: React.FC<TBLProps> = ({
     setEmailModalVisible(true);
   }, [lastGeneratedDocId, api, emailForm, clientData.email]);
 
+  const handleOpenSignedOfferPreview = useCallback(() => {
+    const signedSig = signatureStatus?.signatures.find(
+      (signature): signature is Record<string, unknown> => (
+        typeof signature === 'object'
+        && signature !== null
+        && signature.status === 'SIGNED'
+      )
+    );
+
+    if (!signedSig?.id || typeof signedSig.id !== 'string') {
+      message.warning('Aucune offre signée disponible pour le moment');
+      return;
+    }
+
+    setSignedPdfPreviewId(signedSig.id);
+    setSignedPdfPreviewOpen(true);
+  }, [signatureStatus]);
+
   // 📧 Appliquer un template email sélectionné
   const handleSelectEmailTemplate = useCallback((templateId: string) => {
     const tmpl = emailTemplatesList.find(t => t.id === templateId);
@@ -4270,13 +4296,87 @@ const TBL: React.FC<TBLProps> = ({
   }
 
   // Afficher un skeleton pendant le chargement initial (Lead OU données de l'arbre)
+  const tblHeaderContext = isDefaultDraft
+    ? (!leadId ? 'Mode brouillon' : `${clientData.name || 'Lead sans nom'} · Brouillon`)
+    : [
+        clientData.name || 'Aucun lead',
+        devisName || (tree.name ? `${tree.name} (Nouveau devis)` : 'Nouveau devis'),
+        devisCreatedAt ? devisCreatedAt.toLocaleDateString('fr-FR') : '',
+      ].filter(Boolean).join(' · ');
+
+  const tblHeaderStatus = isDefaultDraft
+    ? { label: 'Brouillon', color: 'gold' as const }
+    : isDevisSaved
+      ? { label: 'Enregistré', color: 'green' as const }
+      : { label: 'En cours', color: 'blue' as const };
+
+  const tblHeaderSourceTag = hasCopiedDevis
+    ? { label: 'Copie', color: 'green' as const }
+    : isLoadedDevis
+      ? { label: 'Original', color: 'blue' as const }
+      : null;
+
+  const tblSaveTooltip = leadId
+    ? (isDevisSaved ? 'Devis déjà enregistré' : 'Enregistrer le devis')
+    : 'Sélectionnez un lead pour enregistrer';
+
+  const tblOverflowMenuItems = [
+    {
+      key: 'create-lead',
+      icon: <PlusOutlined />,
+      label: 'Créer un lead',
+      onClick: () => setLeadCreatorVisible(true),
+    },
+    {
+      key: 'gestionnaire',
+      icon: <ToolOutlined />,
+      label: 'Gestionnaire',
+      onClick: () => setGestionnaireVisible(true),
+    },
+    signatureStatus?.totalSigned
+      ? {
+          key: 'signed-offer',
+          icon: <CheckCircleOutlined />,
+          label: 'Voir l’offre signée',
+          onClick: handleOpenSignedOfferPreview,
+        }
+      : null,
+    isMobile
+      ? {
+          key: 'select-lead',
+          icon: <UserOutlined />,
+          label: 'Sélectionner un lead',
+          onClick: () => setLeadSelectorVisible(true),
+        }
+      : null,
+    isMobile
+      ? {
+          key: 'load-devis',
+          icon: <FolderOpenOutlined />,
+          label: 'Charger un devis',
+          onClick: handleLoadDevis,
+        }
+      : null,
+    isMobile
+      ? {
+          key: 'send-offer',
+          icon: <MailOutlined />,
+          label: 'Envoyer l’offre',
+          disabled: !lastGeneratedDocId,
+          onClick: handleOpenEmailModal,
+        }
+      : null,
+  ].filter(Boolean) as MenuProps['items'];
+
+  const showLegacyTblHeader = typeof window !== 'undefined' && window.location.hash === '#tbl-legacy-header';
+
   if (isLoadingLead || dataLoading) {
     return (
       <Layout className="h-full bg-gray-50">
         <Content className={contentPaddingClass}>
           <Row gutter={mainRowGutter} className="h-full">
             <Col xs={24}>
-              <Card className="h-full shadow-sm" styles={{ body: { padding: isMobile ? 16 : isTablet ? 20 : 24 } }}>
+              <Card className="h-full shadow-sm tbl-shell tbl-shell--compact" styles={{ body: { padding: tblCardBodyPadding } }}>
                 <Skeleton active paragraph={{ rows: 8 }} />
               </Card>
             </Col>
@@ -4294,7 +4394,7 @@ const TBL: React.FC<TBLProps> = ({
         <Row gutter={mainRowGutter} className="h-full">
           {/* Contenu principal pleine largeur */}
           <Col xs={24}>
-            <Card className="h-full shadow-sm" styles={{ body: { padding: isMobile ? 16 : isTablet ? 20 : 24 } }}>
+            <Card className="h-full shadow-sm tbl-shell tbl-shell--compact" styles={{ body: { padding: tblCardBodyPadding } }}>
               {/* Dev panel capabilities (diagnostic) */}
               {useFixed && (() => { try { return localStorage.getItem('TBL_DIAG') === '1'; } catch { return false; } })() && (
                 <div className="mb-4">
@@ -4305,8 +4405,132 @@ const TBL: React.FC<TBLProps> = ({
                   </Suspense>
                 </div>
               )}
+              <div style={{ margin: `${-tblCardBodyPadding}px ${-tblCardBodyPadding}px ${tblHeaderBottomSpacing}px` }}>
+                <ZhiiveModuleHeader
+                  icon={<FileTextOutlined style={{ color: '#1677ff', fontSize: 16 }} />}
+                  title="TBL"
+                  center={(
+                    <Tooltip title={tblHeaderContext}>
+                      <div
+                        style={{
+                          width: '100%',
+                          minWidth: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <Tag color={tblHeaderStatus.color} style={{ margin: 0, borderRadius: 999, fontSize: 10 }}>
+                          {tblHeaderStatus.label}
+                        </Tag>
+                        {!isMobile && tblHeaderSourceTag && (
+                          <Tag color={tblHeaderSourceTag.color} style={{ margin: 0, borderRadius: 999, fontSize: 10 }}>
+                            {tblHeaderSourceTag.label}
+                          </Tag>
+                        )}
+                        <div
+                          style={{
+                            minWidth: 0,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            fontSize: 12,
+                            color: '#1f2937',
+                          }}
+                        >
+                          {tblHeaderContext}
+                        </div>
+                        {autosaveLast && (
+                          <Tooltip title={`Dernière sauvegarde : ${autosaveLast.toLocaleTimeString('fr-FR')}`}>
+                            <ClockCircleOutlined style={{ color: '#94a3b8', flexShrink: 0 }} />
+                          </Tooltip>
+                        )}
+                      </div>
+                    </Tooltip>
+                  )}
+                  actions={(
+                    <>
+                      {!isMobile && (
+                        <Tooltip title="Sélectionner un lead" placement="bottom">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<UserOutlined />}
+                            onClick={() => setLeadSelectorVisible(true)}
+                          />
+                        </Tooltip>
+                      )}
+                      <Tooltip title="Nouveau devis" placement="bottom">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<FileAddOutlined />}
+                          onClick={handleNewDevis}
+                        />
+                      </Tooltip>
+                      <Tooltip title={tblSaveTooltip} placement="bottom">
+                        <Button
+                          size="small"
+                          icon={isDevisSaved ? <CheckCircleOutlined /> : <SaveOutlined />}
+                          onClick={handleSaveDevis}
+                          disabled={!leadId}
+                          type={leadId && !isDevisSaved ? 'primary' : 'text'}
+                          danger={!leadId}
+                          style={
+                            leadId && !isDevisSaved
+                              ? { backgroundColor: '#52c41a', borderColor: '#52c41a', color: '#fff' }
+                              : isDevisSaved
+                                ? { color: '#52c41a' }
+                                : undefined
+                          }
+                        />
+                      </Tooltip>
+                      {!isMobile && (
+                        <Tooltip title="Charger un devis" placement="bottom">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<FolderOpenOutlined />}
+                            onClick={handleLoadDevis}
+                          />
+                        </Tooltip>
+                      )}
+                      <Tooltip title="Générer PDF" placement="bottom">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<DownloadOutlined />}
+                          onClick={handleGeneratePDF}
+                        />
+                      </Tooltip>
+                      {!isMobile && (
+                        <Tooltip title={lastGeneratedDocId ? "Envoyer l'offre" : "Générez d'abord un PDF"} placement="bottom">
+                          <Button
+                            size="small"
+                            icon={<MailOutlined />}
+                            onClick={handleOpenEmailModal}
+                            disabled={!lastGeneratedDocId}
+                            type={lastGeneratedDocId ? 'primary' : 'text'}
+                            style={lastGeneratedDocId ? { backgroundColor: '#1677ff', borderColor: '#1677ff', color: '#fff' } : undefined}
+                          />
+                        </Tooltip>
+                      )}
+                      <Dropdown menu={{ items: tblOverflowMenuItems }} trigger={['click']} placement="bottomRight">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<MoreOutlined />}
+                        />
+                      </Dropdown>
+                    </>
+                  )}
+                />
+              </div>
+              {showLegacyTblHeader && (
+              <>
               {/* En-tête compact avec Lead - Devis - Date */}
-              <div className={headerContainerClass}>
+              <div style={{ margin: `${-tblCardBodyPadding}px ${-tblCardBodyPadding}px 16px` }}>
                 <div className="flex-1">
                   <Title level={4} className="mb-0 text-gray-800">
                     {/* 🆕 Affichage du mode + informations */}
@@ -4441,17 +4665,28 @@ const TBL: React.FC<TBLProps> = ({
                   </Tooltip>
                 </Space>
               </div>
+              </>
+              )}
 
               {/* Barre de progression globale */}
-              <div className="mb-6">
-                <Progress 
-                  percent={Math.round(globalStats.completion)}
-                  status={globalStats.completion === 100 ? 'success' : 'active'}
-                  strokeColor={{
-                    '0%': '#108ee9',
-                    '100%': '#52c41a',
-                  }}
-                />
+              <div className="tbl-progress-row" style={{ marginBottom: tblProgressBottomSpacing }}>
+                <div className="tbl-progress-track">
+                  <Progress 
+                    percent={Math.round(globalStats.completion)}
+                    status={globalStats.completion === 100 ? 'success' : 'active'}
+                    strokeWidth={tblProgressStrokeWidth}
+                    showInfo={false}
+                    trailColor="#e8edf3"
+                    strokeLinecap="round"
+                    strokeColor={{
+                      '0%': '#108ee9',
+                      '100%': '#52c41a',
+                    }}
+                  />
+                </div>
+                <span className="tbl-progress-value" style={{ fontSize: tblProgressValueFontSize }}>
+                  {Math.round(globalStats.completion)}%
+                </span>
               </div>
 
               {/* 🔄 Conteneur avec gestion du swipe (mobile uniquement) - navigation invisible */}
@@ -4461,9 +4696,9 @@ const TBL: React.FC<TBLProps> = ({
                 activeKey={activeTab}
                 onChange={setActiveTab}
                 type="card"
-                size={isMobile ? 'small' : 'large'}
+                size={tblTopTabsSize}
                 centered
-                className={`tbl-tabs ${
+                className={`tbl-tabs tbl-tabs--compact tbl-main-tabs ${
                   // 🎯 LOGIQUE 100% DYNAMIQUE pour les onglets
                   tabs?.map(tab => {
                     const tabSections = tab.sections || [];
@@ -4494,13 +4729,24 @@ const TBL: React.FC<TBLProps> = ({
                     }
                   }).join(' ') || ''
                 }`}
-                tabBarGutter={isMobile ? 12 : 24}
+                tabBarGutter={tblTopTabsGutter}
                 items={[
                   // Onglet Client en premier
                   {
                     key: 'client-info',
                     label: (
-                      <div className="flex items-center gap-2" style={{ padding: '8px 12px' }}>
+                      <div
+                        className="tbl-main-tab-label flex items-center gap-2"
+                        style={{
+                          padding: tblTopTabPadding,
+                          fontSize: tblTopTabFontSize,
+                          backgroundColor: activeTab === 'client-info' ? '#eff6ff' : '#ffffff',
+                          borderColor: activeTab === 'client-info' ? '#bfdbfe' : '#e5e7eb',
+                          color: '#0f172a',
+                          borderRadius: 12,
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
                         <UserOutlined />
                         <span>{t('entity.client')}</span>
                       </div>
@@ -4642,21 +4888,54 @@ const TBL: React.FC<TBLProps> = ({
                     logger.debug(`⚪ [STYLE] ${tab.label} → NORMAL (incomplet)`);
                     return {};
                   })();
+                  const isTabActive = activeTab === tab.id;
+                  const resolvedTabStyle = (() => {
+                    if (isValidatingIncomplete && !isComplete) {
+                      return {
+                        backgroundColor: isTabActive ? '#fee2e2' : '#fff5f5',
+                        borderColor: '#fca5a5',
+                        color: '#991b1b'
+                      };
+                    }
+                    if (isComplete) {
+                      return {
+                        backgroundColor: isTabActive ? '#0f766e' : '#ecfdf5',
+                        borderColor: isTabActive ? '#0f766e' : '#99f6e4',
+                        color: isTabActive ? '#ffffff' : '#0f766e'
+                      };
+                    }
+                    if (isTabActive) {
+                      return {
+                        backgroundColor: '#eff6ff',
+                        borderColor: '#bfdbfe',
+                        color: '#0f172a'
+                      };
+                    }
+                    return tabStyle;
+                  })();
 
                   return {
                     key: tab.id,
                     // Pas de style sur l'item - seulement sur le label
                     label: (
-                    <div 
-                      className="flex items-center gap-2" 
+                    <div
+                      className="tbl-main-tab-label flex items-center gap-2"
                       style={{
-                        ...tabStyle,  // Appliquer le style directement sur le label
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        transition: 'all 0.3s ease'
+                        ...resolvedTabStyle,
+                        padding: tblTopTabPadding,
+                        fontSize: tblTopTabFontSize,
+                        borderRadius: '12px',
+                        transition: 'all 0.2s ease'
                       }}
                     >
-                      <FileTextOutlined />
+                      {(() => {
+                        const label = (tab.label || '').toLowerCase();
+                        if (label.includes('projet')) return <FolderOpenOutlined />;
+                        if (label.includes('mesure')) return <LineChartOutlined />;
+                        if (label.includes('devis')) return <FileProtectOutlined />;
+                        if (label.includes('comptabilit')) return <DollarOutlined />;
+                        return <FileTextOutlined />;
+                      })()}
                       <span>{tab.label}</span>
                       {/* Badge de completion avec couleurs dynamiques */}
                       {(() => {
@@ -4665,16 +4944,20 @@ const TBL: React.FC<TBLProps> = ({
                         // 🎯 UTILISER LA MÊME LOGIQUE COHÉRENTE POUR LE BADGE
                         const badgeIsIncomplete = validationState.isValidating && !isComplete && requiredFields.length > 0;
                         
-                        let badgeClass = "text-xs px-2 py-1 rounded-full";
+                        let badgeClass = "text-[11px] px-1.5 py-0.5 rounded-full";
+                        const useActiveNeutralBadge = !badgeIsIncomplete && !isComplete && isTabActive;
                         if (badgeIsIncomplete) {
                           badgeClass += " bg-red-100 text-red-600"; // Rouge si incomplet pendant validation
                         } else if (isComplete) {
-                          badgeClass += " bg-green-100 text-green-700"; // VERT si tous les champs obligatoires sont remplis
+                          badgeClass += isTabActive ? " bg-white/20 text-white" : " bg-green-100 text-green-700";
                         } else {
                           badgeClass += " bg-gray-100 text-gray-600"; // GRIS par défaut
                         }
 
                         // 🎯 COMPTER BASÉ SUR LES SECTIONS (COHÉRENT)
+                        if (useActiveNeutralBadge) {
+                          badgeClass = "text-[11px] px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-700";
+                        }
                         const allTabFields: Array<{id: string}> = [];
                         tabSections.forEach(section => {
                           const sectionFields = section.fields || [];
@@ -5820,6 +6103,18 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
   correctionSubmitted = false,
   onSubmitCommercialCorrection,
 }) => {
+  const subTabScreens = useBreakpoint();
+  const isCompactSubTabViewport = !subTabScreens.lg;
+  const subTabButtonStyle = useMemo<React.CSSProperties>(() => ({
+    flexShrink: 0,
+    height: isCompactSubTabViewport ? 34 : 36,
+    padding: isCompactSubTabViewport ? '0 10px' : '0 12px',
+    borderRadius: 10,
+    fontSize: isCompactSubTabViewport ? 12 : 13,
+    fontWeight: 500,
+    boxShadow: 'none'
+  }), [isCompactSubTabViewport]);
+
   const stats = useMemo(() => {
     let total = 0;
     let required = 0;
@@ -6105,26 +6400,27 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
       // Log filteredSections summary supprimé pour performance
 
       return (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {showSubTabs && (
             <div style={{ 
               display: 'flex', 
-              gap: 8, 
-              marginBottom: 8,
+              gap: isCompactSubTabViewport ? 6 : 8,
+              marginBottom: isCompactSubTabViewport ? 6 : 8,
               overflowX: 'auto',
               overflowY: 'hidden',
               WebkitOverflowScrolling: 'touch',
               scrollbarWidth: 'none',
               msOverflowStyle: 'none',
-              paddingBottom: 4
-            }} className="hide-scrollbar">
+              paddingBottom: 2
+            }} className="tbl-subtabs hide-scrollbar">
               {(visibleSubTabs || []).map(st => (
                 <Button
                   key={st.key}
                   size="small"
                   type={st.key === activeSubTab ? 'primary' : 'default'}
                   onClick={() => setActiveSubTab(st.key)}
-                  style={{ flexShrink: 0 }}
+                  className="tbl-subtab-button"
+                  style={subTabButtonStyle}
                 >
                   {st.label}
                 </Button>
@@ -6198,22 +6494,23 @@ const TBLTabContentWithSections: React.FC<TBLTabContentWithSectionsProps> = Reac
         {showSubTabs && (
           <div style={{ 
             display: 'flex', 
-            gap: 8, 
-            marginBottom: 8,
+            gap: isCompactSubTabViewport ? 6 : 8,
+            marginBottom: isCompactSubTabViewport ? 6 : 8,
             overflowX: 'auto',
             overflowY: 'hidden',
             WebkitOverflowScrolling: 'touch',
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
-            paddingBottom: 4
-          }} className="hide-scrollbar">
+            paddingBottom: 2
+          }} className="tbl-subtabs hide-scrollbar">
             {(visibleSubTabs || []).map(st => (
               <Button
                 key={st.key}
                 size="small"
                 type={st.key === activeSubTab ? 'primary' : 'default'}
                 onClick={() => setActiveSubTab(st.key)}
-                style={{ flexShrink: 0 }}
+                className="tbl-subtab-button"
+                style={subTabButtonStyle}
               >
                 {st.label}
               </Button>

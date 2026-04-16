@@ -220,7 +220,7 @@ export function buildWallFeedWhere(
       { authorId: ctx.userId, publishAsOrg: false },
     ];
 
-    // Posts publics d'autres bees (non-Colony)
+    // Posts publics d'amis (personnels)
     if (ctx.settings?.showFriendsPostsInFeed !== false) {
       if (ctx.friendIds.length > 0) {
         orConditions.push({
@@ -232,10 +232,11 @@ export function buildWallFeedWhere(
       }
     }
 
-    // Posts publics généraux (discovery)
+    // Posts publics généraux — TOUS les posts publics (perso + orgs)
+    // Un post public (visibility=ALL) doit être visible par tout le réseau,
+    // qu'il soit publié par un user ou par une Colony.
     orConditions.push({
       visibility: 'ALL',
-      publishAsOrg: false,
       ...blockedOrgFilter,
     });
 

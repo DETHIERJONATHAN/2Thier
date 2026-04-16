@@ -944,6 +944,10 @@ model Lead {
   @@index([email])
   @@index([firstName, lastName])
   @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@index([organizationId, statusId])
+  @@index([assignedToId])
+  @@index([organizationId, assignedToId, status])
 }
 
 model LeadSource {
@@ -5185,12 +5189,13 @@ enum ArenaTournamentStatus {
 }
 
 enum ArenaTournamentFormat {
-  RANDOM_DRAW // Mêlée / tirage aléatoire (pétanque conviviale)
-  ROUND_ROBIN // Poules (chaque équipe joue contre toutes les autres)
-  SINGLE_ELIMINATION // Élimination directe
-  DOUBLE_ELIMINATION // Double élimination (2 chances)
-  SWISS // Système suisse (appariement par niveau)
-  CHAMPIONSHIP // Championnat / saison complète
+  FRIENDLY           // Match amical — 1 seul match entre 2 équipes
+  RANDOM_DRAW        // Mêlée / tirage aléatoire (pétanque conviviale)
+  ROUND_ROBIN        // Poules (chaque équipe joue contre toutes les autres, même lieu)
+  SINGLE_ELIMINATION // Élimination directe / Tableau
+  DOUBLE_ELIMINATION // Tableau avec repêchage (2 chances)
+  SWISS              // Système suisse (appariement par niveau)
+  CHAMPIONSHIP       // Championnat distribué — chaque équipe reçoit à domicile
 }
 
 enum ArenaTeamType {

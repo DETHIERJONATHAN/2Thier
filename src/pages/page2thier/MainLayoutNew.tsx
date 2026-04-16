@@ -152,10 +152,11 @@ const ZhiiveHeaderTabs: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { centerApp, setCenterApp, tabOrder, reorderTabs, mobilePanel, scrollMobileToPanel } = useZhiiveNav();
-  const { currentOrganization, isSuperAdmin } = useAuth();
+  const { currentOrganization, organizations, isSuperAdmin } = useAuth();
   const { api } = useAuthenticatedApi();
   const { isAppEnabled } = useSocialIdentity();
-  const isFreeUser = !currentOrganization && !isSuperAdmin;
+  const hasColony = (organizations || []).some(o => o.id !== 'zhiive-global-org');
+  const isFreeUser = !hasColony && !isSuperAdmin;
   const [dragId, setDragId] = useState<string | null>(null);
   const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
   const activeModule = searchParams.get('module');
@@ -415,7 +416,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const { logout, user, currentOrganization } = useAuth();
+  const { logout, user, currentOrganization, organizations, selectOrganization } = useAuth();
   const { feedMode, setFeedMode, centerApp, setCenterApp, browseUrl, setBrowseUrl, wallViewUrl, setWallViewUrl, wallSearchQuery, setWallSearchQuery } = useZhiiveNav();
 
   // � Enregistrement global des notifications push (Service Worker + VAPID)
@@ -429,7 +430,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     return (source?.charAt?.(0) || 'C').toUpperCase();
   }, [user?.firstName, (user as unknown)?.firstname, user?.email, currentOrganization?.name]);
 
-  const orgLogo = (currentOrganization as unknown)?.logoUrl || null;
+  // Ne pas afficher le logo Zhiive comme logo colony — Zhiive est le réseau de base, pas une colonie.
+  const orgLogo = currentOrganization?.id !== 'zhiive-global-org' ? ((currentOrganization as unknown)?.logoUrl || null) : null;
   const orgInitial = useMemo(() => (currentOrganization?.name?.charAt(0) || 'O').toUpperCase(), [currentOrganization?.name]);
 
   // 🐝 Avatar du header piloté par le système d'identité centralisé
@@ -478,7 +480,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         icon: <SettingOutlined />,
         label: <NavLink to="/settings">Paramètres</NavLink>
       },
-      ...(currentOrganization ? [
+      ...((organizations || []).some(o => o.id !== 'zhiive-global-org') ? [
         { type: 'divider' as const },
         {
           key: 'feed-mode',
@@ -504,12 +506,35 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             </div>
           ),
         },
+        // Sélecteur de colonie — visible si l'user a ≥2 colonies
+        ...((organizations || []).filter(o => o.id !== 'zhiive-global-org').length > 1 ? [
+          {
+            key: 'colony-selector',
+            label: (
+              <div style={{ padding: '2px 0' }} role="button" tabIndex={0} onClick={e => e.stopPropagation()}>
+                <div style={{ fontSize: 11, color: '#636E72', marginBottom: 4 }}>Changer de Colony :</div>
+                {(organizations || []).filter(o => o.id !== 'zhiive-global-org').map(colony => (
+                  <div
+                    key={colony.id}
+                    role="button" tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); selectOrganization(colony.id); }}
+                    style={{
+                      padding: '4px 8px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      background: currentOrganization?.id === colony.id ? SF.primary + '15' : 'transparent',
+                      fontWeight: currentOrganization?.id === colony.id ? 600 : 400,
+                      color: currentOrganization?.id === colony.id ? SF.primary : '#2D3436',
+                    }}
+                  >
+                    <span>🏢 {colony.name}</span>
+                    {currentOrganization?.id === colony.id && <span style={{ fontSize: 10 }}>✓</span>}
+                  </div>
+                ))}
+              </div>
+            ),
+          },
+        ] : []),
       ] : []),
-      { type: 'divider' },
-      {
-        key: 'zhiive',
-        label: <a href="https://www.zhiive.com" target="_blank" rel="noopener noreferrer" style={{ color: '#1890ff' }}>www.zhiive.com</a>
-      },
       { type: 'divider' },
       {
         key: 'logout',
@@ -518,7 +543,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         onClick: handleLogout
       }
     ]
-  }), [handleLogout, currentOrganization, feedMode, setFeedMode]);
+  }), [handleLogout, organizations, currentOrganization, feedMode, setFeedMode, selectOrganization]);
 
   return (
     <Layout className="min-h-screen">

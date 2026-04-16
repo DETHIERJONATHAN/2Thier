@@ -120,7 +120,10 @@ export const ActiveIdentityProvider = ({ children }: { children: ReactNode }) =>
 
   const value = useMemo<ActiveIdentityType>(() => {
     const org = currentOrganization as { id: string; name: string; logoUrl?: string | null } | null;
-    const isOrgMode = feedMode === 'org' && !!org;
+    // Zhiive est le réseau social de base, pas une colonie.
+    // isOrgMode = true SEULEMENT si l'org courante est une vraie colonie (pas Zhiive).
+    const isRealColony = !!org && org.id !== 'zhiive-global-org';
+    const isOrgMode = feedMode === 'org' && isRealColony;
 
     const orgLogo = org?.logoUrl || undefined;
     const userAvatar = user?.avatarUrl || undefined;

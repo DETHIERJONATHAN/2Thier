@@ -56,12 +56,11 @@ describe('Code Quality — No hardcoded secrets in source', () => {
     expect(result).toBe('');
   });
 
-  it('should not hardcode database URLs in source', () => {
-    const result = execSync(
-      `grep -rn "postgresql://.*:.*@" src/ --include="*.ts" --include="*.tsx" 2>/dev/null | grep -v node_modules | grep -v ".env" | grep -v database.ts || true`,
-      { cwd: ROOT, encoding: 'utf-8' }
-    ).trim();
-    expect(result).toBe('');
+  it('should not hardcode database URLs in source', async () => {
+    const { grepSrc } = await import('../helpers/grepSrc');
+    const hits = grepSrc(/postgresql:\/\/.*:.*@/i, { dir: SRC })
+      .filter(h => !h.file.includes('database.ts') && !h.file.includes('.env'));
+    expect(hits.map(h => `${h.file}:${h.line}  ${h.text}`)).toEqual([]);
   });
 });
 

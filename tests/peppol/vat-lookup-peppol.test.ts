@@ -122,10 +122,13 @@ describe('vatLookupService — Sources de données', () => {
   });
 
   it('priorise KBO puis VIES pour les entreprises belges', () => {
-    // L'ordre d'appel doit être: KBO d'abord, VIES ensuite
-    const kboIndex = content.indexOf('lookupKBO');
-    const viesCheck = content.indexOf("if (!company) {\n    company = await lookupVIES");
-    expect(kboIndex).toBeLessThan(viesCheck);
+    // L'ordre d'appel doit être: KBO d'abord, VIES ensuite.
+    // Regex tolère l'indentation et CRLF/LF.
+    const kboIndex = content.search(/=\s*await\s+lookupKBO/);
+    const viesFallback = content.search(/if\s*\(!company\)\s*\{[\s\S]{0,80}?lookupVIES/);
+    expect(kboIndex).toBeGreaterThan(-1);
+    expect(viesFallback).toBeGreaterThan(-1);
+    expect(kboIndex).toBeLessThan(viesFallback);
   });
 });
 

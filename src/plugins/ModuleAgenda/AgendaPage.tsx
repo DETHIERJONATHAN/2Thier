@@ -694,11 +694,11 @@ export default function AgendaPage({ compact }: { compact?: boolean }) {
                 role="button" tabIndex={0} onClick={f.toggle}
                 style={{
                   display: 'flex', alignItems: 'center', gap: isMobile ? 0 : 5,
-                  padding: isMobile ? '0 8px' : '0 12px', height: 30, borderRadius: 15, cursor: 'pointer',
+                  padding: isMobile ? '0 8px' : '0 12px', height: 30, cursor: 'pointer',
                   fontSize: 12, fontWeight: 600, transition: 'all 0.18s',
-                  background: f.active ? f.color + '15' : SF.bg,
+                  background: 'transparent',
                   color: f.active ? f.color : SF.textSecondary,
-                  border: `1.5px solid ${f.active ? f.color + '50' : SF.border}`,
+                  border: 'none',
                 }}
               >
                 {React.cloneElement(f.icon, { style: { fontSize: isMobile ? 12 : 13 } })}

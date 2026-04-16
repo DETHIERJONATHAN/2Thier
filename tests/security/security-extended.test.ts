@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { grepSrc } from '../helpers/grepSrc';
 
 const ROOT = path.resolve(__dirname, '../..');
 const SRC = path.join(ROOT, 'src');
@@ -47,21 +47,17 @@ describe('Security — Rate Limiting', () => {
 
 describe('Security — Input Validation', () => {
   it('routes should use zod or express-validator for input validation', () => {
-    const result = execSync(
-      `grep -rl "zod\\|express-validator\\|Joi\\|\\.parse(" src/routes/ 2>/dev/null | wc -l`,
-      { cwd: ROOT, encoding: 'utf-8' }
-    ).trim();
-    expect(parseInt(result)).toBeGreaterThan(0);
+    const hits = grepSrc(/\b(zod|express-validator|Joi)\b|\.parse\(/i, {
+      dir: path.join(SRC, 'routes'),
+    });
+    const uniqueFiles = new Set(hits.map(h => h.file));
+    expect(uniqueFiles.size).toBeGreaterThan(0);
   });
 
   it('should not use eval() in source code', () => {
-    const result = execSync(
-      `grep -rn "\\beval(" src/ --include="*.ts" --include="*.tsx" 2>/dev/null | grep -v node_modules | grep -v "// " || true`,
-      { cwd: ROOT, encoding: 'utf-8' }
-    ).trim();
+    const hits = grepSrc(/\beval\(/, { dir: SRC, ignoreComments: true });
     // Allow very few legitimate uses (formula engine, etc.)
-    const count = result ? result.split('\n').length : 0;
-    expect(count).toBeLessThanOrEqual(3);
+    expect(hits.length).toBeLessThanOrEqual(3);
   });
 });
 
@@ -97,16 +93,12 @@ describe('Security — SQL Injection Prevention', () => {
   });
 
   it('should not use raw SQL string concatenation in routes', () => {
-    const result = execSync(
-      `grep -rn "queryRawUnsafe" src/routes/ --include="*.ts" 2>/dev/null || true`,
-      { cwd: ROOT, encoding: 'utf-8' }
-    ).trim();
-    // queryRawUnsafe with user input concatenation is dangerous
-    const concatResult = execSync(
-      `grep -rn "queryRawUnsafe" src/routes/ --include="*.ts" 2>/dev/null | grep "req\." || true`,
-      { cwd: ROOT, encoding: 'utf-8' }
-    ).trim();
-    expect(concatResult).toBe('');
+    // queryRawUnsafe combined with `req.` on the same line indicates user input
+    // is being concatenated into SQL — always a red flag.
+    const hits = grepSrc(/queryRawUnsafe[\s\S]*req\./, {
+      dir: path.join(SRC, 'routes'),
+    });
+    expect(hits.map(h => `${h.file}:${h.line}`)).toEqual([]);
   });
 });
 

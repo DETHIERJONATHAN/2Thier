@@ -724,8 +724,9 @@ export const WallPostCard: React.FC<{
   };
 
   // Navigation vers le profil de l'auteur (Colony ou utilisateur)
+  // Zhiive n'est pas une colonie — pas de lien vers son profil colony.
   const handleAuthorClick = () => {
-    if (post.publishAsOrg && post.organization?.id) {
+    if (post.publishAsOrg && post.organization?.id && post.organization.id !== 'zhiive-global-org') {
       postNavigate(`/colony/${post.organization.id}`);
     } else if (post.author?.id) {
       postNavigate(`/profile/${post.author.id}`);
@@ -1628,8 +1629,11 @@ export default function DashboardPageUnified() {
   const { t } = useTranslation();
   const apiHook = useAuthenticatedApi();
   const api = useMemo(() => apiHook.api, [apiHook.api]);
-  const { currentOrganization, isSuperAdmin, user, hasFeature, modules } = useAuth();
-  const isFreeUser = !currentOrganization && !isSuperAdmin;
+  const { currentOrganization, organizations, isSuperAdmin, user, hasFeature, modules } = useAuth();
+  // 🆓 Utilisateur "libre" = membre de Zhiive uniquement, aucune colonie.
+  // STATS n'apparaît que si l'user a ≥1 colonie (ou est super admin).
+  const hasColony = (organizations || []).some(o => o.id !== 'zhiive-global-org');
+  const isFreeUser = !hasColony && !isSuperAdmin;
   const { leadStatuses } = useLeadStatuses();
   const { isMobile } = useScreenSize();
 
@@ -3392,6 +3396,7 @@ export default function DashboardPageUnified() {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: FB.bg, minHeight: 0 }}>
       <PageHelmet title="Accueil" description="Votre fil d'actualité Zhiive" />
       <style>{`.mobile-swipe::-webkit-scrollbar { display: none; }
+        .sf-sidebar, .sf-sidebar-panel { scrollbar-width: none; -ms-overflow-style: none; }
         .sf-sidebar::-webkit-scrollbar { display: none; }
         .sf-sidebar-panel::-webkit-scrollbar { display: none; }
         .sf-center-col::-webkit-scrollbar { display: none; }
@@ -3503,13 +3508,14 @@ export default function DashboardPageUnified() {
             borderRight: `1px solid ${FB.border}`, background: FB.bg,
             overflow: 'hidden',
           }}>
-            <div className="sf-sidebar" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "none", width: 300 }}>
+            <div className="sf-sidebar" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "none", msOverflowStyle: 'none' as unknown, width: 300 }}>
               {[...leftApps].filter(a => a !== centerApp).reverse().map(appId => (
-                <div key={appId} style={{
+                <div key={appId} className={`sf-sidebar-panel sf-sidebar-panel--${appId}`} style={{
                   ...(appId === 'reels' ? { height: '100%', minHeight: '100%' } : { minHeight: '60vh' }),
                   borderBottom: `1px solid ${FB.border}`,
                   display: 'flex', flexDirection: 'column',
                   width: 300, maxWidth: 300,
+                  overflow: 'hidden',
                 }}>
                   <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
                     {renderPanel(appId, true)}
@@ -3559,13 +3565,16 @@ export default function DashboardPageUnified() {
             borderLeft: `1px solid ${FB.border}`, background: FB.bg,
             overflow: 'hidden',
           }}>
-            <div className="sf-sidebar" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "none", width: 300 }}>
+            <div className="sf-sidebar" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "none", msOverflowStyle: 'none' as unknown, width: 300 }}>
               {rightApps.filter(a => a !== centerApp).map(appId => (
-                <div key={appId} style={{
+                <div key={appId} className={`sf-sidebar-panel sf-sidebar-panel--${appId}`} style={{
                   minHeight: '60vh',
+                  height: '60vh',
+                  flex: '0 0 60vh',
                   borderBottom: `1px solid ${FB.border}`,
                   display: 'flex', flexDirection: 'column',
                   width: 300, maxWidth: 300,
+                  overflow: 'hidden',
                 }}>
                   <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>}>
                     {renderPanel(appId, true)}

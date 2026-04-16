@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { grepSrc } from '../helpers/grepSrc';
 
 const ROOT = path.resolve(__dirname, '../..');
 const SRC = path.join(ROOT, 'src');
@@ -15,13 +15,9 @@ describe('Performance — Bundle optimization', () => {
   });
 
   it('should not import entire lodash (use lodash-es or individual imports)', () => {
-    const result = execSync(
-      `grep -rn "from 'lodash'" src/ --include="*.ts" --include="*.tsx" 2>/dev/null | grep -v "lodash-es" | grep -v "lodash/" || true`,
-      { cwd: ROOT, encoding: 'utf-8' }
-    ).trim();
-    const count = result ? result.split('\n').length : 0;
-    // Allow a few, but should mostly use tree-shakeable imports
-    expect(count).toBeLessThanOrEqual(5);
+    // Match `from 'lodash'` but not `from 'lodash-es'` or `from 'lodash/xxx'`.
+    const hits = grepSrc(/from ['"]lodash['"](?!-es|\/)/, { dir: SRC });
+    expect(hits.length).toBeLessThanOrEqual(5);
   });
 
   it('should use React.lazy for route-level code splitting', () => {
@@ -45,12 +41,24 @@ describe('Performance — Image optimization', () => {
   it('should not have excessively large images in public/', () => {
     const publicDir = path.join(ROOT, 'public');
     if (!fs.existsSync(publicDir)) return;
-    
-    const result = execSync(
-      `find public/ -type f \\( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \\) -size +2M 2>/dev/null || true`,
-      { cwd: ROOT, encoding: 'utf-8' }
-    ).trim();
-    const count = result ? result.split('\n').filter(Boolean).length : 0;
+
+    const exts = new Set(['.png', '.jpg', '.jpeg']);
+    const twoMB = 2 * 1024 * 1024;
+    let count = 0;
+
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) { walk(full); continue; }
+        const ext = path.extname(entry.name).toLowerCase();
+        if (!exts.has(ext)) continue;
+        try {
+          if (fs.statSync(full).size > twoMB) count++;
+        } catch { /* locked/unreadable — skip */ }
+      }
+    };
+    walk(publicDir);
+
     expect(count).toBeLessThanOrEqual(15);
   });
 });

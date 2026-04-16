@@ -4,7 +4,12 @@ import { randomUUID } from 'crypto';
 
 const prisma = new PrismaClient();
 
-describe('deepCopyNodeInternal Integration Tests', () => {
+// Integration tests: hit a real Postgres via PrismaClient, so they are opt-in
+// (set RUN_DEEP_COPY_INTEGRATION=1). The FK bug previously flagged here was
+// fixed by the FK-safety pre-check in variable-copy-engine.ts (upsert path).
+const runDeepCopy = process.env.RUN_DEEP_COPY_INTEGRATION === '1';
+
+describe.skipIf(!runDeepCopy)('deepCopyNodeInternal Integration Tests', () => {
   let treeId: string;
   let organizationId: string;
 

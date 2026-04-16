@@ -343,8 +343,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.removeItem('organizationId');
           }
         } else {
-          // Pour un utilisateur standard, on utilise son organisation actuelle
-          const userOrg = currentUser.currentOrganization || null;
+          // Pour un utilisateur standard :
+          // 1) respecter la sélection en localStorage si elle est encore valide,
+          // 2) sinon préférer une colonie active (non-Zhiive),
+          // 3) sinon retomber sur ce que le backend a choisi (currentOrganization).
+          const userOrgs = currentUser.organizations || [];
+          const isActive = (o: { status?: string }) => o?.status === 'ACTIVE' || o?.status === 'active';
+          const fromStorage = storedOrgId && userOrgs.find((o: { id: string }) => o.id === storedOrgId && isActive(o));
+          const firstColony = userOrgs.find((o: { id: string; status?: string }) => o.id !== 'zhiive-global-org' && isActive(o));
+          const userOrg = fromStorage || firstColony || currentUser.currentOrganization || null;
           setCurrentOrganization(userOrg);
           selectedOrg = userOrg;
           if (userOrg) {
@@ -566,7 +573,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Organisations depuis la réponse de login (basique)
           const loginOrgs = currentUser.organizations || [];
           setOrganizations(loginOrgs);
-          const activeOrg = loginOrgs.find((o: { status: string }) => o.status === 'ACTIVE' || o.status === 'active') || loginOrgs[0];
+          // Sélection par défaut : préférer la dernière org choisie (localStorage) si
+          // elle est toujours active ; sinon la première colonie active (non-Zhiive) ;
+          // sinon Zhiive ; sinon la première org active.
+          const storedOrgId = localStorage.getItem('organizationId');
+          const isActive = (o: { status: string }) => o.status === 'ACTIVE' || o.status === 'active';
+          const activeOrgs = loginOrgs.filter(isActive);
+          const activeOrg =
+            (storedOrgId && activeOrgs.find((o: { id: string }) => o.id === storedOrgId)) ||
+            activeOrgs.find((o: { id: string }) => o.id !== 'zhiive-global-org') ||
+            activeOrgs.find((o: { id: string }) => o.id === 'zhiive-global-org') ||
+            activeOrgs[0] ||
+            loginOrgs[0];
           if (activeOrg) {
             const orgWithPerms = { ...activeOrg, role: currentUser.role, permissions: currentUser.permissions || [] };
             setCurrentOrganization(orgWithPerms);

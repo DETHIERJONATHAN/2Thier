@@ -46,4 +46,14 @@ export default tseslint.config(
       'no-console': 'off',
     },
   },
+  // Stricter rules for curated library code — acts as an onboarding ratchet:
+  // new utility modules must pass the stricter bar, while the rest of the
+  // codebase keeps the existing 'warn' level until it can be migrated.
+  {
+    files: ['src/lib/cache.ts', 'tests/helpers/grepSrc.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': 'error',
+    },
+  },
 );

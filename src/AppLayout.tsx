@@ -127,11 +127,12 @@ const AIBadge = lazy(() => import('./components/AIBadge'));
 // Composant de chargement optimisé (maintenant utilisé directement inline)
 
 export default function AppLayout() {
-  const { 
-    user, 
-    isSuperAdmin, 
+  const {
+    user,
+    isSuperAdmin,
     currentOrganization,
-    modules, 
+    organizations,
+    modules,
     can,
     hasFeature,
     loading
@@ -151,8 +152,11 @@ export default function AppLayout() {
     return <div className="flex items-center justify-center h-screen text-red-600 font-bold">Erreur de session. Veuillez vous reconnecter.</div>;
   }
 
-  // 🆓 Utilisateur réseau (libre) = accès au réseau social, pas de CRM
-  const isFreeUser = !currentOrganization && !isSuperAdmin;
+  // 🆓 Utilisateur réseau (libre) = membre de Zhiive uniquement, aucune colonie.
+  // On regarde la liste des organisations, pas l'org courante (qui peut être Zhiive
+  // alors même que l'user a des colonies).
+  const hasColony = (organizations || []).some(o => o.id !== 'zhiive-global-org');
+  const isFreeUser = !hasColony && !isSuperAdmin;
 
   if (isFreeUser) {
     logger.debug('[AppLayout] Utilisateur réseau (libre) détecté - accès réseau social uniquement');

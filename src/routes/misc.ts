@@ -151,6 +151,20 @@ router.post("/register", async (req: Request, res: Response) => {
           }
         });
 
+        // Tout user appartient aussi à Zhiive (réseau social) — même les créateurs de colonie.
+        const zhiiveRole = await tx.role.findUnique({ where: { id: ZHIIVE_USER_ROLE_ID } });
+        if (zhiiveRole) {
+          await tx.userOrganization.create({
+            data: {
+              id: randomUUID(),
+              userId: user.id,
+              organizationId: ZHIIVE_ORG_ID,
+              roleId: ZHIIVE_USER_ROLE_ID,
+              status: UserOrganizationStatus.ACTIVE,
+              updatedAt: new Date(),
+            }
+          });
+        }
 
       } else {
         // === TYPE: UTILISATEUR RÉSEAU (freelance) ===

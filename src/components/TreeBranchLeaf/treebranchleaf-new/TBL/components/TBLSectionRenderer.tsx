@@ -233,9 +233,9 @@ interface DisplayAppearanceResolution {
 }
 
 const DISPLAY_SIZE_PRESETS: Record<'sm' | 'md' | 'lg', Partial<DisplayAppearanceTokens>> = {
-  sm: { paddingX: 8, paddingY: 8, labelFontSize: 11, valueFontSize: 12, minHeight: 60 },
-  md: { paddingX: 12, paddingY: 12, labelFontSize: 13, valueFontSize: 14, minHeight: 80 },
-  lg: { paddingX: 16, paddingY: 16, labelFontSize: 15, valueFontSize: 18, minHeight: 100 }
+  sm: { paddingX: 7, paddingY: 6, labelFontSize: 10, valueFontSize: 11, minHeight: 54 },
+  md: { paddingX: 10, paddingY: 9, labelFontSize: 12, valueFontSize: 13, minHeight: 72 },
+  lg: { paddingX: 14, paddingY: 12, labelFontSize: 14, valueFontSize: 16, minHeight: 92 }
 };
 
 const STATUS_ACCENTS: Record<string, string> = {
@@ -265,17 +265,17 @@ const DEFAULT_DISPLAY_TOKENS: DisplayAppearanceTokens = {
   borderColor: DEFAULT_DISPLAY_BORDER,
   textColor: '#334155',
   labelColor: DEFAULT_DISPLAY_ACCENT,
-  labelFontSize: 13,
+  labelFontSize: 12,
   labelFontWeight: 600,
   labelUppercase: false,
-  valueFontSize: 14,
+  valueFontSize: 13,
   valueFontWeight: 700,
   borderWidth: 2,
-  radius: 12,
+  radius: 10,
   shadow: undefined,
-  minHeight: 80,
-  paddingX: 12,
-  paddingY: 12
+  minHeight: 72,
+  paddingX: 10,
+  paddingY: 10
 };
 
 const pickDefined = <T,>(...values: Array<T | null | undefined>): T | undefined => {
@@ -1238,17 +1238,31 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
 
   const screens = useBreakpoint();
   const isMobile = !screens.md;
+  const sectionLooksLikeData = Boolean(
+    section.isDataSection ||
+    section.title === 'Données' ||
+    section.title.includes('Données')
+  );
+  const sectionBodyStyle = useMemo<React.CSSProperties>(() => ({
+    padding: sectionLooksLikeData
+      ? (level === 0
+        ? (isMobile ? '8px 12px 6px' : '10px 14px 8px')
+        : (isMobile ? '8px 10px 6px' : '9px 12px 7px'))
+      : (level === 0
+        ? (isMobile ? '14px 14px 12px' : '16px 18px 14px')
+        : (isMobile ? '10px 12px' : '12px 14px'))
+  }), [isMobile, level, sectionLooksLikeData]);
 
   
   // 📱 Gutters configurables par section (avec fallback)
   const getFormRowGutter = useCallback((section?: TBLSection): [number, number] => {
-    const customGutter = section?.config?.gutter ?? (isMobile ? 12 : 24);
-    return [customGutter, customGutter];
+    const baseGutter = section?.config?.gutter ?? (isMobile ? 10 : 18);
+    return [baseGutter, Math.max(8, Math.round(baseGutter * 0.65))];
   }, [isMobile]);
   
   const getDataRowGutter = useCallback((section?: TBLSection): [number, number] => {
-    const customGutter = section?.config?.gutter ?? (isMobile ? 12 : 16);
-    return [customGutter, 16];
+    const baseGutter = section?.config?.gutter ?? (isMobile ? 10 : 14);
+    return [baseGutter, Math.max(8, Math.round(baseGutter * 0.7))];
   }, [isMobile]);
   
   // 📱 Fonction pour calculer les spans de colonnes responsive
@@ -4098,23 +4112,23 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     switch (level) {
       case 0: // Section principale
         return {
-          marginBottom: '24px',
+          marginBottom: sectionLooksLikeData ? (isMobile ? '12px' : '14px') : (isMobile ? '16px' : '18px'),
           border: '1px solid #d9d9d9',
           borderRadius: '8px'
         };
       case 1: // Sous-section
         return {
-          marginBottom: '16px',
+          marginBottom: '12px',
           border: '1px solid #f0f0f0',
           borderRadius: '6px',
-          marginLeft: '16px'
+          marginLeft: isMobile ? '8px' : '12px'
         };
       default: // Sous-sous-section et plus
         return {
-          marginBottom: '12px',
+          marginBottom: '10px',
           border: '1px solid #fafafa',
           borderRadius: '4px',
-          marginLeft: `${16 * level}px`
+          marginLeft: `${(isMobile ? 8 : 12) * level}px`
         };
     }
   };
@@ -4123,7 +4137,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     const { evaluateBatch } = useBatchEvaluation({ debug: false });
     const batchCacheRef = useRef<Record<string, number | string | boolean | null>>({});
     const [batchLoaded, setBatchLoaded] = useState(false);
-    const isDataSection = section.isDataSection || section.title === 'Données' || section.title.includes('Données');
+    const isDataSection = sectionLooksLikeData;
 
     // 🔥 CORRECTION CRITIQUE: Pré-chargement batch UNIQUEMENT au montage du composant
     // ❌ NE PAS mettre formData dans les dépendances car ça relance l'API à chaque frappe !
@@ -4995,7 +5009,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     const hasAnyCustomBg = Boolean(effectiveBubbleBg);
     const usesDarkBubble = hasAnyCustomBg ? isColorDark(effectiveBubbleBg!) : isTotalField;
     
-    const bubbleSize = (isTotalField || hasAnyCustomBg) ? 90 : 80; // px - plus petit pour mobile
+    const bubbleSize = (isTotalField || hasAnyCustomBg) ? 80 : 72; // px - compact pour rester cohérent avec le header
     
     // 🔢 Détecter si c'est une copie (suffixe -1, -2, etc.)
     const copyMatch = (field.id || '').match(/-(\d+)$/);
@@ -5030,12 +5044,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
       position: 'absolute',
       top: -4,
       right: -4,
-      width: 20,
-      height: 20,
+      width: 18,
+      height: 18,
       borderRadius: '50%',
       backgroundColor: SF.red,
       color: '#ffffff',
-      fontSize: 11,
+      fontSize: 10,
       fontWeight: 700,
       display: 'flex',
       alignItems: 'center',
@@ -5045,13 +5059,13 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     };
     
     const iconStyle: React.CSSProperties = {
-      fontSize: (isTotalField || hasAnyCustomBg) ? 24 : 22,
-      marginBottom: 2,
+      fontSize: (isTotalField || hasAnyCustomBg) ? 20 : 18,
+      marginBottom: 1,
       filter: usesDarkBubble ? 'brightness(0) invert(1)' : 'none',
     };
     
     const valueTextStyle: React.CSSProperties = {
-      fontSize: (isTotalField || hasAnyCustomBg) ? 14 : 12,
+      fontSize: (isTotalField || hasAnyCustomBg) ? 13 : 11,
       fontWeight: 600,
       // 🎨 Priorité: textColor explicite > auto (dark/light) > défaut teal
       color: customTextColor 
@@ -5085,7 +5099,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     } : undefined;
 
     return (
-      <Col key={field.id} xs={bubbleSpanMob} sm={bubbleSpanMob} md={bubbleSpan} lg={bubbleSpan} xl={bubbleSpan} style={{ marginBottom: 12, ...bubbleFlexStyle }}>
+      <Col key={field.id} xs={bubbleSpanMob} sm={bubbleSpanMob} md={bubbleSpan} lg={bubbleSpan} xl={bubbleSpan} style={{ marginBottom: 8, ...bubbleFlexStyle }}>
         {/* 🖼️ MODE PHOTO: Si linkConfig.mode === 'PHOTO' OU link_mode === 'PHOTO', utiliser ImageDisplayBubble */}
         {isPhotoLink && photoTargetNodeId ? (
           <ImageDisplayBubble
@@ -5149,11 +5163,12 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
     <div style={getSectionStyle()}>
       <Card
         size={level === 0 ? 'default' : 'small'}
-        className={`tbl-section-level-${level}`}
+        className={`tbl-section-level-${level} ${isDataSection ? 'tbl-data-section-card' : ''}`.trim()}
+        styles={{ body: sectionBodyStyle }}
       >
         {/* En-tête de section (seulement pour les sous-sections, pas le niveau racine) */}
         {level > 0 && (
-          <div className="mb-4">
+          <div className="mb-3">
             {/* Style spécial pour section "Données" avec toggle ouvrir/fermer */}
             {section.title === 'Données' || section.title.includes('Données') ? (
               <div 
@@ -5161,9 +5176,9 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 style={{
                   background: 'linear-gradient(135deg, #14b8a6 0%, #0891b2 100%)',
                   color: 'white',
-                  padding: '10px 16px',
+                  padding: isMobile ? '8px 12px' : '8px 14px',
                   borderRadius: '8px',
-                  marginBottom: isDataSectionOpen ? '16px' : '0',
+                  marginBottom: isDataSectionOpen ? '12px' : '0',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -5172,11 +5187,11 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                 }}
                 className="hover:opacity-90"
               >
-                <Text strong style={{ color: 'white', fontSize: '16px' }}>
+                <Text strong style={{ color: 'white', fontSize: isMobile ? '14px' : '15px' }}>
                   {section.title}
                 </Text>
                 <span style={{ 
-                  fontSize: 18, 
+                  fontSize: 16, 
                   transition: 'transform 0.2s ease',
                   transform: isDataSectionOpen ? 'rotate(180deg)' : 'rotate(0deg)'
                 }}>
@@ -5186,15 +5201,15 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
             ) : (
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-1">
                     <BranchesOutlined />
-                    <Text strong style={{ fontSize: '16px' }}>
+                    <Text strong style={{ fontSize: isMobile ? '14px' : '15px' }}>
                       {section.title}
                     </Text>
                   </div>
                   
                   {section.description && (
-                    <Text type="secondary" className="block mb-2">
+                    <Text type="secondary" className="block mb-1">
                       {section.description}
                     </Text>
                   )}
@@ -5217,22 +5232,22 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 6,
+                    gap: 5,
                     cursor: 'pointer',
-                    padding: '4px 8px',
-                    marginBottom: isDataSectionOpen ? '8px' : '0',
+                    padding: '3px 6px',
+                    marginBottom: isDataSectionOpen ? '6px' : '0',
                     borderRadius: '4px',
                     transition: 'all 0.2s ease',
                     userSelect: 'none',
                     color: '#0d9488',
-                    fontSize: 13,
+                    fontSize: 12,
                   }}
                   className="hover:bg-gray-100"
                 >
                   <span style={{ 
                     transition: 'transform 0.2s ease',
                     transform: isDataSectionOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
-                    fontSize: 12,
+                    fontSize: 11,
                   }}>
                     ▼
                   </span>
@@ -5245,9 +5260,10 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
                   maxHeight: isDataSectionOpen ? '2000px' : '0',
                   opacity: isDataSectionOpen ? 1 : 0,
                   transition: 'all 0.3s ease-in-out',
-                  marginBottom: isDataSectionOpen ? '16px' : '0',
+                  marginBottom: isDataSectionOpen ? '8px' : '0',
+                  paddingTop: isDataSectionOpen ? '2px' : '0',
                 }}>
-                  <Row gutter={getDataRowGutter(section)} justify="center">
+                  <Row gutter={getDataRowGutter(section)} justify="center" className="tbl-data-bubbles-row">
                     {(() => {
                       const filteredFields = orderedFields.filter(field => {
                         const meta = (field.metadata || {}) as unknown;

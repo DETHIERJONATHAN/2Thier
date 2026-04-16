@@ -1775,6 +1775,56 @@ export async function copyVariableWithCapacities(
           }
         }
 
+        // FK SAFETY: ensure the target node row is actually committed before we
+        // reference it from TreeBranchLeafNodeVariable.nodeId. The in-memory
+        // `existingNodeIds` set is optimistically populated before awaits
+        // complete, so it can claim a node exists when the underlying INSERT
+        // hasn't landed yet (or was rolled back in a batch transaction).
+        // Without this check, the upsert below throws
+        // `TreeBranchLeafNodeVariable_nodeId_fkey` and the whole deep-copy
+        // aborts. We perform a cheap findUnique and, if the row is missing,
+        // materialize a minimal placeholder node so the FK holds — the real
+        // node data is patched later by the display-node upsert path.
+        {
+          const nodeRow = await prisma.treeBranchLeafNode.findUnique({
+            where: { id: finalNodeId },
+            select: { id: true }
+          });
+          if (!nodeRow) {
+            const fallbackParentId = (preloadedDuplicatedOwnerNode?.parentId
+              ?? preloadedOwnerNode?.parentId
+              ?? null) as string | null;
+            const fallbackTreeId = (preloadedOwnerNode?.treeId ?? originalVar.nodeId
+              ? (await prisma.treeBranchLeafNode.findUnique({
+                  where: { id: originalVar.nodeId! },
+                  select: { treeId: true }
+                }))?.treeId
+              : null) as string | null;
+            if (fallbackTreeId) {
+              try {
+                await prisma.treeBranchLeafNode.upsert({
+                  where: { id: finalNodeId },
+                  update: { updatedAt: new Date() },
+                  create: {
+                    id: finalNodeId,
+                    treeId: fallbackTreeId,
+                    parentId: fallbackParentId,
+                    type: 'leaf_field',
+                    label: forceSingleSuffix(originalVar.displayName) || 'Donnée',
+                    isVisible: true,
+                    isActive: true,
+                    order: 0,
+                    updatedAt: new Date()
+                  } as unknown as Prisma.TreeBranchLeafNodeCreateInput
+                });
+                if (existingNodeIds) existingNodeIds.add(finalNodeId);
+              } catch (ensureErr) {
+                logger.warn(`[VAR-COPY] FK SAFETY: impossible de matérialiser le nœud ${finalNodeId}:`, (ensureErr as Error).message);
+              }
+            }
+          }
+        }
+
         // PERF R13: Use upsert to avoid P2002 on nodeId during parallel copies.
         // The nodeId field is @unique, so parallel chunks may race to create for the same node.
         // upsert atomically handles the conflict: if nodeId already exists, update instead of failing.

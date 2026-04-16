@@ -1,7 +1,7 @@
 # 🔌 Guide de Connexion Générale - CRM 2Thier
 
-> **Document de référence** pour la connexion locale et le déploiement Cloud Run.  
-> Dernière mise à jour : 28 décembre 2025
+> **Document de référence** pour la connexion locale, le déploiement Cloud Run et la stratégie de backup du code.  
+> Dernière mise à jour : 16 avril 2026
 
 ---
 
@@ -9,9 +9,10 @@
 
 1. [Connexion Locale (Développement)](#-connexion-locale-développement)
 2. [Déploiement Cloud Run (Production)](#-déploiement-cloud-run-production)
-3. [Problèmes Rencontrés et Solutions](#-problèmes-rencontrés-et-solutions)
-4. [Configuration Importante](#-configuration-importante)
-5. [Commandes Utiles](#-commandes-utiles)
+3. [Stratégie Git Multi-Remote et Backup](#-stratégie-git-multi-remote-et-backup)
+4. [Problèmes Rencontrés et Solutions](#-problèmes-rencontrés-et-solutions)
+5. [Configuration Importante](#-configuration-importante)
+6. [Commandes Utiles](#-commandes-utiles)
 
 ---
 
@@ -86,59 +87,204 @@ Solution rapide: `CLOUD_SQL_AUTH_MODE=gcloud bash scripts/start-local.sh` (si tu
 
 ## 🚀 Déploiement Cloud Run (Production)
 
-### Déploiement via GitHub Actions (Recommandé)
+### Option A : Deploiement via GitHub Actions (quand GitHub est disponible)
 
-Le déploiement se fait automatiquement via GitHub Actions lors d'un push sur `main`.
+Le deploiement se fait automatiquement via GitHub Actions lors d'un push sur `main`.
 
 **Fichier**: `.github/workflows/deploy-cloud-run.yml`
 
-### Déploiement manuel
+### Option B : Deploiement DIRECT sur Cloud Run (sans GitHub)
+
+> **Quand utiliser ?** GitHub bloque (billing, panne), ou besoin de deployer en urgence.
+> Aucune dependance a GitHub - tout passe par `gcloud` directement.
+
+#### Etape 1 : Deployer
+
+```powershell
+# Depuis PowerShell (Windows) - deploie le code local tel quel
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy\manual-cloud-run.ps1 -AllowDirtyWorktree
+```
+
+Ce script fait :
+1. Build l'image Docker via **Cloud Build** (sur GCP, pas sur votre PC)
+2. Deploie l'image sur **Cloud Run** avec toutes les env vars et secrets
+3. Fait un **health check** automatique
+4. Cree un tag git local + log dans `.git/manual-deploy/`
+
+#### Etape 2 : Verifier
 
 ```bash
-gcloud run deploy crm-api \
-  --source . \
-  --region europe-west1 \
-  --project thiernew \
-  --platform managed \
-  --allow-unauthenticated \
-  --memory 2Gi \
-  --cpu 2 \
-  --min-instances 1 \
-  --max-instances 10 \
-  --timeout 300 \
-  --concurrency 80 \
-  --cpu-boost \
-  --port 8080 \
-  --command="" \
-  --args="" \
-  --add-cloudsql-instances "thiernew:europe-west1:crm-postgres-prod" \
-  --set-env-vars "NODE_ENV=production,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://app.2thier.be,BACKEND_URL=https://app.2thier.be,ODOO_URL=http://46.225.180.8:8069,ODOO_DB_NAME=odoo_peppol,ODOO_USER=admin" \
-  --update-secrets "PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=JWT_SECRET:latest,SESSION_SECRET=SESSION_SECRET:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,ODOO_PASSWORD=ODOO_PASSWORD:latest"
+# Health check manuel
+curl https://www.zhiive.com/api/health
+
+# Voir les logs Cloud Run
+gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=crm-api" \
+  --project thiernew --limit 20 --format="table(timestamp,textPayload)"
 ```
+
+#### Etape 3 : Rollback si probleme
+
+```powershell
+# Lister toutes les revisions disponibles
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy\rollback-cloud-run.ps1 -ListRevisions
+
+# Rollback automatique vers la revision precedente
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy\rollback-cloud-run.ps1
+
+# Rollback vers une revision specifique
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy\rollback-cloud-run.ps1 -Revision crm-api-00042-xyz
+```
+
+> **Le rollback Cloud Run est INSTANTANE** - il redirige le trafic vers une ancienne revision
+> sans rebuild. C'est equivalent (voire plus rapide) que le rollback GitHub.
+
+#### GitHub vs Cloud Run : ai-je encore besoin de GitHub ?
+
+| Fonctionnalite | Avec GitHub | Sans GitHub (local + GCP) |
+|---|---|---|
+| Historique du code | Copie remote | Git local suffit (tout est sur le PC) |
+| Rollback du code source | `git revert` / branches | Git local suffit |
+| Rollback en PRODUCTION | Via CI/CD redeploy | Cloud Run revisions (instantane) |
+| CI/CD automatique | GitHub Actions | Manuel via script PowerShell |
+| Backup du code | GitHub = backup remote | **RISQUE** : si le PC meurt, code perdu |
+| Collaboration | PR, code review, issues | Impossible sans remote |
+
+**Conclusion** : Pour un dev solo, GitHub n'est **pas bloquant** pour deployer.
+Cloud Run garde toutes les revisions et permet un rollback instantane.
+Le seul vrai risque sans GitHub = **pas de backup remote du code**.
+
+> **Conseil** : Quand GitHub revient, faire un `git push origin main` pour synchroniser.
+> En attendant, faire des backups reguliers du dossier projet sur un disque externe ou Google Drive.
+
+---
+
+## 🔒 Stratégie Git Multi-Remote et Backup
+
+### Pourquoi un multi-remote ?
+
+Le code source vit **uniquement dans git** (sur votre PC). Cloud Run ne stocke que l'app compilée
+(JavaScript), pas le TypeScript source ni l'historique git. Si le PC meurt sans remote, tout est perdu.
+
+La stratégie multi-remote garantit que le code est toujours sauvegardé sur au moins un serveur distant,
+même si l'un des services (GitHub, GitLab, GCP) est temporairement indisponible.
+
+### Remotes configurés
+
+| Remote | URL | Rôle | Statut |
+|--------|-----|------|--------|
+| `origin` | `https://github.com/DETHIERJONATHAN/2Thier.git` | Remote principal, CI/CD GitHub Actions | Actif quand billing GitHub OK |
+| `gitlab` | `https://gitlab.com/jonathan.dethier/zhiive.git` | Backup gratuit, illimité, repo privé | **ACTIF** - configuré le 16 avril 2026 |
+
+> **Token GitLab** : stocké dans Google Secret Manager sous `GITLAB_TOKEN` (projet `thiernew`).
+> Compte GitLab : jonathan.dethier@2thier.be (connexion via Google).
+
+### Configuration initiale (DEJA FAIT)
+
+```bash
+# Vérifier que les deux remotes sont configurés
+git remote -v
+# origin   https://github.com/DETHIERJONATHAN/2Thier.git (fetch/push)
+# gitlab   https://gitlab.com/jonathan.dethier/zhiive.git (fetch/push)
+```
+
+### Si besoin de reconfigurer sur un nouveau PC
+
+```bash
+# 1. Cloner depuis GitLab
+git clone https://gitlab.com/jonathan.dethier/zhiive.git
+cd zhiive
+
+# 2. Ajouter le remote GitHub
+git remote add origin https://github.com/DETHIERJONATHAN/2Thier.git
+
+# 3. Renommer le remote gitlab si besoin
+git remote rename origin gitlab
+```
+
+### Utilisation quotidienne
+
+```bash
+# Pousser sur GitLab (toujours disponible, gratuit)
+git push gitlab main
+
+# Pousser sur GitHub (quand disponible - déclenche aussi le CI/CD)
+git push origin main
+
+# Pousser sur TOUS les remotes d'un coup
+git push origin main && git push gitlab main
+
+# Astuce : créer un alias pour pousser partout
+git config alias.pushall '!git push origin main && git push gitlab main'
+# Puis simplement :
+git pushall
+```
+
+### Récupérer le code depuis un autre PC
+
+```bash
+# Depuis GitLab (si GitHub est down)
+git clone https://gitlab.com/jonathan.dethier/zhiive.git
+cd zhiive
+git remote add origin https://github.com/DETHIERJONATHAN/2Thier.git
+
+# Depuis GitHub (quand disponible)
+git clone https://github.com/DETHIERJONATHAN/2Thier.git
+cd 2Thier
+git remote add gitlab https://gitlab.com/jonathan.dethier/zhiive.git
+```
+
+### Optionnel : Google Cloud Source Repositories
+
+Si vous souhaitez aussi un backup sur GCP (même infra que Cloud Run) :
+
+```bash
+# 1. Activer l'API (une seule fois, depuis la console GCP)
+#    https://console.developers.google.com/apis/api/sourcerepo.googleapis.com/overview?project=thiernew
+
+# 2. Créer le repo et ajouter le remote
+gcloud source repos create zhiive --project=thiernew
+git remote add google https://source.developers.google.com/p/thiernew/r/zhiive
+
+# 3. Pousser
+git push google main
+```
+
+### Comparatif des options de backup
+
+| | GitHub | GitLab | Google Source Repos |
+|---|---|---|---|
+| Coût | Payant (votre plan) | Gratuit illimité | Gratuit (inclus GCP) |
+| Repos privés | Oui | Oui | Oui |
+| CI/CD intégré | GitHub Actions | GitLab CI | Cloud Build (config séparée) |
+| Pull Requests | Oui | Oui (Merge Requests) | Non |
+| Interface web | Excellente | Excellente | Basique |
+| Fiabilité | 99.9% (hors billing) | 99.9% | Liée au projet GCP |
+| Indépendant de GitHub | Non | Oui | Oui |
+
+### Workflow recommandé
+
+```
+Développement local
+       │
+       ├── git commit (toujours, même sans remote)
+       │
+       ├── git push gitlab main ──────── Backup GitLab (toujours dispo)
+       │
+       ├── git push origin main ──────── GitHub + CI/CD (quand dispo)
+       │
+       └── Deploy direct Cloud Run ───── Si GitHub est down (Option B ci-dessus)
+```
+
+**Règle d'or** : Après chaque session de travail, toujours faire au minimum `git push gitlab main`.
+GitHub est un bonus pour le CI/CD, pas une dépendance.
+
+---
 
 ### Configuration Peppol/Odoo indispensable en production
 
 - Cloud Run doit recevoir `ODOO_URL`, `ODOO_DB_NAME` et `ODOO_USER`.
 - Le mot de passe Odoo doit venir de Secret Manager via `ODOO_PASSWORD=ODOO_PASSWORD:latest`.
 - Ne jamais laisser la prod retomber sur les valeurs de fallback locales (`localhost`, `admin/admin`), sinon `POST /api/peppol/fetch-incoming` finit en erreur 500.
-
-### Mode temporaire sans GitHub Actions
-
-Si GitHub Actions est indisponible temporairement, un mode manuel plus securise est documente dans:
-
-`scripts/deploy/README.md`
-
-Scripts disponibles:
-
-- `scripts/deploy/manual-cloud-run.ps1`
-- `scripts/deploy/rollback-cloud-run.ps1`
-
-Principe recommande:
-1. commit local propre
-2. deploiement manuel Cloud Run
-3. health check
-4. rollback par revision si besoin
-5. push vers GitHub plus tard quand le billing revient
 
 ### Fichiers critiques pour le déploiement
 
@@ -470,7 +616,7 @@ Avant de déployer, vérifier :
 - [ ] `Procfile` contient `web: node dist-server/api-server-clean.cjs`
 - [ ] `npm run build` fonctionne localement
 - [ ] `npm run start` démarre le serveur sur le port défini par `$PORT`
-- [ ] Le code est poussé sur GitHub (`git push origin main`)
+- [ ] Le code est poussé sur au moins un remote (`git push gitlab main` ou `git push origin main`)
 - [ ] Les secrets sont configurés dans Google Secret Manager
 
 ---
@@ -478,11 +624,23 @@ Avant de déployer, vérifier :
 ## 📊 Architecture de Déploiement
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   GitHub        │────▶│   Cloud Build    │────▶│   Cloud Run     │
-│   (push main)   │     │   (Buildpacks)   │     │   (crm-api)     │
-└─────────────────┘     └──────────────────┘     └────────┬────────┘
-                                                          │
+                    BACKUP CODE SOURCE
+                    ==================
+┌─────────────────┐
+│   GitLab        │◄──── git push gitlab main (backup gratuit, toujours dispo)
+│   (backup)      │
+└─────────────────┘
+
+┌─────────────────┐     OPTION A : CI/CD AUTO
+│   GitHub        │────▶┌──────────────────┐     ┌─────────────────┐
+│   (origin)      │     │   Cloud Build    │────▶│   Cloud Run     │
+└─────────────────┘     └──────────────────┘     │   (crm-api)     │
+                                                 │                 │
+                        OPTION B : DEPLOY DIRECT │                 │
+┌─────────────────┐     ┌──────────────────┐     │   zhiive.com    │
+│   PC Local      │────▶│   Cloud Build    │────▶│                 │
+│   (gcloud)      │     │   (Dockerfile)   │     └────────┬────────┘
+└─────────────────┘     └──────────────────┘              │
                                                           │ Unix Socket
                                                           ▼
                                                  ┌─────────────────┐
@@ -503,4 +661,4 @@ Avant de déployer, vérifier :
 
 ---
 
-*Document créé le 28 décembre 2025 après résolution des problèmes de déploiement Cloud Run.*
+*Document créé le 28 décembre 2025. Mis à jour le 16 avril 2026 : ajout stratégie multi-remote GitLab + deploy direct Cloud Run sans GitHub.*

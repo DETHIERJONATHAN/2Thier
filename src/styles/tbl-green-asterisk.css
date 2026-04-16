@@ -70,6 +70,48 @@
 
 /* CSS supprimé - on utilise l'API native d'Ant Design maintenant */
 
+.tbl-tabs--compact > .ant-tabs-nav {
+  margin-bottom: 10px !important;
+}
+
+.tbl-tabs--compact.ant-tabs-card > .ant-tabs-nav .ant-tabs-tab {
+  padding: 0 !important;
+  min-height: 42px;
+}
+
+.tbl-tabs--compact.ant-tabs-card > .ant-tabs-nav .ant-tabs-tab .ant-tabs-tab-btn {
+  line-height: 1.1 !important;
+}
+
+.tbl-main-tabs > .ant-tabs-nav {
+  margin-bottom: 8px !important;
+}
+
+.tbl-main-tabs.ant-tabs-card > .ant-tabs-nav .ant-tabs-tab {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  min-height: 38px;
+  box-shadow: none !important;
+}
+
+.tbl-main-tabs.ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active {
+  background: transparent !important;
+}
+
+.tbl-main-tab-label {
+  min-height: 38px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  box-shadow: none;
+}
+
+.tbl-main-tab-label .anticon {
+  font-size: 13px;
+}
+
 /* ========== SOUS-ONGLETS SCROLLABLES - MOBILE ========== */
 /* Cacher la scrollbar pour les sous-onglets mais garder le scroll fonctionnel */
 .hide-scrollbar {
@@ -81,6 +123,137 @@
   display: none !important; /* Chrome, Safari, Opera */
   width: 0 !important;
   height: 0 !important;
+}
+
+.tbl-subtabs {
+  align-items: center;
+}
+
+.tbl-subtab-button.ant-btn {
+  min-height: 34px;
+  padding-inline: 12px !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+
+.tbl-subtab-button.ant-btn-sm {
+  height: 34px !important;
+}
+
+.tbl-form-row {
+  row-gap: 8px;
+}
+
+.tbl-form-col .ant-form-item {
+  margin-bottom: 8px !important;
+}
+
+.tbl-form-col .ant-form-item-label {
+  padding-bottom: 4px !important;
+}
+
+.tbl-form-col .ant-form-item-label > label {
+  line-height: 1.25 !important;
+}
+
+.tbl-shell--compact .tbl-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tbl-shell--compact .tbl-progress-track {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tbl-shell--compact .tbl-progress-track .ant-progress {
+  line-height: 1 !important;
+}
+
+.tbl-shell--compact .tbl-progress-track .ant-progress-outer {
+  margin-inline-end: 0 !important;
+  padding-inline-end: 0 !important;
+}
+
+.tbl-shell--compact .tbl-progress-value {
+  flex: 0 0 auto;
+  min-width: 34px;
+  color: #334155;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.tbl-shell--compact .tbl-form-item {
+  margin-bottom: 10px !important;
+}
+
+.tbl-shell--compact .tbl-form-item .ant-form-item-label {
+  padding-bottom: 4px !important;
+}
+
+.tbl-shell--compact .tbl-form-item .ant-form-item-explain,
+.tbl-shell--compact .tbl-form-item .ant-form-item-extra {
+  font-size: 12px !important;
+}
+
+.tbl-shell--compact .tbl-form-label-text {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #1e293b;
+}
+
+.tbl-shell--compact .tbl-form-label-actions .anticon {
+  font-size: 13px !important;
+  color: #94a3b8 !important;
+}
+
+.tbl-shell--compact .tbl-data-section-card {
+  border-color: #e2e8f0 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
+}
+
+.tbl-shell--compact .tbl-data-bubbles-row {
+  row-gap: 6px;
+}
+
+.tbl-shell--compact .tbl-form-col .ant-input,
+.tbl-shell--compact .tbl-form-col .ant-input-affix-wrapper,
+.tbl-shell--compact .tbl-form-col .ant-input-number,
+.tbl-shell--compact .tbl-form-col .ant-picker,
+.tbl-shell--compact .tbl-form-col .ant-btn {
+  min-height: 38px;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+}
+
+.tbl-shell--compact .tbl-form-col .ant-select-selector {
+  min-height: 38px !important;
+  border-radius: 10px !important;
+  padding-inline: 11px !important;
+}
+
+.tbl-shell--compact .tbl-form-col .ant-select-single .ant-select-selector .ant-select-selection-item,
+.tbl-shell--compact .tbl-form-col .ant-select-single .ant-select-selector .ant-select-selection-placeholder {
+  line-height: 36px !important;
+}
+
+.tbl-shell--compact .tbl-form-col .ant-input,
+.tbl-shell--compact .tbl-form-col .ant-input-affix-wrapper,
+.tbl-shell--compact .tbl-form-col .ant-picker-input > input,
+.tbl-shell--compact .tbl-form-col .ant-input-number-input {
+  font-size: 13px !important;
+}
+
+.tbl-shell--compact .tbl-form-col .ant-input-textarea textarea {
+  min-height: 84px !important;
+  border-radius: 12px !important;
+}
+
+.tbl-shell--compact .tbl-form-col .ant-btn {
+  padding-inline: 14px !important;
 }
 
 /* ========== MISE EN PAGE FIXE TBL MOBILE ========== */
@@ -106,5 +279,38 @@
   /* Permettre le scroll horizontal uniquement sur les sous-onglets */
   .tbl-tabs .ant-tabs-content-holder {
     overflow-x: hidden !important;
+  }
+
+  .tbl-subtab-button.ant-btn {
+    padding-inline: 10px !important;
+    font-size: 12px !important;
+  }
+
+  .tbl-main-tabs.ant-tabs-card > .ant-tabs-nav .ant-tabs-tab,
+  .tbl-main-tab-label {
+    min-height: 36px;
+  }
+
+  .tbl-shell--compact .tbl-progress-row {
+    gap: 8px;
+  }
+
+  .tbl-shell--compact .tbl-progress-value {
+    min-width: 30px;
+    font-size: 12px !important;
+  }
+
+  .tbl-shell--compact .tbl-form-col .ant-input,
+  .tbl-shell--compact .tbl-form-col .ant-input-affix-wrapper,
+  .tbl-shell--compact .tbl-form-col .ant-input-number,
+  .tbl-shell--compact .tbl-form-col .ant-picker,
+  .tbl-shell--compact .tbl-form-col .ant-btn,
+  .tbl-shell--compact .tbl-form-col .ant-select-selector {
+    min-height: 36px !important;
+  }
+
+  .tbl-shell--compact .tbl-form-col .ant-select-single .ant-select-selector .ant-select-selection-item,
+  .tbl-shell--compact .tbl-form-col .ant-select-single .ant-select-selector .ant-select-selection-placeholder {
+    line-height: 34px !important;
   }
 }

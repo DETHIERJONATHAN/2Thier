@@ -5,36 +5,19 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { grepSrc } from '../helpers/grepSrc';
 
 const SRC = path.resolve(__dirname, '../../src');
-const ROOT = path.resolve(__dirname, '../..');
 
 describe('Security — No Secrets in Source Code', () => {
   it('should not have hardcoded JWT secret values', () => {
-    // Check for actual hardcoded secret values like: JWT_SECRET = "mysecret" 
-    // Imports and process.env references are fine
-    const result = execSync(
-      'grep -rn "JWT_SECRET" src/ --include="*.ts" --include="*.tsx" 2>/dev/null | grep -v process.env | grep -v ".test." | grep -v node_modules | grep -v "import " | grep -v "require(" | grep -v "REQUIRED_ENV" || true',
-      { cwd: ROOT, encoding: 'utf-8' }
-    );
-    const violations = result.trim().split('\n').filter(l => {
-      if (!l) return false;
-      // Allow usage of imported JWT_SECRET constant (no literal assignment)
-      return l.match(/JWT_SECRET\s*=\s*['"][^'"]+['"]/);
-    });
+    // Flag literal assignments like: JWT_SECRET = "xxx". Imports & process.env are fine.
+    const violations = grepSrc(/JWT_SECRET\s*=\s*['"][^'"]+['"]/, { dir: SRC });
     expect(violations.length).toBe(0);
   });
 
   it('should not have hardcoded database password values', () => {
-    const result = execSync(
-      'grep -rn "PGPASSWORD" src/ --include="*.ts" 2>/dev/null | grep -v process.env | grep -v ".test." || true',
-      { cwd: ROOT, encoding: 'utf-8' }
-    );
-    const violations = result.trim().split('\n').filter(l => {
-      if (!l) return false;
-      return l.match(/PGPASSWORD\s*=\s*['"][^'"]+['"]/);
-    });
+    const violations = grepSrc(/PGPASSWORD\s*=\s*['"][^'"]+['"]/, { dir: SRC });
     expect(violations.length).toBe(0);
   });
 });

@@ -425,7 +425,14 @@ const Header: React.FC = () => {
           <div className="flex items-center space-x-3">
             <Link to="/" className="flex items-center space-x-2 text-white hover:text-gray-200">
               <img loading="lazy" src="/logo.png" alt="Logo" className="h-8 w-8" />
-              <span className="font-semibold">{currentOrganization?.name}</span>
+              <div className="flex flex-col">
+                <span className="font-semibold">{currentOrganization?.name}</span>
+                {(currentOrganization as any)?.role && (
+                  <span className="text-xs text-white/70">
+                    {(currentOrganization as any).role}
+                  </span>
+                )}
+              </div>
             </Link>
           </div>
 

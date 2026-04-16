@@ -300,6 +300,55 @@ router.delete('/tournaments/:id', authenticateToken, async (req: Request, res: R
 });
 
 // ═══════════════════════════════════════════════════════════
+// PATCH /tournaments/:id/round-dates — Planifier les dates des journées
+// ═══════════════════════════════════════════════════════════
+
+router.patch('/tournaments/:id/round-dates', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const tournament = await db.arenaTournament.findUnique({
+      where: { id: req.params.id },
+      include: { Rounds: { select: { id: true, roundNumber: true } } },
+    });
+    if (!tournament) return res.status(404).json({ success: false, message: 'Tournoi introuvable' });
+    const isSuperAdmin = (req as any).user?.role === 'SUPER_ADMIN';
+    if (tournament.creatorId !== userId && !isSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Non autorisé' });
+    }
+
+    const { roundDates } = req.body as { roundDates: Record<string, string | null> };
+
+    // Si les rounds existent déjà → mettre à jour ArenaRound.startsAt directement
+    if (tournament.Rounds.length > 0) {
+      await db.$transaction(
+        tournament.Rounds.map(round =>
+          db.arenaRound.update({
+            where: { id: round.id },
+            data: {
+              startsAt: roundDates[String(round.roundNumber)]
+                ? new Date(roundDates[String(round.roundNumber)]!)
+                : null,
+            },
+          })
+        )
+      );
+    }
+
+    // Toujours stocker dans settings pour la génération future
+    const currentSettings = (tournament.settings as Record<string, unknown>) ?? {};
+    await db.arenaTournament.update({
+      where: { id: req.params.id },
+      data: { settings: { ...currentSettings, roundDates } },
+    });
+
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('[ARENA] PATCH /round-dates error:', error.message);
+    res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
 // POST /tournaments/:id/start — Ouvrir les inscriptions ou démarrer
 // ═══════════════════════════════════════════════════════════
 

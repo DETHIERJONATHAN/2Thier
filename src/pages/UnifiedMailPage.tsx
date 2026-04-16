@@ -894,7 +894,11 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
   // ═══════════════════════════════════════════════════════════
 
   const renderMessageList = () => (
-    <div ref={_messageListRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0, backgroundColor: '#fff', width: '100%', maxWidth: '100%' }}>
+    <div
+      ref={_messageListRef}
+      className="zhiive-mail-list-shell"
+      style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, height: '100%', backgroundColor: '#fff', width: '100%', maxWidth: '100%' }}
+    >
       {isLoading && messages.length === 0 ? (
         <div className="p-4">
           {Array.from({ length: 8 }).map((_, i) => (
@@ -917,7 +921,8 @@ const UnifiedMailPage: React.FC<{ compact?: boolean }> = ({ compact }) => {
       ) : (
         <>
           <Virtuoso
-            style={{ flex: 1, minHeight: 300 }}
+            className="zhiive-mail-list-virtuoso"
+            style={{ flex: 1, height: '100%', minHeight: 0, width: '100%', scrollbarWidth: 'none', msOverflowStyle: 'none' as unknown }}
             data={messages}
             itemContent={(_index, msg) => {
             const isActive = selectedMessage?.id === msg.id && splitOpen;
@@ -1873,8 +1878,21 @@ document.querySelectorAll('img').forEach(function(img) {
   // ─── Mode compact (sidebar 300px) : layout simplifié sans Ant Layout ───
   if (compact) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#fff', position: 'relative', minWidth: 0, maxWidth: '100%' }}>
+      <div className="zhiive-mail-compact" style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#fff', position: 'relative', minWidth: 0, maxWidth: '100%' }}>
         {msgCtx}
+        <style>{`
+          .zhiive-mail-compact,
+          .zhiive-mail-compact * {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+          }
+          .zhiive-mail-compact::-webkit-scrollbar,
+          .zhiive-mail-compact *::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+          }
+        `}</style>
         {/* Sidebar mobile (colonne glissante) */}
         {mobileSidebarOpen && (
           <div
@@ -1929,7 +1947,7 @@ document.querySelectorAll('img').forEach(function(img) {
             />
           </div>
         )}
-        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', width: '100%' }}>
+        <div style={{ flex: 1, minHeight: 0, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%' }}>
           {renderMessageList()}
         </div>
         {!isDesktop && renderMessageDetail()}

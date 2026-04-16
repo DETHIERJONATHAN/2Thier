@@ -196,14 +196,24 @@ export const login = async (req: Request, res: Response) => {
         organizations: user.UserOrganization.map(uo => ({
           id: uo.Organization.id,
           name: uo.Organization.name,
-          status: uo.status
+          status: uo.status,
+          role: uo.Role.name
         }))
       },
       originalUser: null,
     };
 
-    // Récupérer l'organizationId de la première organisation active (ou première organisation si super admin)
-    const primaryOrganization = user.UserOrganization.find(uo => uo.status === 'active') || user.UserOrganization[0];
+    // Sélectionner l'organisation principale pour le JWT :
+    // 1) préférer une colonie active (non-Zhiive) si elle existe,
+    // 2) sinon Zhiive si actif,
+    // 3) sinon première organisation active,
+    // 4) fallback : première ligne UserOrganization.
+    const activeMemberships = user.UserOrganization.filter(uo => uo.status === 'ACTIVE');
+    const primaryOrganization =
+      activeMemberships.find(uo => uo.organizationId !== 'zhiive-global-org') ||
+      activeMemberships.find(uo => uo.organizationId === 'zhiive-global-org') ||
+      activeMemberships[0] ||
+      user.UserOrganization[0];
     const organizationId = primaryOrganization?.organizationId;
 
     // Créer le token JWT avec TOUTES les informations nécessaires
@@ -303,8 +313,15 @@ export const getMe = async (req: Request, res: Response) => {
       permissions: uo.Role.Permission || []
     }));
 
-    // Sélectionner l'organisation principale (première active ou première tout court)
-    const currentOrganization = organizations.find(org => org.status === 'ACTIVE') || organizations[0] || null;
+    // Sélectionner l'organisation principale : préférer une colonie active (non-Zhiive),
+    // sinon Zhiive si actif, sinon première active, sinon première tout court.
+    const activeOrgs = organizations.filter(org => org.status === 'ACTIVE');
+    const currentOrganization =
+      activeOrgs.find(org => org.id !== 'zhiive-global-org') ||
+      activeOrgs.find(org => org.id === 'zhiive-global-org') ||
+      activeOrgs[0] ||
+      organizations[0] ||
+      null;
 
     // Extraire les rôles et permissions depuis UserOrganization
     const userRoles = user.UserOrganization.map(uo => uo.Role);
@@ -326,6 +343,7 @@ export const getMe = async (req: Request, res: Response) => {
       originalUser: null // Pour l'usurpation d'identité, null par défaut
     };
 
+    logger.info(`[AUTH][/me] 🔍 cookie.userId=${decoded.userId} → DB user=${user.email} (${user.firstName} ${user.lastName}) id=${user.id}`);
     res.status(200).json(response);
   } catch (error: unknown) {
     // Distinguer les erreurs JWT des erreurs Prisma/autres

@@ -5,6 +5,10 @@ import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../config';
 import { authenticateToken } from '../middleware/auth';
 import { logger } from '../lib/logger';
+import { cached, cacheDelPattern } from '../lib/cache';
+import { audit } from '../lib/audit';
+
+const MODULES_CACHE_TTL = 30; // seconds — modules rarely change
 
 // Implémentation MINIMALE restaurée pour éviter les 404 côté frontend
 // et rétablir l'affichage des modules. Conçue pour être sûre et simple.
@@ -113,31 +117,39 @@ function extractUserFromRequest(req: Request): { userId: string; role?: string; 
 router.get('/', async (req, res) => {
 	const { organizationId } = req.query as { organizationId?: string };
 	try {
-		// Récupération brute des modules (globaux + spécifiques) avec catégories
-		const modules = await prisma.module.findMany({
-			orderBy: { order: 'asc' },
-			include: {
-				Category: {
-					select: {
-						id: true,
-						name: true,
-						icon: true,
-						iconColor: true
+		// Récupération brute des modules (globaux + spécifiques) avec catégories — cached
+		const modules = await cached('modules:all', MODULES_CACHE_TTL, () =>
+			prisma.module.findMany({
+				orderBy: { order: 'asc' },
+				include: {
+					Category: {
+						select: {
+							id: true,
+							name: true,
+							icon: true,
+							iconColor: true
+						}
 					}
 				}
-			}
-		});
+			})
+		);
 
 		let orgStatuses: Record<string, boolean> | null = null;
 		if (organizationId) {
-			const statuses = await prisma.organizationModuleStatus.findMany({
-				where: { organizationId },
-				select: { moduleId: true, active: true },
-			});
-			orgStatuses = statuses.reduce((acc, s) => {
-				acc[s.moduleId] = s.active;
-				return acc;
-			}, {} as Record<string, boolean>);
+			orgStatuses = await cached(
+				`modules:org:${organizationId}:statuses`,
+				MODULES_CACHE_TTL,
+				async () => {
+					const statuses = await prisma.organizationModuleStatus.findMany({
+						where: { organizationId },
+						select: { moduleId: true, active: true },
+					});
+					return statuses.reduce((acc, s) => {
+						acc[s.moduleId] = s.active;
+						return acc;
+					}, {} as Record<string, boolean>);
+				}
+			);
 		}
 
 		const mapped = modules.map(m => mapModule(m, orgStatuses, organizationId));
@@ -151,12 +163,12 @@ router.get('/', async (req, res) => {
 		// Super admins voient tout, les autres ne voient que les modules autorisés par leur rôle
 		const currentUser = extractUserFromRequest(req);
 		const isSuperAdmin = currentUser?.isSuperAdmin || currentUser?.role === 'super_admin';
-		
+
 		// Filtrer les modules superAdminOnly pour les non-SA
 		if (!isSuperAdmin) {
 			filtered = filtered.filter(m => !(m as any).superAdminOnly);
 		}
-		
+
 		if (currentUser && organizationId && !isSuperAdmin) {
 			try {
 				// Trouver le rôle de l'utilisateur dans cette organisation
@@ -207,6 +219,25 @@ router.get('/', async (req, res) => {
 				logger.error('[modules] Erreur lors du filtrage par permissions du rôle:', permErr);
 				// En cas d'erreur, on ne filtre pas (fail-open pour ne pas bloquer l'UI)
 			}
+		}
+
+		// ✅ SORT: Garantir l'ordre des modules Zhiive
+		// Si organizationId === 'zhiive-global-org' (ou pas d'organizationId):
+		// Afficher les 9 modules Zhiive DANS CET ORDRE: Nectar, Arena, Wax, Friends, Reels, Hive, Mail, Agenda, Search
+		// Stats n'apparaît PAS pour Zhiive
+		const isZhiiveOrg = !organizationId || organizationId === 'zhiive-global-org';
+		if (isZhiiveOrg) {
+			const ZHIIVE_MODULE_ORDER = ['nectar', 'arena', 'wax', 'friends', 'reels', 'hive', 'mail', 'agenda', 'search'];
+
+			// Filtrer: garder SEULEMENT les modules Zhiive (exclure stats)
+			filtered = filtered.filter(m => ZHIIVE_MODULE_ORDER.includes(m.key));
+
+			// Trier selon l'ordre défini
+			filtered.sort((a, b) => {
+				const indexA = ZHIIVE_MODULE_ORDER.indexOf(a.key);
+				const indexB = ZHIIVE_MODULE_ORDER.indexOf(b.key);
+				return indexA - indexB;
+			});
 		}
 
 		res.json({ success: true, data: filtered });
@@ -332,6 +363,7 @@ router.patch('/status', async (req, res) => {
 			update: { active },
 			create: { organizationId, moduleId, active },
 		});
+		await cacheDelPattern(`modules:org:${organizationId}:*`);
 		res.json({ success: true, data: status });
 	} catch (e) {
 		logger.error('[modules] PATCH /status erreur', e);
@@ -361,6 +393,17 @@ router.post('/', async (req, res) => {
 				parameters: parameters || null, // 🔧 Paramètres JSON
 				organizationId: organizationId || null,
 			},
+		});
+		await cacheDelPattern('modules:*');
+		const actor = extractUserFromRequest(req);
+		audit.record({
+			action: 'module.create',
+			actorId: actor?.userId ?? null,
+			organizationId: organizationId ?? null,
+			targetType: 'Module',
+			targetId: created.id,
+			outcome: 'success',
+			ip: req.ip ?? null
 		});
 		res.json({ success: true, data: mapModule(created, null, organizationId) });
 		} catch (e: unknown) {
@@ -404,6 +447,16 @@ router.put('/:id', async (req, res) => {
 				superAdminOnly: superAdminOnly !== undefined ? superAdminOnly : undefined,
 			},
 		});
+		await cacheDelPattern('modules:*');
+		const actor = extractUserFromRequest(req);
+		audit.record({
+			action: 'module.update',
+			actorId: actor?.userId ?? null,
+			targetType: 'Module',
+			targetId: id,
+			outcome: 'success',
+			ip: req.ip ?? null
+		});
 		res.json({ success: true, data: mapModule(updated, null) });
 	} catch (e: unknown) {
 		logger.error('[modules] PUT /:id erreur', e);
@@ -422,6 +475,16 @@ router.delete('/:id', async (req, res) => {
 		await prisma.organizationModuleStatus.deleteMany({ where: { moduleId: id } });
 		await prisma.permission.deleteMany({ where: { moduleId: id } }).catch(() => {}); // best effort
 		const deleted = await prisma.module.delete({ where: { id } });
+		await cacheDelPattern('modules:*');
+		const actor = extractUserFromRequest(req);
+		audit.record({
+			action: 'module.delete',
+			actorId: actor?.userId ?? null,
+			targetType: 'Module',
+			targetId: deleted.id,
+			outcome: 'success',
+			ip: req.ip ?? null
+		});
 		res.json({ success: true, data: { id: deleted.id } });
 	} catch (e) {
 		logger.error('[modules] DELETE /:id erreur', e);

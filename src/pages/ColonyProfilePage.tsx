@@ -69,6 +69,13 @@ const ColonyProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const { isMobile } = useScreenSize();
 
+  // Zhiive est le réseau social de base, pas une colonie — rediriger vers le dashboard.
+  useEffect(() => {
+    if (orgId === 'zhiive-global-org') {
+      navigate('/', { replace: true });
+    }
+  }, [orgId, navigate]);
+
   const [colony, setColony] = useState<ColonyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('about');

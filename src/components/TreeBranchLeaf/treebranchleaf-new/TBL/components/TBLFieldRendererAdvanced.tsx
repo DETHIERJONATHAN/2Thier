@@ -676,9 +676,9 @@ const { Text } = Typography;
 const { useBreakpoint } = Grid;
 
 // 🔧 Réserve deux lignes pour les labels afin d'aligner toutes les entrées
-const LABEL_LINE_HEIGHT_PX = 18;
+const LABEL_LINE_HEIGHT_PX = 17;
 const LABEL_MIN_LINES = 2;
-const LABEL_CONTAINER_HEIGHT = (LABEL_LINE_HEIGHT_PX * LABEL_MIN_LINES) + 12;
+const LABEL_CONTAINER_HEIGHT = (LABEL_LINE_HEIGHT_PX * LABEL_MIN_LINES) + 8;
 const DEFAULT_LABEL_TEXT_STYLE: React.CSSProperties = {
   lineHeight: `${LABEL_LINE_HEIGHT_PX}px`,
   height: `${LABEL_LINE_HEIGHT_PX * LABEL_MIN_LINES}px`,
@@ -687,7 +687,7 @@ const DEFAULT_LABEL_TEXT_STYLE: React.CSSProperties = {
   WebkitBoxOrient: 'vertical',
   overflow: 'hidden',
   width: '100%',
-  paddingRight: 32
+  paddingRight: 28
 };
 
 const LABEL_CONTAINER_STYLE: React.CSSProperties = {
@@ -711,8 +711,8 @@ const LABEL_ACTIONS_STYLE: React.CSSProperties = {
   height: LABEL_CONTAINER_HEIGHT,
   display: 'inline-flex',
   alignItems: 'flex-start',
-  gap: 8,
-  minWidth: 24
+  gap: 6,
+  minWidth: 20
 };
 
 interface TreeBranchLeafFieldConfig {
@@ -3178,7 +3178,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
         ...appearanceStyle, 
         ...widthStyle 
       },
-      className: fieldConfig.appearance?.className || fieldConfig.className || '',
+      className: `${fieldConfig.appearance?.className || fieldConfig.className || ''} tbl-field-control`.trim(),
       'aria-required': fieldConfig.required || undefined
     };
 
@@ -3261,7 +3261,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
             {...commonProps}
             value={finalValue || ''}
             onChange={(e) => handleChange(e.target.value)}
-            rows={fieldConfig.textConfig?.rows || 3}
+            rows={fieldConfig.textConfig?.rows || 2}
             // 🔥 LONGUEUR MAX DYNAMIQUE PRISMA TEXTAREA
             maxLength={fieldConfig.textConfig?.maxLength || fieldConfig.maxLength}
             showCount={!!(fieldConfig.textConfig?.maxLength || fieldConfig.maxLength)}
@@ -4341,7 +4341,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
 
   return (
     <Form.Item
-      className={`mb-4 ${isMobile ? 'tbl-form-item-mobile' : ''}`}
+      className={`tbl-form-item mb-3 ${isMobile ? 'tbl-form-item-mobile' : ''}`}
       labelCol={{ span: 24 }}
       wrapperCol={{ span: 24 }}
       colon={false}
@@ -4349,7 +4349,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
       label={
         <div style={LABEL_CONTAINER_STYLE}>
           <span
-            className={`font-medium whitespace-normal break-words ${!fieldConfig.appearance?.labelColor ? 'text-gray-700' : ''}`}
+            className={`tbl-form-label-text font-medium whitespace-normal break-words ${!fieldConfig.appearance?.labelColor ? 'text-gray-700' : ''}`}
             style={{
               ...DEFAULT_LABEL_TEXT_STYLE,
               // 🎨 Couleur du label héritée du parent/template si définie
@@ -4368,7 +4368,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
               *
             </span>
           </span>
-          <div style={LABEL_ACTIONS_STYLE}>
+          <div className="tbl-form-label-actions" style={LABEL_ACTIONS_STYLE}>
             {tooltipData.hasTooltip && (
               <HelpTooltip
                 type={tooltipData.type}
@@ -4395,7 +4395,7 @@ const TBLFieldRendererAdvanced: React.FC<TBLFieldAdvancedProps> = ({
           style={{ 
             color: isValidation ? SF.red : SF.emeraldDark,
             fontWeight: '400',
-            fontSize: '14px',
+            fontSize: '13px',
             marginTop: '4px'
           }}
         >

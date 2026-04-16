@@ -446,18 +446,22 @@ export async function generateRound(tournamentId: string): Promise<{
     }
 
     const schedule = generateRoundRobinSchedule(teams);
+    const settings = (tournament.settings as Record<string, unknown>) ?? {};
+    const roundDates = (settings.roundDates as Record<string, string>) ?? {};
 
     const result = await db.$transaction(async (tx) => {
       let totalMatches = 0;
       let firstRoundId = '';
 
       for (const roundData of schedule) {
+        const scheduledDate = roundDates[String(roundData.roundNumber)];
         const round = await tx.arenaRound.create({
           data: {
             tournamentId,
             roundNumber: roundData.roundNumber,
             name: roundData.name,
             status: 'SCHEDULED',
+            startsAt: scheduledDate ? new Date(scheduledDate) : null,
           },
         });
 

@@ -103,6 +103,8 @@ const FBButton: React.FC<{
 }> = ({ primary, icon, children, mobileIconOnly, isMobile, onClick, style }) => {
   const [hover, setHover] = useState(false);
   const showLabel = !(mobileIconOnly && isMobile);
+  const hasLabel = showLabel && Boolean(children);
+  const buttonHeight = isMobile ? 40 : 36;
   return (
     <button
       type="button"
@@ -110,17 +112,20 @@ const FBButton: React.FC<{
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        height: 36, padding: showLabel && children ? '0 16px' : '0 12px',
-        borderRadius: 6, border: 'none', cursor: 'pointer',
-        fontSize: 15, fontWeight: 600, transition: 'background 0.15s',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: isMobile ? 5 : 6,
+        height: buttonHeight,
+        padding: hasLabel ? (isMobile ? '0 14px' : '0 16px') : 0,
+        width: hasLabel ? undefined : buttonHeight,
+        minWidth: hasLabel ? undefined : buttonHeight,
+        borderRadius: isMobile ? 12 : 6, border: 'none', cursor: 'pointer',
+        fontSize: isMobile ? 14 : 15, fontWeight: 600, transition: 'background 0.15s',
         background: primary ? (hover ? FB.blueHover : FB.blue) : (hover ? FB.btnGrayHover : FB.btnGray),
         color: primary ? '#fff' : FB.text,
         flexShrink: 0,
         ...style,
       }}
     >
-      {icon}{showLabel && children}
+      {icon}{hasLabel && children}
     </button>
   );
 };
@@ -232,7 +237,8 @@ const ProfilePage = () => {
   const [colonyLoading, setColonyLoading] = useState(false);
   const [colonyPosts, setColonyPosts] = useState<WallPostData[]>([]);
   const [colonyPostsLoading, setColonyPostsLoading] = useState(false);
-  const hasColony = !isViewingOther && !!currentOrganization;
+  // Zhiive n'est pas une colonie — ne jamais afficher le profil Zhiive comme vue "Colony".
+  const hasColony = !isViewingOther && !!currentOrganization && currentOrganization.id !== 'zhiive-global-org';
   const isColonyView = feedMode === 'org' && hasColony;
 
   // Load colony data when switching to colony view
@@ -760,11 +766,28 @@ const ProfilePage = () => {
   ];
 
   /* ── Responsive dimensions ─────────────────────────────────── */
-  const coverH = isMobile ? 200 : 350;
-  const avatarSize = isMobile ? 120 : 168;
-  const avatarOverlap = isMobile ? 60 : 40;
-  const nameFontSize = isMobile ? 24 : 32;
-  const cameraBtnSize = isMobile ? 32 : 36;
+  const isCompactMobile = isMobile && width < 480;
+  const coverH = isMobile ? (isCompactMobile ? 176 : 204) : 350;
+  const avatarSize = isMobile ? (isCompactMobile ? 104 : 116) : 168;
+  const avatarOverlap = isMobile ? Math.round(avatarSize * 0.48) : 40;
+  const nameFontSize = isMobile ? (isCompactMobile ? 22 : 26) : 32;
+  const cameraBtnSize = isMobile ? 30 : 36;
+  const compactIconButtonStyle: React.CSSProperties = isMobile
+    ? {
+        width: isCompactMobile ? 42 : 44,
+        minWidth: isCompactMobile ? 42 : 44,
+        height: isCompactMobile ? 42 : 44,
+        padding: 0,
+        borderRadius: 12,
+      }
+    : {};
+  const mobilePrimaryActionStyle: React.CSSProperties = isMobile
+    ? {
+        minWidth: 0,
+        flex: '1 1 auto',
+        padding: isCompactMobile ? '0 12px' : '0 14px',
+      }
+    : {};
 
   return (
     <>
@@ -824,20 +847,23 @@ const ProfilePage = () => {
             {/* Bottom action buttons */}
             {!isViewingOther && <div style={{
               position: 'absolute', bottom: isMobile ? 8 : 16, right: isMobile ? 8 : 16,
-              display: 'flex', gap: 8,
+              display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end',
+              maxWidth: isMobile ? 'calc(100% - 16px)' : undefined,
             }}>
               {coverRepositioning ? (
                 <>
                   <div role="button" tabIndex={0} onClick={() => { setCoverPosY(isColonyView ? (colonyData?.coverPositionY ?? 50) : (profile.coverPositionY ?? 50)); setCoverRepositioning(false); }} style={{
                     background: SF.overlayDarkStrong, color: '#fff',
-                    padding: isMobile ? '4px 10px' : '6px 16px',
-                    borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
+                    padding: isMobile ? '0 10px' : '6px 16px',
+                    minHeight: isMobile ? 32 : undefined,
+                    borderRadius: isMobile ? 999 : 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', gap: 6,
                   }}><CloseOutlined /> Annuler</div>
                   <div role="button" tabIndex={0} onClick={isColonyView ? saveColonyCoverPosition : saveCoverPosition} style={{
                     background: FB.blue, color: '#fff',
-                    padding: isMobile ? '4px 10px' : '6px 16px',
-                    borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
+                    padding: isMobile ? '0 10px' : '6px 16px',
+                    minHeight: isMobile ? 32 : undefined,
+                    borderRadius: isMobile ? 999 : 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', gap: 6,
                   }}><CheckOutlined /> Enregistrer</div>
                 </>
@@ -846,15 +872,17 @@ const ProfilePage = () => {
                   {cvCoverUrl && (
                     <div role="button" tabIndex={0} onClick={() => setCoverRepositioning(true)} style={{
                       background: SF.overlayDarkMd, color: '#fff',
-                      padding: isMobile ? '4px 10px' : '6px 16px',
-                      borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
+                      padding: isMobile ? '0 10px' : '6px 16px',
+                      minHeight: isMobile ? 32 : undefined,
+                      borderRadius: isMobile ? 999 : 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
                       display: 'flex', alignItems: 'center', gap: 6,
                     }}><DragOutlined />{!isMobile && ' Repositionner'}</div>
                   )}
                   <div role="button" tabIndex={0} onClick={() => isColonyView ? orgCoverInputRef.current?.click() : coverInputRef.current?.click()} style={{
                     background: SF.overlayDarkMd, color: '#fff',
-                    padding: isMobile ? '4px 10px' : '6px 16px',
-                    borderRadius: 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
+                    padding: isMobile ? '0 10px' : '6px 16px',
+                    minHeight: isMobile ? 32 : undefined,
+                    borderRadius: isMobile ? 999 : 6, fontSize: isMobile ? 12 : 14, fontWeight: 600, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', gap: 6,
                   }}>{coverUploading ? <Spin size="small" /> : <CameraOutlined />}{!isMobile && ' Modifier la couverture'}</div>
                 </>
@@ -865,15 +893,22 @@ const ProfilePage = () => {
           </div>
 
           {/* ─── Avatar à gauche, nom à côté ─── */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', padding: isMobile ? '0 12px' : '0 16px', position: 'relative' }}>
-            <div style={{ marginTop: -avatarOverlap, position: 'relative', zIndex: 2 }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'stretch' : 'flex-end',
+            padding: isMobile ? '0 12px 12px' : '0 16px',
+            position: 'relative',
+            gap: isMobile ? 10 : 0,
+          }}>
+            <div style={{ marginTop: -avatarOverlap, position: 'relative', zIndex: 2, alignSelf: isMobile ? 'center' : 'flex-start' }}>
               <Avatar
                 size={avatarSize}
                 src={cvAvatar}
                 icon={!cvAvatar && !cvAvatarFallback ? <UserOutlined style={{ fontSize: isMobile ? 48 : 64 }} /> : undefined}
                 style={{
                   border: '4px solid white', background: !cvAvatar ? cvAvatarBg : undefined,
-                  boxShadow: '0 2px 8px ${SF.overlayDarkLight}', fontSize: isMobile ? 48 : 64,
+                  boxShadow: `0 2px 8px ${SF.overlayDarkLight}`, fontSize: isMobile ? 48 : 64,
                 }}
               >
                 {!cvAvatar && cvAvatarFallback}
@@ -886,7 +921,7 @@ const ProfilePage = () => {
                   background: FB.btnGray,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer', border: 'none',
-                  boxShadow: '0 1px 3px ${SF.overlayDarkSubtle}',
+                  boxShadow: `0 1px 3px ${SF.overlayDarkSubtle}`,
                 }}
               >
                 {avatarUploading ? <Spin size="small" /> : <CameraOutlined style={{ fontSize: isMobile ? 14 : 16, color: FB.text }} />}
@@ -894,7 +929,16 @@ const ProfilePage = () => {
               {!isViewingOther && <input type="file" accept="image/*" onChange={isColonyView ? handleColonyLogoChange : handleAvatarChange} ref={fileInputRef} style={{ display: 'none' }} />}
             </div>
 
-            <div style={{ marginLeft: isMobile ? 12 : 16, paddingBottom: isMobile ? 8 : 16, flex: 1, minWidth: 0 }}>
+            <div style={{
+              marginLeft: isMobile ? 0 : 16,
+              paddingBottom: isMobile ? 0 : 16,
+              flex: 1,
+              minWidth: 0,
+              textAlign: isMobile ? 'center' : 'left',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: isMobile ? 'center' : 'flex-start',
+            }}>
               <h1 style={{ fontSize: nameFontSize, fontWeight: 700, color: FB.text, margin: 0, lineHeight: 1.2 }}>{cvName}</h1>
               {isColonyView && colonyData ? (
                 <div style={{ fontSize: isMobile ? 13 : 15, color: FB.textSecondary, marginTop: 4 }}>
@@ -903,9 +947,18 @@ const ProfilePage = () => {
                   {colonyData.postCount} publication{colonyData.postCount > 1 ? 's' : ''}
                 </div>
               ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 8, marginTop: 4, flexWrap: 'wrap', fontSize: isMobile ? 13 : 15, color: FB.textSecondary }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: isMobile ? 'center' : 'flex-start',
+                  gap: isMobile ? 6 : 8,
+                  marginTop: 4,
+                  flexWrap: 'wrap',
+                  fontSize: isMobile ? 13 : 15,
+                  color: FB.textSecondary,
+                }}>
                   <span style={{ color: rl.color, fontWeight: 600 }}>{rl.icon} {rl.label}</span>
-                  {displayOrg && (
+                  {displayOrg && displayOrg.id !== 'zhiive-global-org' && (
                     <>
                       <span>·</span>
                       <span role="button" tabIndex={0} onClick={() => navigate(`/colony/${displayOrg.id}`)} style={{ cursor: 'pointer' }}
@@ -919,29 +972,47 @@ const ProfilePage = () => {
             </div>
 
             {!isViewingOther ? (
-              <div style={{ display: 'flex', gap: 8, paddingBottom: isMobile ? 8 : 16, alignItems: 'flex-end' }}>
-                <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>{t('common.settings')}</FBButton>
-                <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly>{t('common.edit')}</FBButton>
+              <div style={{
+                display: 'flex',
+                gap: isMobile ? 6 : 8,
+                paddingBottom: isMobile ? 0 : 16,
+                alignItems: 'center',
+                width: isMobile ? '100%' : 'auto',
+                justifyContent: isMobile ? 'center' : 'flex-end',
+              }}>
+                <FBButton primary icon={<SettingOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly style={compactIconButtonStyle}>{t('common.settings')}</FBButton>
+                <FBButton icon={<EditOutlined />} onClick={() => moduleNavigate('/settings')} isMobile={isMobile} mobileIconOnly style={compactIconButtonStyle}>{t('common.edit')}</FBButton>
                 {canFoundColony && <FBButton icon={<ShopOutlined />} onClick={() => setIsCreateOrgModalVisible(true)} isMobile={isMobile} mobileIconOnly
-                  style={{ background: '#0f766e', color: '#fff' }}>Business</FBButton>}
-                <FBButton icon={<EllipsisOutlined />} />
+                  style={{ ...compactIconButtonStyle, background: '#0f766e', color: '#fff' }}>Business</FBButton>}
+                <FBButton icon={<EllipsisOutlined />} style={compactIconButtonStyle} />
               </div>
             ) : (
-              <div style={{ display: 'flex', gap: 8, paddingBottom: isMobile ? 8 : 16, alignItems: 'flex-end' }}>
+              <div style={{
+                display: 'flex',
+                gap: isMobile ? 6 : 8,
+                paddingBottom: isMobile ? 0 : 16,
+                alignItems: 'center',
+                justifyContent: isMobile ? 'center' : 'flex-end',
+                width: isMobile ? '100%' : 'auto',
+                flexWrap: isMobile ? 'wrap' : 'nowrap',
+              }}>
                 {(() => { const fp = getFriendButtonProps(); return (
                   <FBButton primary={fp.primary} icon={fp.icon} onClick={handleFriendAction} isMobile={isMobile}
-                    style={friendStatus === 'blocked' ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
+                    style={{
+                      ...mobilePrimaryActionStyle,
+                      ...(friendStatus === 'blocked' ? { opacity: 0.5, cursor: 'not-allowed' } : undefined),
+                    }}>
                     {friendLoading ? <Spin size="small" /> : fp.label}
                   </FBButton>
                 ); })()}
                 {friendStatus === 'pending' && friendDirection === 'received' && (
-                  <FBButton icon={<CloseOutlined />} onClick={() => { if (friendshipId) api.delete(`/api/friends/${friendshipId}`).then(() => { setFriendStatus(null); setFriendshipId(null); setFriendDirection(null); message.info('Demande refusée'); }); }} isMobile={isMobile} mobileIconOnly>
+                  <FBButton icon={<CloseOutlined />} onClick={() => { if (friendshipId) api.delete(`/api/friends/${friendshipId}`).then(() => { setFriendStatus(null); setFriendshipId(null); setFriendDirection(null); message.info('Demande refusée'); }); }} isMobile={isMobile} mobileIconOnly style={compactIconButtonStyle}>
                     Refuser
                   </FBButton>
                 )}
-                <FBButton icon={<MessageOutlined />} onClick={handleOpenMessenger} isMobile={isMobile} mobileIconOnly>Message</FBButton>
+                <FBButton icon={<MessageOutlined />} onClick={handleOpenMessenger} isMobile={isMobile} mobileIconOnly style={compactIconButtonStyle}>Message</FBButton>
                 <Dropdown menu={{ items: profileMoreMenuItems }} trigger={['click']} placement="bottomRight">
-                  <span><FBButton icon={<EllipsisOutlined />} /></span>
+                  <span><FBButton icon={<EllipsisOutlined />} style={compactIconButtonStyle} /></span>
                 </Dropdown>
               </div>
             )}
@@ -953,7 +1024,8 @@ const ProfilePage = () => {
           {/* Tabs — scrollable on mobile */}
           <div style={{
             display: 'flex', alignItems: 'center',
-            padding: isMobile ? '0 8px' : '0 16px',
+            gap: isMobile ? 4 : 0,
+            padding: isMobile ? '0 8px 2px' : '0 16px',
             overflowX: 'auto', WebkitOverflowScrolling: 'touch',
             msOverflowStyle: 'none', scrollbarWidth: 'none',
           }}>
@@ -963,12 +1035,12 @@ const ProfilePage = () => {
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
                 style={{
-                  padding: isMobile ? '12px 12px' : '16px 16px',
-                  fontSize: isMobile ? 14 : 15, fontWeight: 600, cursor: 'pointer',
+                  padding: isMobile ? (isCompactMobile ? '12px 10px' : '12px 11px') : '16px 16px',
+                  fontSize: isMobile ? (isCompactMobile ? 13 : 14) : 15, fontWeight: 600, cursor: 'pointer',
                   background: 'none', border: 'none', whiteSpace: 'nowrap',
                   borderBottom: activeTab === tab.key ? `3px solid ${FB.blue}` : '3px solid transparent',
                   color: activeTab === tab.key ? FB.blue : FB.textSecondary,
-                  borderRadius: activeTab === tab.key ? 0 : '6px 6px 0 0',
+                  borderRadius: activeTab === tab.key ? 0 : (isMobile ? 10 : '6px 6px 0 0'),
                   transition: 'all 0.15s', flexShrink: 0,
                 }}
                 onMouseEnter={e => { if (activeTab !== tab.key) e.currentTarget.style.background = FB.bg; }}
@@ -984,7 +1056,7 @@ const ProfilePage = () => {
       {/* ════════ BODY (gray background, responsive layout) ════════ */}
       <div style={{
         width: '100%',
-        padding: isMobile ? '12px 8px 32px' : '16px 16px 40px',
+        padding: isMobile ? '10px 6px 28px' : '16px 16px 40px',
       }}>
         {activeTab === 'about' && isColonyView && colonyData && (
           <div style={{
@@ -1193,11 +1265,11 @@ const ProfilePage = () => {
               </FBCard>
 
               {/* Rôle & Colony */}
-              <FBCard title="Rôle & Colony">
+              <FBCard title={displayOrg && displayOrg.id !== 'zhiive-global-org' ? 'Rôle & Colony' : 'Rôle'}>
                 <InfoLine icon={<SafetyCertificateOutlined />}>
                   <span style={{ color: rl.color, fontWeight: 600 }}>{rl.icon} {rl.label}</span>
                 </InfoLine>
-                {displayOrg && (
+                {displayOrg && displayOrg.id !== 'zhiive-global-org' && (
                   <InfoLine icon={<TeamOutlined />}>
                     <span role="button" tabIndex={0} onClick={() => navigate(`/colony/${displayOrg.id}`)} style={{ cursor: 'pointer', color: FB.blue }}
                       onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
