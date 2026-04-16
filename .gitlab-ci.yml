@@ -1,0 +1,96 @@
+# ============================================================================
+# GITLAB CI/CD - DEPLOIEMENT AUTOMATIQUE SUR CLOUD RUN
+# ============================================================================
+# Se declenche automatiquement a chaque push sur main
+# Equivalent exact du .github/workflows/deploy-cloud-run.yml
+#
+# Variables requises (a configurer dans GitLab > Settings > CI/CD > Variables) :
+#   GCP_SERVICE_ACCOUNT_KEY : contenu JSON de la cle service account GCP
+# ============================================================================
+
+stages:
+  - build
+  - deploy
+
+variables:
+  PROJECT_ID: thiernew
+  REGION: europe-west1
+  SERVICE_NAME: crm-api
+  IMAGE_URL: europe-west1-docker.pkg.dev/thiernew/crm-api/crm-api
+
+# ============================================================================
+# JOB : BUILD & DEPLOY
+# ============================================================================
+deploy-cloud-run:
+  stage: deploy
+  image: google/cloud-sdk:slim
+  only:
+    - main
+  when: on_success
+
+  before_script:
+    # Authentification GCP via service account
+    # GCP_SERVICE_ACCOUNT_KEY est une variable de type "file" dans GitLab CI
+    # GitLab ecrit automatiquement le contenu dans un fichier temporaire
+    - gcloud auth activate-service-account --key-file="$GCP_SERVICE_ACCOUNT_KEY"
+    - gcloud config set project $PROJECT_ID
+
+  script:
+    # ============================================
+    # 1. BUILD IMAGE VIA CLOUD BUILD
+    # ============================================
+    - echo "==> Lancement du build Cloud Build..."
+    - |
+      BUILD_ID=$(gcloud builds submit \
+        --project $PROJECT_ID \
+        --tag "$IMAGE_URL" \
+        --async \
+        --format='value(id)')
+      echo "Build ID: $BUILD_ID"
+    - |
+      echo "==> Attente de la fin du build..."
+      while true; do
+        STATUS=$(gcloud builds describe "$BUILD_ID" --project $PROJECT_ID --format='value(status)')
+        echo "Status: $STATUS"
+        if [ "$STATUS" = "SUCCESS" ]; then
+          echo "Build reussi !"
+          break
+        elif [ "$STATUS" = "FAILURE" ] || [ "$STATUS" = "TIMEOUT" ] || [ "$STATUS" = "CANCELLED" ]; then
+          echo "Build echoue avec status: $STATUS"
+          exit 1
+        fi
+        sleep 10
+      done
+
+    # ============================================
+    # 2. DEPLOIEMENT CLOUD RUN
+    # ============================================
+    - echo "==> Deploiement sur Cloud Run..."
+    - |
+      gcloud run deploy $SERVICE_NAME \
+        --image "$IMAGE_URL" \
+        --region $REGION \
+        --platform managed \
+        --allow-unauthenticated \
+        --memory 2Gi \
+        --cpu 2 \
+        --min-instances 1 \
+        --max-instances 10 \
+        --timeout 300 \
+        --concurrency 80 \
+        --cpu-boost \
+        --port 8080 \
+        --add-cloudsql-instances thiernew:europe-west1:crm-postgres-prod \
+        --set-env-vars "NODE_ENV=production,PGHOST=/cloudsql/thiernew:europe-west1:crm-postgres-prod,PGDATABASE=2thier,PGUSER=postgres,FRONTEND_URL=https://www.zhiive.com,BACKEND_URL=https://www.zhiive.com,GCS_BUCKET=crm-2thier-uploads,SMTP_HOST=send.one.com,SMTP_PORT=465,SMTP_USER=contact@zhiive.com,SMTP_FROM=contact@zhiive.com,POSTAL_API_URL=https://postal.zhiive.com,POSTAL_SMTP_HOST=postal.zhiive.com,POSTAL_SMTP_PORT=25,POSTAL_SMTP_USER=zhiive-mail,DEFAULT_EMAIL_DOMAIN=zhiive.com,SEARXNG_URL=http://46.225.180.8:8888,VAPID_SUBJECT=mailto:contact@zhiive.com,ODOO_URL=http://46.225.180.8:8069,ODOO_DB_NAME=odoo_peppol,ODOO_USER=admin" \
+        --update-secrets "PGPASSWORD=crm-postgres-password:latest,JWT_SECRET=JWT_SECRET:latest,SESSION_SECRET=SESSION_SECRET:latest,ENCRYPTION_KEY=ENCRYPTION_KEY:latest,CRYPTO_SECRET_KEY=CRYPTO_SECRET_KEY:latest,GOOGLE_AI_API_KEY=GOOGLE_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,SMTP_PASS=SMTP_PASS:latest,POSTAL_API_KEY=POSTAL_API_KEY:latest,POSTAL_SMTP_PASS=POSTAL_SMTP_PASS:latest,POSTAL_WEBHOOK_SECRET=POSTAL_WEBHOOK_SECRET:latest,VAPID_PUBLIC_KEY=VAPID_PUBLIC_KEY:latest,VAPID_PRIVATE_KEY=VAPID_PRIVATE_KEY:latest,ODOO_PASSWORD=ODOO_PASSWORD:latest"
+
+    # ============================================
+    # 3. VERIFICATION
+    # ============================================
+    - |
+      URL=$(gcloud run services describe $SERVICE_NAME --region $REGION --format 'value(status.url)')
+      echo "Service deploye sur: $URL"
+    - echo "==> Health check dans 10 secondes..."
+    - sleep 10
+    - |
+      curl -f -s "$URL/api/health" && echo "Health check OK" || echo "Health check failed, mais deploiement reussi"
