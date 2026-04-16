@@ -54,7 +54,7 @@ import advancedSelectRoutes from '../api/advanced-select.js'; // 🚀 Routes Adv
 import dynamicFormulasRoutes from '../api/dynamic-formulas'; // 🌟 Routes Système Dynamique Universel
 import dashboardRoutes from './dashboard'; // 📊 Routes Dashboard
 import treeBranchLeafNewRoutes from '../components/TreeBranchLeaf/treebranchleaf-new/api/treebranchleaf-routes'; // 🌳 Routes TreeBranchLeaf NOUVEAU système centralisé
-// import treeBranchLeafV2Routes from './treebranchleaf-v2'; // 🌳 Routes TreeBranchLeaf V2 (DÉSACTIVÉ - Migration vers architecture centralisée)
+
 import tblRoutes from '../components/TreeBranchLeaf/treebranchleaf-new/TBL/routes/tbl-routes'; // 🎯 Routes TBL (TreeBranchLeaf Business Logic)
 import tblIntelligenceRoutes from '../components/TreeBranchLeaf/tbl-bridge/routes/tbl-intelligence-routes'; // 🧠 Routes TBL Intelligence V2.0
 import tblCapabilitiesRoutes from './tbl-capabilities'; // 🧠 Nouveau endpoint capabilities pré-chargées
@@ -312,9 +312,8 @@ apiRouter.use('/dynamic-formulas', dynamicFormulasRoutes);
 apiRouter.use('/treebranchleaf', authenticateToken, fetchFullUser, treeBranchLeafNewRoutes);
 
 
-// Routes TreeBranchLeaf V2 🌳 (DÉSACTIVÉ - Migration vers architecture centralisée)
-// apiRouter.use('/treebranchleaf-v2', treeBranchLeafV2Routes);
-// 
+
+
 
 // Routes TBL Intelligence 🧠 (Intelligence pour formules, conditions, tableaux)
 apiRouter.use('/tbl', tblIntelligenceRoutes);
