@@ -1,0 +1,2 @@
+ALTER TABLE "Section"
+ADD COLUMN IF NOT EXISTS "sectionType" TEXT NOT NULL DEFAULT 'normal';

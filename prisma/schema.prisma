@@ -1412,6 +1412,7 @@ model Section {
   order   Int
   blockId String
   active  Boolean @default(true)
+  sectionType String @default("normal")
   Field   Field[]
   Block   Block   @relation(fields: [blockId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
