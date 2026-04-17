@@ -242,10 +242,10 @@ const FormulaireLayout: React.FC = () => {
                 logger.error(`[DND_END] ❌ Could not find parent field for formula ${formulaId}`);
             }
         } else if (overData.type === 'validation-drop-zone') {
-            // TODO: Implémenter la logique pour les validations
+            // Stub — validation drop logic not yet implemented
             toast.warn("Logique de validation à implémenter.");
         } else if (overData.type === 'dependency-condition-drop-zone') {
-            // TODO: Implémenter la logique pour les dépendances
+            // Stub — dependency drop logic not yet implemented
             toast.warn("Logique de dépendance à implémenter.");
         }
 

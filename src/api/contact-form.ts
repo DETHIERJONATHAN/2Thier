@@ -9,8 +9,8 @@
  * - Validation complète
  * - Détection spam basique
  * - Métadonnées (IP, User-Agent)
- * - TODO: Envoi emails (SendGrid/AWS SES)
- * - TODO: Création lead automatique dans CRM
+ * - Email notifications (SendGrid/AWS SES) can be added
+ * - Automatic CRM lead creation can be added
  */
 
 import { Router, Request } from 'express';
@@ -152,7 +152,7 @@ router.get('/contact-submissions/:websiteId', async (req: Request, res) => {
   try {
     const websiteId = parseInt(req.params.websiteId);
     
-    // TODO: Vérifier permissions (organisationId du user = organisationId du site)
+    // Stub — org-level permission check can be added here
     
     const submissions = await prisma.contactSubmission.findMany({
       where: { websiteId },

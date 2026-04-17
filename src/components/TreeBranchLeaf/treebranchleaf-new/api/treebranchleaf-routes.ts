@@ -1085,7 +1085,7 @@ async function buildConditionExpressionReadable(
 // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂºÃ‚Â¡ÃƒÂ¯Ã‚Â¸Ã‚Â MIDDLEWARE - SÃƒÆ’Ã‚Â©curitÃƒÆ’Ã‚Â© et authentification
 // =============================================================================
 // TEMPORAIREMENT DÃƒÆ’Ã¢â‚¬Â°SACTIVÃƒÆ’Ã¢â‚¬Â° pour tester le systÃƒÆ’Ã‚Â¨me automatique
-// TODO: RÃƒÆ’Ã‚Â©activer l'authentification aprÃƒÆ’Ã‚Â¨s tests
+// Auth temporarily disabled — re-enable after testing phase
 
 // Authentification requise pour toutes les routes - TEMPORAIREMENT DÃƒÆ’Ã¢â‚¬Â°SACTIVÃƒÆ’Ã¢â‚¬Â°
 // router.use(authenticateToken);

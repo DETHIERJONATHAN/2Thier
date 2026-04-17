@@ -518,7 +518,7 @@ const TreeBranchLeafLayoutV2: React.FC = () => {
 
   const handleDragEnd = (event: DragEndEvent) => {
     logger.debug('🎯 [TreeBranchLeafV2] Drag end:', event);
-    // TODO: Implémenter la logique de drag & drop
+    // Stub — drag & drop reorder logic not yet implemented
   };
 
   if (loading) {

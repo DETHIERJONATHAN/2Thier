@@ -234,11 +234,11 @@ router.post('/evaluate', async (req, res) => {
     }
 
     if (capacity === '3') {
-      // TODO: implémenter moteur conditions
+      // Stub — condition engine not yet implemented
       return res.json({ success: true, type: 'condition', capacity, status: 'not_implemented', value: null, trace });
     }
     if (capacity === '4') {
-      // TODO: implémenter moteur tableaux
+      // Stub — table engine not yet implemented
       return res.json({ success: true, type: 'table', capacity, status: 'not_implemented', value: null, trace });
     }
 

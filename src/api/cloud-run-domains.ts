@@ -26,7 +26,7 @@ router.get('/cloud-run-domains', authenticateToken, async (req: Request, res: Re
     }
 
     // Liste des domaines mappés dans Cloud Run (basé sur votre console)
-    // TODO: À terme, on pourrait interroger l'API Cloud Run pour récupérer cette liste dynamiquement
+    // Static list; could be replaced with Cloud Run Admin API calls
     const mappedDomains = [
       {
         domain: '2thier.be',
@@ -83,7 +83,7 @@ router.post('/cloud-run-domains/verify', authenticateToken, async (req: Request,
     }
 
     // Vérification simple: on teste si le domaine répond
-    // TODO: Améliorer avec un vrai health check ou appel API Cloud Run
+    // Simple reachability check; Cloud Run API health check can be added
     const isReachable = await checkDomainReachability(domain);
 
     res.json({

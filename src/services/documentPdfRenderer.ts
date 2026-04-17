@@ -2949,8 +2949,7 @@ export class DocumentPdfRenderer {
 
     // Logo si configuré
     if (config.companyImage || this.theme.logoUrl) {
-      // TODO: Charger et afficher l'image du logo
-      // Pour l'instant on skip car pdfkit a besoin du fichier local
+      // Stub — logo rendering skipped (pdfkit requires local file)
     }
 
     // Titre principal
@@ -4087,8 +4086,7 @@ export class DocumentPdfRenderer {
    * Image
    */
   private renderImage(config: Record<string, unknown>): void {
-    // TODO: Implémenter le chargement d'images distantes
-    // Pour l'instant, on affiche juste un placeholder
+    // Stub — remote image loading not yet supported; shows placeholder
     if (config.url || config.src) {
       this.checkPageBreak(100);
       this.doc
@@ -4210,8 +4208,7 @@ export class DocumentPdfRenderer {
    * Extraire les données de prix depuis TBL
    */
   private extractPricingFromTbl(): unknown[] {
-    // TODO: Parser les données TBL pour trouver les éléments de prix
-    // Pour l'instant, retourner un tableau vide
+    // Stub — TBL pricing extraction not yet implemented
     return [];
   }
 

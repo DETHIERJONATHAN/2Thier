@@ -274,7 +274,7 @@ export function useDragAndDrop({
 
   // Throttler les validations de drag over pour améliorer les performances
   // Fonction canDrop sans throttling pour éviter les bugs
-  // TODO: Remettre throttling une fois le bug résolu
+  // Throttling disabled due to canDrop timing bug
   // const throttledCanDrop = useThrottledCallback(canDrop, 50); // Limite à 20fps
 
   const handleDragOver = useCallback((event: DragOverEvent): boolean => {

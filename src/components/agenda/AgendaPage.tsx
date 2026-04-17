@@ -149,7 +149,7 @@ const AgendaPage: React.FC = () => {
         ...values,
         startDate: values.dateRange[0].toISOString(),
         endDate: values.dateRange[1] ? values.dateRange[1].toISOString() : null,
-        participants: [] // TODO: Ajouter la gestion des participants
+        participants: [] // Stub — participant management not yet wired
       };
 
       if (editingEvent) {

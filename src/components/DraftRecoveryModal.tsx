@@ -131,7 +131,7 @@ export const DraftRecoveryModal: React.FC<DraftRecoveryModalProps> = ({
       onRestoreSuccess?.(draft);
     } catch (error) {
       logger.error('[DraftRecoveryModal] Erreur restore:', error);
-      // TODO: Afficher notification d'erreur
+      // Error is logged above; user notification could be added
     } finally {
       setActionLoading(null);
     }

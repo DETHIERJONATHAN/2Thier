@@ -1,9 +1,8 @@
-import React, { Suspense, lazy, useEffect } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import { useAuth } from './auth/useAuth';
-import { useFormulasVersionWatcher, onFormulasVersionChange } from './hooks/useFormulasVersionWatcher';
 import { DomainRouter } from './hooks/useDomainRouter';
 
 // Lazy imports
@@ -92,15 +91,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
 };
 
 const App: React.FC = () => {
-  // Active la surveillance de la version des formules (invalidation automatique)
-  useFormulasVersionWatcher({ intervalMs: 60_000 });
-
-  // Exemple: écoute globale (on pourrait déplacer vers un provider context si besoin)
-  useEffect(() => {
-    const off = onFormulasVersionChange(() => { /* hook d'écoute prêt pour actions futures */ });
-    return () => off();
-  }, []);
-  
   return (
     <DomainRouter>
       <Routes>

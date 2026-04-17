@@ -84,7 +84,7 @@ const LeadSelectorModal: React.FC<LeadSelectorModalProps> = ({
           phone: lead.phone,
           company: lead.company,
           address: lead.address || lead.data?.address || '',
-          hasSubmission: false, // TODO: Vérifier s'il y a une soumission TBL
+          hasSubmission: false, // Stub — TBL submission check not yet wired
           lastModified: lead.updatedAt ? new Date(lead.updatedAt) : undefined
         }));
         

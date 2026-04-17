@@ -609,7 +609,7 @@ export const useModulesAdmin = () => {
   }, [currentOrganization?.id, service]);
 
   const handleEditModule = useCallback((module: ModuleWithStatus) => {
-    // TODO: Ouvrir modal d'édition
+    // Stub — edit modal not yet implemented
     logger.debug('[useModulesAdmin] Edit module:', module.label);
   }, []);
 

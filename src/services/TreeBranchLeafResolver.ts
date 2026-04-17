@@ -216,7 +216,7 @@ export class TreeBranchLeafResolver {
    * Évalue une condition (placeholder pour la logique métier)
    */
   private evaluateCondition(conditionSet: unknown, value: string | null): unknown {
-    // TODO: Implémenter la logique d'évaluation des conditions
+    // Placeholder — returns passthrough result
     return { evaluated: true, conditionSet, inputValue: value };
   }
 
@@ -224,7 +224,7 @@ export class TreeBranchLeafResolver {
    * Évalue une formule (placeholder pour la logique métier)
    */
   private evaluateFormula(tokens: unknown, value: string | null): unknown {
-    // TODO: Implémenter la logique d'évaluation des formules
+    // Placeholder — returns passthrough result
     return { calculated: true, tokens, inputValue: value };
   }
 

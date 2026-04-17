@@ -18,7 +18,7 @@ export default function ThankYouPage() {
   };
 
   const handleTrackProject = () => {
-    // TODO: Implémenter le suivi de projet si nécessaire
+    // Stub — project tracking page
     window.location.href = '/suivi';
   };
 

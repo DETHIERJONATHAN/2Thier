@@ -1126,8 +1126,7 @@ router.post('/generated/generate', async (req: AuthenticatedRequest, res: Respon
     });
 
 
-    // TODO: Implémenter la vraie génération PDF ici
-    // Pour l'instant, on simule avec un statut SENT (ready)
+    // Stub — marks as SENT; actual PDF generation pending
     const updatedDocument = await prisma.generatedDocument.update({
       where: { id: generatedDocument.id },
       data: {

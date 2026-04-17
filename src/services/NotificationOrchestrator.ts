@@ -272,7 +272,7 @@ export class NotificationOrchestrator extends EventEmitter {
   private async checkMissedCalls(): Promise<void> {
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
-    // TODO: Implémenter selon votre modèle d'appels
+    // Stub — call model integration pending
     logger.debug('📞 [NotificationOrchestrator] Vérification appels manqués...', {
       since: tenMinutesAgo.toISOString()
     });
@@ -282,7 +282,7 @@ export class NotificationOrchestrator extends EventEmitter {
    * ⭐ VÉRIFIER EMAILS VIP
    */
   private async checkVIPEmails(): Promise<void> {
-    // TODO: Implémenter détection emails VIP avec IA
+    // Stub — VIP email detection not yet wired
     logger.debug('⭐ [NotificationOrchestrator] Vérification emails VIP...');
   }
 
@@ -290,7 +290,7 @@ export class NotificationOrchestrator extends EventEmitter {
    * ⏰ VÉRIFIER RENDEZ-VOUS IMMINENTS
    */
   private async checkImminentMeetings(): Promise<void> {
-    // TODO: Implémenter vérification rendez-vous via Calendar API
+    // Stub — Calendar API integration pending
     logger.debug('⏰ [NotificationOrchestrator] Vérification rendez-vous imminents...');
   }
 
@@ -300,7 +300,7 @@ export class NotificationOrchestrator extends EventEmitter {
   private async checkNewQuotes(): Promise<void> {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
-    // TODO: Implémenter selon votre modèle de devis
+    // Stub — quotes model integration pending
     logger.debug('💰 [NotificationOrchestrator] Vérification nouveaux devis...', {
       since: oneHourAgo.toISOString()
     });
@@ -310,7 +310,7 @@ export class NotificationOrchestrator extends EventEmitter {
    * 🧾 VÉRIFIER NOUVELLES FACTURES
    */
   private async checkNewInvoices(): Promise<void> {
-    // TODO: Implémenter selon votre modèle de factures
+    // Stub — invoices model integration pending
     logger.debug('🧾 [NotificationOrchestrator] Vérification nouvelles factures...');
   }
 
@@ -318,7 +318,7 @@ export class NotificationOrchestrator extends EventEmitter {
    * ⏰ VÉRIFIER TÂCHES EN RETARD
    */
   private async checkOverdueTasks(): Promise<void> {
-    // TODO: Implémenter selon votre modèle de tâches
+    // Stub — tasks model integration pending
     logger.debug('⏰ [NotificationOrchestrator] Vérification tâches en retard...');
   }
 
@@ -326,7 +326,7 @@ export class NotificationOrchestrator extends EventEmitter {
    * 📋 VÉRIFIER MISES À JOUR PROJETS
    */
   private async checkProjectUpdates(): Promise<void> {
-    // TODO: Implémenter selon votre modèle de projets
+    // Stub — projects model integration pending
     logger.debug('📋 [NotificationOrchestrator] Vérification mises à jour projets...');
   }
 
@@ -334,7 +334,7 @@ export class NotificationOrchestrator extends EventEmitter {
    * 📊 ANALYSER PATTERNS DE NOTIFICATIONS
    */
   private async analyzeNotificationPatterns(): Promise<void> {
-    // TODO: Implémenter analyse IA des patterns
+    // Stub — AI pattern analysis not yet wired
     logger.debug('📊 [NotificationOrchestrator] Analyse patterns notifications...');
   }
 
@@ -342,7 +342,7 @@ export class NotificationOrchestrator extends EventEmitter {
    * ⏰ OPTIMISER HORAIRES NOTIFICATIONS
    */
   private async optimizeNotificationTiming(): Promise<void> {
-    // TODO: Implémenter optimisation IA des horaires
+    // Stub — AI timing optimization not yet wired
     logger.debug('⏰ [NotificationOrchestrator] Optimisation horaires...');
   }
 
@@ -350,7 +350,7 @@ export class NotificationOrchestrator extends EventEmitter {
    * 🔍 DÉTECTER ANOMALIES
    */
   private async detectAnomalies(): Promise<void> {
-    // TODO: Implémenter détection d'anomalies avec IA
+    // Stub — AI anomaly detection not yet wired
     logger.debug('🔍 [NotificationOrchestrator] Détection anomalies...');
   }
 
@@ -358,7 +358,7 @@ export class NotificationOrchestrator extends EventEmitter {
    * 💡 SUGGÉRER AMÉLIORATIONS
    */
   private async suggestImprovements(): Promise<void> {
-    // TODO: Implémenter suggestions IA
+    // Stub — AI suggestions not yet wired
     logger.debug('💡 [NotificationOrchestrator] Suggestions améliorations...');
   }
 
@@ -403,7 +403,7 @@ export class NotificationOrchestrator extends EventEmitter {
   }
 
   private async loadUserSettings(userId: string): Promise<NotificationSettings> {
-    // TODO: Charger depuis la base de données
+    // Stub — returns defaults; DB persistence pending
     return {
       userId,
       organizationId: (await this.getUserOrganization(userId))!,

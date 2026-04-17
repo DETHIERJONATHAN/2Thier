@@ -117,8 +117,8 @@ const LeadsPage: React.FC = () => {
           {selectedLeadId && (
             <CalendarWidget
               leadId={selectedLeadId}
-              leadEmail="" // TODO: récupérer l'email du lead
-              leadName="" // TODO: récupérer le nom du lead
+              leadEmail="" // Stub — lead email lookup pending
+              leadName="" // Stub — lead name lookup pending
               onEventCreated={() => {
                 setIsCalendarOpen(false);
                 setRefreshTrigger(prev => prev + 1);

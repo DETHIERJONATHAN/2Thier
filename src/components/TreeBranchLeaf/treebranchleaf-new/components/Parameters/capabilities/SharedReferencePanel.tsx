@@ -311,7 +311,7 @@ const SharedReferencePanel: React.FC<SharedReferencePanelProps> = ({
   useEffect(() => {
     if (selectedReferenceIds.length > 0) {
       // Pour l'instant on charge les détails de la première référence
-      // TODO: Adapter l'UI pour afficher les détails de toutes les références
+      // Currently loads first reference only; multi-reference display can be added
       loadReferenceDetails(selectedReferenceIds[0]);
     } else {
       setSelectedReferenceDetails(null);

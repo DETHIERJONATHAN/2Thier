@@ -284,7 +284,7 @@ router.put('/events/:id', authMiddleware, async (req: AuthenticatedRequest, res:
 
     // Vérifier les permissions (propriétaire ou admin)
     if (existingEvent.ownerId !== userId) {
-      // TODO: Ajouter une vérification de rôle admin si nécessaire
+      // Admin role bypass can be added here
       return res.status(403).json({ error: 'Accès refusé' });
     }
 
@@ -380,7 +380,7 @@ router.delete('/events/:id', authMiddleware, async (req: AuthenticatedRequest, r
 
     // Vérifier les permissions (propriétaire ou admin)
     if (existingEvent.ownerId !== userId) {
-      // TODO: Ajouter une vérification de rôle admin si nécessaire
+      // Admin role bypass can be added here
       return res.status(403).json({ error: 'Accès refusé' });
     }
 

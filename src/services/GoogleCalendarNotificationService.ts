@@ -408,7 +408,7 @@ export class GoogleCalendarNotificationService extends EventEmitter {
   }
 
   private async getUpcomingEvents(_userId: string, _start: Date, _end: Date): Promise<any[]> {
-    // TODO: Implémenter récupération événements via Google Calendar API
+    // Stub — Google Calendar API integration pending
     return [];
   }
 
@@ -529,7 +529,7 @@ export class GoogleCalendarNotificationService extends EventEmitter {
 
   private calculateTravelTime(location?: string): number | undefined {
     if (!location) return undefined;
-    // TODO: Intégrer API Google Maps pour calcul temps de trajet
+    // Stub — returns 15min default; Google Maps API integration pending
     return 15; // minutes par défaut
   }
 }

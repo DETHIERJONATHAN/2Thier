@@ -216,7 +216,7 @@ export class GoogleGeminiService {
         return this.generateDemoAnalysis(leadData);
       }
       
-      // TODO: Intégration réelle Vertex AI
+      // Stub — Vertex AI not configured
       return { success: false, error: 'Vertex AI non configuré' };
       
     } catch (error) {
@@ -236,7 +236,7 @@ export class GoogleGeminiService {
         return this.generateDemoProposal(leadData, productData);
       }
       
-      // TODO: Intégration réelle Vertex AI
+      // Stub — Vertex AI not configured
       return { success: false, error: 'Vertex AI non configuré' };
       
     } catch (error) {
@@ -256,7 +256,7 @@ export class GoogleGeminiService {
         return this.generateDemoSentiment(emailContent);
       }
       
-      // TODO: Intégration réelle Vertex AI
+      // Stub — Vertex AI not configured
       return { success: false, error: 'Vertex AI non configuré' };
       
     } catch (error) {
@@ -276,7 +276,7 @@ export class GoogleGeminiService {
         return this.generateDemoResponse(emailContent, context);
       }
       
-      // TODO: Intégration réelle Vertex AI
+      // Stub — Vertex AI not configured
       return { success: false, error: 'Vertex AI non configuré' };
       
     } catch (error) {

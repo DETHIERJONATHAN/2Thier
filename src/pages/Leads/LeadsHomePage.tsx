@@ -157,7 +157,7 @@ export default function LeadsHomePage({
       const companyMatch = lead.company?.toLowerCase().includes(term);
       const sourceMatch = lead.source?.toLowerCase().includes(term);
       
-      // TODO: Ajouter IA pour recherche phonétique avancée
+      // Phonetic/fuzzy search can be added via AI
       return nameMatch || emailMatch || phoneMatch || companyMatch || sourceMatch;
     });
   }, [leads, searchTerm]);
@@ -873,7 +873,7 @@ export default function LeadsHomePage({
         }}
         scroll={{ x: isMobile ? 900 : 1200 }}
         onChange={(pagination, filters, sorter) => {
-          // TODO: Gérer le tri côté serveur
+          // Server-side sorting can be added for large datasets
           logger.debug('Table change:', { pagination, filters, sorter });
         }}
       />

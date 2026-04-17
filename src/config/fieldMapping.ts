@@ -29,7 +29,7 @@ export const DEFAULT_FIELD_MAPPING: FieldMapping = {
  * être étendu pour récupérer des configurations spécifiques
  */
 export function getFieldMapping(organizationId?: string): FieldMapping {
-  // TODO: Implémenter la récupération depuis la base de données si besoin
+  // Returns default mapping; DB-backed config can be added per org
   return DEFAULT_FIELD_MAPPING;
 }
 

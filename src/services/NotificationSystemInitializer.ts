@@ -87,7 +87,7 @@ export class NotificationSystemInitializer {
   private handleUrgentNotification(data: unknown): void {
     try {
       
-      // TODO: Implémenter actions spécifiques selon le type
+      // Route by notification type
       switch (data.type) {
         case 'urgent-email':
           this.handleUrgentEmail(data.data);
@@ -120,11 +120,7 @@ export class NotificationSystemInitializer {
    */
   private handleUrgentEmail(emailData: unknown): void {
     
-    // TODO: Actions spécifiques pour emails urgents
-    // - Push notification immédiate
-    // - Notification SMS si configuré
-    // - Alerte desktop
-    // - Mise à jour tableau de bord temps réel
+    // Stub — urgent email actions (push, SMS, desktop alert) not yet wired
   }
 
   /**
@@ -132,11 +128,7 @@ export class NotificationSystemInitializer {
    */
   private handleUrgentMeeting(meetingData: unknown): void {
     
-    // TODO: Actions spécifiques pour meetings urgents
-    // - Alerte sonore
-    // - Ouverture automatique du lien de meeting
-    // - Notification push avec action directe
-    // - Préparation automatique documents
+    // Stub — urgent meeting actions (audio alert, auto-open link) not yet wired
   }
 
   /**
@@ -145,11 +137,7 @@ export class NotificationSystemInitializer {
   private handleSystemError(error: unknown): void {
     logger.error('💥 [NotificationSystem] ERREUR SYSTÈME:', error);
     
-    // TODO: Gestion robuste des erreurs
-    // - Notification aux administrateurs
-    // - Sauvegarde état système
-    // - Tentative de redémarrage automatique
-    // - Logging détaillé pour debugging
+    // Stub — admin alerting and auto-recovery not yet wired
   }
 
   /**
@@ -160,7 +148,7 @@ export class NotificationSystemInitializer {
       const universal = UniversalNotificationService.getInstance();
       const universalStatus = universal.getStatus();
 
-      // TODO: Collecter stats de tous les services
+      // Aggregate stats from all notification services
       return {
         isRunning: this.isInitialized,
         services: {

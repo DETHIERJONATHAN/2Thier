@@ -264,7 +264,7 @@ describe('TBLFieldRendererAdvanced - Champs NUMBER', () => {
         },
         value: null
       };
-      // TODO: Implémenter la logique de validation
+      // Validation logic test placeholder
     });
   });
 

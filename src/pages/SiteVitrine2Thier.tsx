@@ -180,7 +180,7 @@ const SiteVitrine2Thier: React.FC = () => {
   // Handler formulaire contact
   const handleSubmit = (values: unknown) => {
     logger.debug('Formulaire soumis:', values);
-    // TODO: Envoyer vers API CRM
+    // Stub — CRM API integration pending
   };
 
   return (

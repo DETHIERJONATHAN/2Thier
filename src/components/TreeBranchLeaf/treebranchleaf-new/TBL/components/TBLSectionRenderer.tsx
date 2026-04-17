@@ -2142,7 +2142,7 @@ const TBLSectionRenderer: React.FC<TBLSectionRendererProps> = ({
           // Cela permet aux conditions @select.xxx de fonctionner correctement
           value: optionNode.value || optionNode.id,
           metadata: optionNode.metadata, // 🔥 CRITIQUE: Inclure metadata avec sharedReferenceIds !
-          conditionalFields: undefined // TODO: construire si nécessaire
+          conditionalFields: undefined // Conditional fields can be built from metadata if needed
         };
       });
     }

@@ -92,7 +92,7 @@ export const useSharedSections = () => {
   // 🔄 Réorganiser les sections (pour l'instant, on garde l'ordre Prisma)
   const reorderSections = useCallback((newOrder: SharedSection[]) => {
     // Pour l'instant, on met à jour localement
-    // TODO: Implémenter l'ordre dans Prisma si nécessaire
+    // Local reorder; Prisma-persisted ordering can be added
     const reordered = newOrder.map((section, index) => ({
       ...section,
       order: index + 1

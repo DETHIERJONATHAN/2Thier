@@ -288,8 +288,7 @@ function calculateAngleSpread(angles: number[], maxAngle: number): number {
  * Détecte le marqueur de calibration dans les photos
  */
 async function detectMarker(photos: CapturedPhoto[]): Promise<MarkerDetection | null> {
-  // TODO: Implémenter la détection réelle avec vision API ou OpenCV.js
-  // Pour l'instant, retourne une détection simulée si la photo est de bonne qualité
+  // Stub — returns simulated detection; real vision API/OpenCV.js integration pending
   
   const bestPhoto = photos.reduce((best, current) => 
     current.metadata.quality.overallScore > best.metadata.quality.overallScore ? current : best

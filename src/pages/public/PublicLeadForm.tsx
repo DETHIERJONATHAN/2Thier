@@ -99,7 +99,7 @@ export default function PublicLeadForm() {
     try {
       setIsSubmitting(true);
       
-      // TODO: Remplacer par l'appel API réel
+      // Calls public lead API endpoint
       const response = await fetch('/api/public/leads', {
         method: 'POST',
         headers: {

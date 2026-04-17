@@ -480,7 +480,7 @@ Avez-vous quelques minutes pour échanger à ce sujet ?"
       setCallInProgress(true);
       setCallStartTime(new Date());
       
-      // TODO: Intégrer avec l'API Telnyx
+      // Calls Telnyx API to initiate outbound call
       const callData = await api.post('/api/telnyx/call', {
         to: lead.data.phone,
         from: process.env.TELNYX_PHONE_NUMBER,

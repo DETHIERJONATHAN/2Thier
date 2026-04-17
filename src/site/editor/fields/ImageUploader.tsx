@@ -97,7 +97,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     setLoading(true);
     message.info('Optimisation AI en cours...');
     
-    // TODO: Appel API pour optimiser l'image avec AI
+    // Stub — AI image optimization API call pending
     setTimeout(() => {
       message.success('Image optimisée avec succès !');
       setLoading(false);

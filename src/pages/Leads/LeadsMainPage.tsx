@@ -54,7 +54,7 @@ export default function LeadsMainPage() {
     logger.debug('📅 [LeadsMainPage] Ouverture module agenda:', leadId);
     setSelectedLeadId(leadId);
     setIsCalendarOpen(true);
-    // TODO: Implémenter module agenda
+    // Stub — agenda module not yet fully wired
     notification.info({
       message: 'Module Agenda',
       description: 'Module Agenda à implémenter'

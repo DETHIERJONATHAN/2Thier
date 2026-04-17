@@ -187,8 +187,7 @@ Subject: ${email.subject}
 Body: ${email.textContent || email.snippet}
 `.trim();
 
-      // TODO: Intégrer votre service IA (OpenAI, Anthropic, etc.)
-      // Pour l'instant, analyse basique avec des règles
+      // Basic rule-based analysis (AI integration deferred)
         const analysis = {
           ...this.analyzeEmailBasic(email),
           rawContent: content
@@ -327,7 +326,7 @@ Body: ${email.textContent || email.snippet}
    */
   private async createUrgentPushNotification(notification: EnrichedGmailNotification): Promise<void> {
     
-    // TODO: Implémenter push notifications (Firebase, WebPush, etc.)
+    // Stub — emits event; push transport (Firebase/WebPush) not yet wired
     this.emit('urgent-email', {
       type: 'URGENT_EMAIL',
       title: `🚨 EMAIL URGENT de ${notification.from}`,
@@ -381,7 +380,7 @@ Body: ${email.textContent || email.snippet}
   }
 
   private async getFullEmailContent(emailId: string, _userId: string): Promise<unknown> {
-    // TODO: Implémenter la récupération complète via Gmail API
+    // Stub — returns mock email; Gmail API fetch not yet wired
     return {
       id: emailId,
       threadId: 'thread_' + emailId,

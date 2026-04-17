@@ -228,8 +228,7 @@ async function executeCascade(
     }
 
 
-    // TODO: Implémenter la logique de dial/transfer via Telnyx Call Control
-    // Pour l'instant, les webhooks vont gérer les transitions d'état
+    // Stub — webhooks handle state transitions; dial/transfer not yet wired
 
   } catch (error) {
     logger.error('❌ [TelnyxCascade] Erreur executeCascade:', error);

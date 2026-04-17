@@ -339,7 +339,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
   const handleCallLead = useCallback(() => {
     if (!lead) return;
     
-    // TODO: Intégrer avec Telnyx
+    // Stub — Telnyx call integration pending
     // Suggestion IA de script d'appel avant d'ouvrir Telnyx
     Modal.info({
       title: '🤖 Script d\'appel suggéré par l\'IA',
@@ -365,7 +365,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
   const handleScheduleMeeting = useCallback(() => {
     if (!lead) return;
     
-    // TODO: Intégrer avec Google Calendar
+    // Stub — Google Calendar integration pending
     // Propositions de créneaux optimisés par IA
     Modal.info({
       title: '🤖 Créneaux optimisés par l\'IA',
@@ -390,7 +390,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
   const handleSendEmail = useCallback(() => {
     if (!lead) return;
     
-    // TODO: Pré-remplir email avec IA
+    // Pre-fills email with context data
     const emailData = {
       to: displayEmail,
       subject: `Suivi de votre demande - ${displayCompany || displayName}`,
@@ -419,8 +419,7 @@ export default function LeadDetailModule({ leadId: propLeadId, onClose }: LeadDe
       // Recharger l'historique
       fetchLeadDetail();
       
-      // TODO: Analyse IA de la note
-      // Détection d'opportunités ou signaux faibles
+      // AI note analysis (opportunity/signal detection) can be added
       
     } catch (error) {
       const errorMessage = getErrorMessage(error, 'Erreur lors de l\'ajout de la note');

@@ -859,7 +859,7 @@ function OptionsEditor({ fieldId, options }: {
       setNewOptionLabel('');
     } catch (error) {
       logger.error("Failed to add option", error);
-      // TODO: show error to user
+      // Error is logged; user-facing notification can be added
     } finally {
       setIsAdding(false);
     }
@@ -873,7 +873,7 @@ function OptionsEditor({ fieldId, options }: {
       await removeOptionFromField(fieldId, String(optionId));
     } catch (error) {
       logger.error("Failed to remove option", error);
-      // TODO: show error to user
+      // Error is logged; user-facing notification can be added
       setIsRemoving(prev => ({...prev, [optionId]: false}));
     }
     // No finally block to reset state, because the item will disappear from the list on re-render

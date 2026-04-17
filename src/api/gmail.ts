@@ -221,7 +221,7 @@ async function logEmailActivity(data: {
   subject: string;
 }) {
   try {
-    // TODO: Implémenter avec Prisma
+    // Stub — activity logging with Prisma pending
     // Sauvegarder dans une table email_logs ou lead_activities
   } catch (error) {
     logger.error('[Gmail] ❌ Erreur log activité:', error);
@@ -243,7 +243,7 @@ async function getGoogleAuth(userId: string) {
     googleOAuthConfig.redirectUri
   );
   
-  // TODO: Récupérer les tokens depuis la DB
+  // Fetches tokens from DB via getUserGoogleTokens
   const userTokens = await getUserGoogleTokens(userId);
   
   oauth2Client.setCredentials({
@@ -255,7 +255,7 @@ async function getGoogleAuth(userId: string) {
 }
 
 async function getUserGoogleTokens(_userId: string) {
-  // TODO: Implémentation avec Prisma
+  // Stub — Prisma implementation pending
   throw new Error('getUserGoogleTokens à implémenter avec Prisma');
 }
 

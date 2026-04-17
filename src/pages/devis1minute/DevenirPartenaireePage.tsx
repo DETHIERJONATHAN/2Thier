@@ -64,7 +64,7 @@ const DevenirPartenairePage: React.FC = () => {
   const handleSubmit = async (values: unknown) => {
     setLoading(true);
     try {
-      // TODO: Intégrer avec l'API
+      // Stub — API integration pending
       logger.debug('Inscription professionnel:', values);
       
       // Simulation appel API

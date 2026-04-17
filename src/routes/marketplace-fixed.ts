@@ -197,8 +197,8 @@ router.get('/stats', requireRole(['admin', 'super_admin']), async (req: Authenti
       data: {
         totalLeads: availableLeads + soldLeads,
         availableLeads,
-        avgPrice: 0, // TODO: calculer la moyenne des prix
-        newToday: 0, // TODO: compter les leads d'aujourd'hui
+        avgPrice: 0, // Stub — price average calculation pending
+        newToday: 0, // Stub — today count calculation pending
         marketplace: {
           availableLeads,
           soldLeads
@@ -206,7 +206,7 @@ router.get('/stats', requireRole(['admin', 'super_admin']), async (req: Authenti
         organization: {
           totalPurchases,
           myPublishedLeads,
-          currentCredits: 0 // TODO: système de crédits si nécessaire
+          currentCredits: 0 // Stub — credits system not yet implemented
         }
       }
     });

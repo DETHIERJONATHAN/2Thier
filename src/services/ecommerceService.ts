@@ -457,33 +457,33 @@ export class EcommerceService {
 
   // Tests de connexion (à implémenter)
   private static async testShopifyConnection(integration: { url: string; credentials: any }): Promise<boolean> {
-    // TODO: Implémenter test Shopify
+    // Stub — returns true until platform API is integrated
     return true;
   }
 
   private static async testWooCommerceConnection(integration: { url: string; credentials: any }): Promise<boolean> {
-    // TODO: Implémenter test WooCommerce
+    // Stub — returns true until platform API is integrated
     return true;
   }
 
   private static async testPrestaShopConnection(integration: { url: string; credentials: any }): Promise<boolean> {
-    // TODO: Implémenter test PrestaShop
+    // Stub — returns true until platform API is integrated
     return true;
   }
 
   private static async testMagentoConnection(integration: { url: string; credentials: any }): Promise<boolean> {
-    // TODO: Implémenter test Magento
+    // Stub — returns true until platform API is integrated
     return true;
   }
 
   private static async testCustomConnection(integration: { url: string; credentials: any }): Promise<boolean> {
-    // TODO: Implémenter test API personnalisée
+    // Stub — returns true until platform API is integrated
     return true;
   }
 
   // Récupération des produits (à implémenter)
   private static async fetchShopifyProducts(integration: unknown): Promise<ProductData[]> {
-    // TODO: Implémenter récupération produits Shopify
+    // Stub — not yet integrated
     logger.warn('🛍️ [Ecommerce] fetchShopifyProducts non implémenté', {
       integrationId: integration?.id ?? integration?.url ?? 'unknown'
     });
@@ -491,7 +491,7 @@ export class EcommerceService {
   }
 
   private static async fetchWooCommerceProducts(integration: unknown): Promise<ProductData[]> {
-    // TODO: Implémenter récupération produits WooCommerce
+    // Stub — not yet integrated
     logger.warn('🛍️ [Ecommerce] fetchWooCommerceProducts non implémenté', {
       integrationId: integration?.id ?? integration?.url ?? 'unknown'
     });
@@ -499,7 +499,7 @@ export class EcommerceService {
   }
 
   private static async fetchPrestaShopProducts(integration: unknown): Promise<ProductData[]> {
-    // TODO: Implémenter récupération produits PrestaShop
+    // Stub — not yet integrated
     logger.warn('🛍️ [Ecommerce] fetchPrestaShopProducts non implémenté', {
       integrationId: integration?.id ?? integration?.url ?? 'unknown'
     });
@@ -507,7 +507,7 @@ export class EcommerceService {
   }
 
   private static async fetchMagentoProducts(integration: unknown): Promise<ProductData[]> {
-    // TODO: Implémenter récupération produits Magento
+    // Stub — not yet integrated
     logger.warn('🛍️ [Ecommerce] fetchMagentoProducts non implémenté', {
       integrationId: integration?.id ?? integration?.url ?? 'unknown'
     });
@@ -515,7 +515,7 @@ export class EcommerceService {
   }
 
   private static async fetchCustomProducts(integration: unknown): Promise<ProductData[]> {
-    // TODO: Implémenter récupération produits API personnalisée
+    // Stub — not yet integrated
     logger.warn('🛍️ [Ecommerce] fetchCustomProducts non implémenté', {
       integrationId: integration?.id ?? integration?.url ?? 'unknown'
     });
@@ -524,7 +524,7 @@ export class EcommerceService {
 
   // Récupération des commandes (à implémenter)
   private static async fetchShopifyOrders(integration: unknown, fromDate?: Date): Promise<OrderData[]> {
-    // TODO: Implémenter récupération commandes Shopify
+    // Stub — not yet integrated
     logger.warn('🛒 [Ecommerce] fetchShopifyOrders non implémenté', {
       integrationId: integration?.id ?? integration?.url ?? 'unknown',
       fromDate: fromDate?.toISOString() ?? null
@@ -533,7 +533,7 @@ export class EcommerceService {
   }
 
   private static async fetchWooCommerceOrders(integration: unknown, fromDate?: Date): Promise<OrderData[]> {
-    // TODO: Implémenter récupération commandes WooCommerce
+    // Stub — not yet integrated
     logger.warn('🛒 [Ecommerce] fetchWooCommerceOrders non implémenté', {
       integrationId: integration?.id ?? integration?.url ?? 'unknown',
       fromDate: fromDate?.toISOString() ?? null
@@ -542,7 +542,7 @@ export class EcommerceService {
   }
 
   private static async fetchPrestaShopOrders(integration: unknown, fromDate?: Date): Promise<OrderData[]> {
-    // TODO: Implémenter récupération commandes PrestaShop
+    // Stub — not yet integrated
     logger.warn('🛒 [Ecommerce] fetchPrestaShopOrders non implémenté', {
       integrationId: integration?.id ?? integration?.url ?? 'unknown',
       fromDate: fromDate?.toISOString() ?? null
@@ -551,7 +551,7 @@ export class EcommerceService {
   }
 
   private static async fetchMagentoOrders(integration: unknown, fromDate?: Date): Promise<OrderData[]> {
-    // TODO: Implémenter récupération commandes Magento
+    // Stub — not yet integrated
     logger.warn('🛒 [Ecommerce] fetchMagentoOrders non implémenté', {
       integrationId: integration?.id ?? integration?.url ?? 'unknown',
       fromDate: fromDate?.toISOString() ?? null
@@ -560,7 +560,7 @@ export class EcommerceService {
   }
 
   private static async fetchCustomOrders(integration: unknown, fromDate?: Date): Promise<OrderData[]> {
-    // TODO: Implémenter récupération commandes API personnalisée
+    // Stub — not yet integrated
     logger.warn('🛒 [Ecommerce] fetchCustomOrders non implémenté', {
       integrationId: integration?.id ?? integration?.url ?? 'unknown',
       fromDate: fromDate?.toISOString() ?? null

@@ -141,7 +141,7 @@ router.post('/purchase/:leadId', requireRole(['admin', 'super_admin']), async (r
       }
 
       // 2. Vérifier les crédits de l'organisation acheteuse (si le système de crédits est implémenté)
-      // TODO: Implémenter système de crédits si nécessaire
+      // Stub — credits system not yet implemented
 
       // 3. Créer la transaction d'achat
       const purchase = await tx.leadPurchase.create({
@@ -241,7 +241,7 @@ router.get('/stats', requireRole(['admin', 'super_admin']), async (req: Authenti
         organization: {
           totalPurchases,
           myPublishedLeads,
-          currentCredits: 0 // TODO: Implémenter système de crédits si nécessaire
+          currentCredits: 0 // Stub — credits system not yet implemented
         }
       }
     });
@@ -365,7 +365,7 @@ router.get('/saved-searches', requireRole(['admin', 'super_admin']), async (req:
     }
 
     // Pour l'instant, retourner un tableau vide
-    // TODO: Implémenter le système de recherches sauvegardées si nécessaire
+    // Stub — saved searches not yet implemented; returns empty
     res.json({
       success: true,
       data: []
@@ -402,7 +402,7 @@ router.post('/saved-searches', requireRole(['admin', 'super_admin']), async (req
       });
     }
 
-    // TODO: Implémenter le système de recherches sauvegardées
+    // Stub — saved searches not yet implemented
     res.json({
       success: true,
       data: {

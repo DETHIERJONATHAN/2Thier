@@ -276,7 +276,7 @@ export const UniversalSectionEditor: React.FC<UniversalSectionEditorProps> = ({
       setLoading(true);
       message.info('Génération de contenu par IA en cours...');
       
-      // TODO: Appel API pour générer le contenu
+      // Stub — AI content generation API call pending
       // const aiContent = await generateSectionContent({
       //   sectionType,
       //   aiContext: schema.aiContext,

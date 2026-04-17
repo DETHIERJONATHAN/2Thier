@@ -776,6 +776,6 @@ export async function unlinkVariableFromAllNodes(
   // On rÃƒÂ©utilise la mÃƒÂªme logique d'extraction que pour la crÃƒÂ©ation
   // mais on retire au lieu d'ajouter
   
-  // TODO: ImplÃƒÂ©menter si nÃƒÂ©cessaire
+  // Stub — unlinking logic not yet implemented
   
 }

@@ -12,7 +12,7 @@ const MODULES_CACHE_TTL = 30; // seconds — modules rarely change
 
 // Implémentation MINIMALE restaurée pour éviter les 404 côté frontend
 // et rétablir l'affichage des modules. Conçue pour être sûre et simple.
-// TODO: Affiner la logique d'activation par organisation si nécessaire.
+// Per-organization activation logic can be refined later.
 
 const prisma = db;
 const router = Router();

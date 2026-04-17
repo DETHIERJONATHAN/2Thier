@@ -172,7 +172,7 @@ export class FormulaEvaluator {
     }
     
     // Évaluation simple de gauche à droite pour l'instant
-    // TODO: Implémenter priorité des opérateurs si nécessaire
+    // Left-to-right evaluation; operator precedence can be added later
     let result = processed[0] as number;
     
     for (let i = 1; i < processed.length; i += 2) {

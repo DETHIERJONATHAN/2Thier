@@ -136,8 +136,7 @@ export const ReferenceConfigModal: React.FC<ReferenceConfigModalProps> = ({
       // Upload de l'image si présente
       let referenceImageUrl = existingConfig?.referenceImageUrl;
       if (fileList.length > 0 && fileList[0].originFileObj) {
-        // TODO: Implémenter l'upload de l'image
-        // Pour l'instant on garde l'URL existante
+        // Stub — image upload not yet implemented; keeps existing URL
       }
 
       const payload = {

@@ -123,7 +123,7 @@ export const SectionHeaderEditor: React.FC<SectionHeaderEditorProps> = ({
   };
 
   const handleAIGenerate = (field: 'title' | 'subtitle' | 'description') => {
-    // TODO: Intégrer l'IA pour générer du contenu
+    // Stub — AI content generation not yet integrated
     logger.debug(`Générer ${field} avec IA pour section ${sectionType}`);
   };
 

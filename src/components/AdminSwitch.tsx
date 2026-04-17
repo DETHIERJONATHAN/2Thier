@@ -31,7 +31,7 @@ const AdminSwitch: React.FC<AdminSwitchProps> = ({
           await createEmailAddress(user.id, emailPrefix);
           message.success('Service email activé.');
         } else {
-          // TODO: Implémenter la logique de désactivation
+          // Stub — email deactivation not yet implemented
           message.info("La désactivation de l'email n'est pas encore implémentée.");
           // On ne change pas l'état visuel si l'action n'est pas faite
           setLoading(false);

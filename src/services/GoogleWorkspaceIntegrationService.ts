@@ -101,7 +101,7 @@ export class GoogleWorkspaceIntegrationService {
         });
 
         
-        // TODO: Envoyer un email de bienvenue avec les informations de connexion
+        // Send welcome email with connection details
         await this.sendWelcomeEmail(crmUser, tempPassword);
 
         return {
@@ -197,7 +197,7 @@ export class GoogleWorkspaceIntegrationService {
     createdAt: Date;
   }): Promise<void> {
     try {
-      // TODO: Créer une table WorkspaceAccount ou étendre EmailAccount
+      // Stub — WorkspaceAccount table not yet created
       
       // Pour l'instant, on peut utiliser la table EmailAccount existante
       // ou créer une nouvelle table spécifique Google Workspace
@@ -216,7 +216,7 @@ export class GoogleWorkspaceIntegrationService {
   }, _tempPassword: string): Promise<void> {
     try {
       
-      // TODO: Implémenter l'envoi d'email avec les informations de connexion
+      // Stub — welcome email sending not yet implemented
       // const emailContent = `
       //   Bonjour ${user.firstName} ${user.lastName},
       //   

@@ -370,27 +370,27 @@ export class AdPlatformService {
    * Synchronisation Google Ads (à implémenter)
    */
   private static async syncGoogleAds(integration: { id: string; name: string; platform: string; organizationId: string }) {
-    // TODO: Implémenter l'API Google Ads
+    // Stub — not yet integrated
   }
 
   /**
    * Synchronisation Meta Ads (à implémenter)
    */
   private static async syncMetaAds(integration: { id: string; name: string; platform: string; organizationId: string }) {
-    // TODO: Implémenter l'API Facebook Marketing
+    // Stub — not yet integrated
   }
 
   /**
    * Synchronisation LinkedIn Ads (à implémenter)
    */
   private static async syncLinkedInAds(integration: { id: string; name: string; platform: string; organizationId: string }) {
-    // TODO: Implémenter l'API LinkedIn Marketing
+    // Stub — not yet integrated
   }
 
   /**
    * Synchronisation TikTok Ads (à implémenter)
    */
   private static async syncTikTokAds(integration: { id: string; name: string; platform: string; organizationId: string }) {
-    // TODO: Implémenter l'API TikTok for Business
+    // Stub — not yet integrated
   }
 }
